@@ -1,6 +1,6 @@
 from hashlib import sha256
 import yaml
-from wallet import Wallet
+from wallet import Wallet, verify_sig
 
 def decode_tx_yaml(txt):
     data = yaml.safe_load(txt)
@@ -50,9 +50,18 @@ if __name__ == "__main__":
     tx.data = b"hello sylve"
     tx.sig = wallet_liam.sign(tx.envelope())
 
-    print("tx: {}".format(tx))
+    print("tx: {}".format(tx)) 
+    
+    # from_pubkey_known = wallet_liam.pubkey_str()
+    # print("from_pubkey: {}".format(from_pubkey_known))
 
-    is_valid = Wallet.verify(tx.from_acc, tx.sig, tx.envelope())
+    # from_pubkey_recovered = recover_pubkey(tx.sig, tx.envelope()).to_string().hex()
+    # print("from_pubkey_recovered: {}".format(from_pubkey_recovered))
+
+    # is_valid = verify_sig(from_pubkey_recovered, tx.sig, tx.envelope())
+    # print("Verify signature: {}".format(is_valid))
+
+    is_valid = verify_sig(tx.from_acc, tx.sig, tx.envelope())
     print("Verify signature: {}".format(is_valid))
 
     print(encode_tx_yaml(tx))
