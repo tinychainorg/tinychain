@@ -1,6 +1,7 @@
 from hashlib import sha256
 import yaml
-from wallet import Wallet, verify_sig
+from wallet import Wallet
+from crypto import verify_sig
 
 def decode_tx_yaml(txt):
     data = yaml.safe_load(txt)
