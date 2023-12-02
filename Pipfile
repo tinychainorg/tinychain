@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 pyparsing = "*"
+py-evm = "*"
 
 [dev-packages]
 
