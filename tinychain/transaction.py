@@ -3,20 +3,7 @@ import yaml
 from wallet import Wallet
 from crypto import verify_sig
 
-def decode_tx_yaml(txt):
-    data = yaml.safe_load(txt)
-    return Tx(data['from'], data['to'], data['data'], data['sig'])
-
-def encode_tx_yaml(tx):
-    data = {
-        'from': tx.from_acc,
-        'to': tx.to_acc,
-        'data': tx.data.hex(),
-        'sig': tx.sig.hex()
-    }
-    # Dump keys in order defined above.
-    return yaml.dump(data, default_flow_style=False, sort_keys=False)
-
+# A transaction.
 class Tx:
     def __init__(self, from_acc=None, to_acc=None, data=None, sig=None):
         self.from_acc = from_acc
@@ -39,6 +26,26 @@ class Tx:
             bytes.fromhex(self.to_acc),
             self.data
         ])
+
+    def id(self):
+        return sha256(self.envelope()).digest().hex()
+
+
+# Transaction encoding/decoding.
+
+def decode_tx_yaml(txt):
+    data = yaml.safe_load(txt)
+    return Tx(data['from'], data['to'], data['data'], data['sig'])
+
+def encode_tx_yaml(tx):
+    data = {
+        'from': tx.from_acc,
+        'to': tx.to_acc,
+        'data': tx.data.hex(),
+        'sig': tx.sig.hex()
+    }
+    # Dump keys in order defined above.
+    return yaml.dump(data, default_flow_style=False, sort_keys=False)
 
 
 if __name__ == "__main__":

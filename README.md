@@ -13,12 +13,14 @@ maybe we'll learn some things along the way.
 
 ## roadmap.
 
- - [ ] VM
+ - [x] VM
  - [ ] smart contracts
- - [ ] transactions
+ - [x] wallet
+ - [x] transactions
+ - [ ] CLI
+ - [ ] state machine
  - [ ] sequencer
  - [ ] accounts / gas
- - [ ] storage and state
  - [ ] node
 
 see `node.py` for design.

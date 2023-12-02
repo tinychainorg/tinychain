@@ -3,6 +3,10 @@ from ecdsa import VerifyingKey, BadSignatureError, SECP256k1
 from ecdsa.util import sigdecode_der
 from hashlib import sha256
 
+# 
+# Cryptographic utilities.
+# 
+
 # Sign a message using a private key.
 def sign_msg(prvkey, msg):
     # assert type of `msg` is bytes

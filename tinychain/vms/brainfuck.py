@@ -59,9 +59,13 @@ def brainfuck_fmt(code):
             output_ += char
     return output_
 
+# The out of gas exception.
+class OutOfGasException(Exception):
+    pass
+
 # Runs a Brainfuck interpreter on code.
 # `memory` is all zeros by default.
-def brainfuck_run(code, memory=defaultdict(int)):
+def brainfuck_run(code, memory=defaultdict(int), gas_limit=250000):
     # data pointer
     dp = 0
 
@@ -105,6 +109,10 @@ def brainfuck_run(code, memory=defaultdict(int)):
         if len(code) - 1 < ip:
             # end of program.
             break
+        
+        if gas_limit < gas_cost:
+            raise OutOfGasException()
+
         opcode = code[ip]
         
         gas_cost += GAS_COST_TABLE["compute"]
@@ -163,13 +171,13 @@ class BrainfuckVM:
     def __init__(self):
         self.memory = defaultdict(int)
     
-    def eval(self, code):
+    def eval(self, code, gas_limit):
         memory1 = self.memory.copy()
-        brainfuck_run(code, memory1)
+        brainfuck_run(code, memory1, gas_limit)
 
-    def apply(self, code):
+    def apply(self, code, gas_limit):
         memory1 = self.memory.copy()
-        brainfuck_run(code, memory1)
+        brainfuck_run(code, memory1, gas_limit)
         self.memory = memory1
 
 
