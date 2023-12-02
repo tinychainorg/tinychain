@@ -1,4 +1,4 @@
-from encoding import json_repr
+from tinychain.encoding import json_repr
 
 
 # How this works:
