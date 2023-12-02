@@ -71,4 +71,4 @@ class Network:
 
 
 if __name__ == "__main__":
-    print(json_repr(Transaction(1, 2, 3)))
+    pass

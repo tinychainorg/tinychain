@@ -29,8 +29,6 @@ def create_jump_table(chars):
 
     return jump_table
 
-
-
 def dump_mem(mem):
     buf = ""
     MEM_STEP = 8
@@ -96,13 +94,22 @@ def brainfuck_run(code):
     # is_debugging = True
     is_debugging = False
 
+    # gas metering.
+    GAS_COST_TABLE = {
+        'memory': 3,
+        'compute': 1
+    }
+    gas_cost = 0
+
     while True:
         if len(code) - 1 < ip:
             # end of program.
             break
         opcode = code[ip]
         
-        # 00100 + 
+        gas_cost += GAS_COST_TABLE["compute"]
+        
+        # "00100 +"
         debug("{:05d} {}\n".format(ip, opcode))
 
         if is_debugging:
@@ -116,9 +123,11 @@ def brainfuck_run(code):
             dp -= 1
         elif opcode == '+':
             # Increment the byte at the data pointer by one. 
+            gas_cost += GAS_COST_TABLE["memory"]
             mem[dp] += 1
         elif opcode == '-':
             # Decrement the byte at the data pointer by one. 
+            gas_cost += GAS_COST_TABLE["memory"]
             mem[dp] -= 1
         elif opcode == '.':
             # Output the byte at the data pointer. 
@@ -132,7 +141,6 @@ def brainfuck_run(code):
             # Jumps to the matching ] instruction if the value of the current cell is zero
             if mem[dp] == 0:
                 jmp_register = jmp_table[ip]
-                
         elif opcode == ']':
             # Jump If Not Zero
             # Jumps to the matching [ instruction if the value of the current cell is nonzero
@@ -149,17 +157,19 @@ def brainfuck_run(code):
         
         continue
     
-    return (output, debug_stream.log, mem)
+    return (output, debug_stream.log, mem, gas_cost)
     
 
 if __name__ == "__main__":
     # print "Hello world" to screen.
-    # (output, debug, mem) = brainfuck_run("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.")
+    # (output, debug, mem, gas_cost) = brainfuck_run("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.")
+    (output, debug, mem, gas_cost) = brainfuck_run(">>>>>++")
     # (output, debug, mem) = brainfuck_run("[->+<]")
-    print(brainfuck_fmt("+[-->-[>>+>-----<<]<--<---]>-.>>>+.>>..+++[.>]<<<<.+++.------.<<-.>>>>+."))
-    (output, debug, mem) = brainfuck_run("+[-->-[>>+>-----<<]<--<---]>-.>>>+.>>..+++[.>]<<<<.+++.------.<<-.>>>>+.")
+    # print(brainfuck_fmt("+[-->-[>>+>-----<<]<--<---]>-.>>>+.>>..+++[.>]<<<<.+++.------.<<-.>>>>+."))
+    # (output, debug, mem, gas_cost) = brainfuck_run("+[-->-[>>+>-----<<]<--<---]>-.>>>+.>>..+++[.>]<<<<.+++.------.<<-.>>>>+.")
 
-    print(output)
+    print("output: {}".format(output))
+    print("gas_cost: {}".format(gas_cost))
     # print(dump_mem(mem))
     # print(mem)
 
