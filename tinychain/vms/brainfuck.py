@@ -30,13 +30,16 @@ def create_jump_table(chars):
     return jump_table
 
 def dump_mem(mem):
-    buf = ""
-    MEM_STEP = 8
-    for i in range((len(mem) // MEM_STEP) + 1):
-        buf += "{:04d} ".format(i)
-        for j in range(MEM_STEP):
-            buf += chr(mem[i+j])
-    return buf
+    for key, value in mem.items():
+        print("{:04d}: {}".format(key, value))
+    
+    # buf = ""
+    # MEM_STEP = 8
+    # for i in range((len(mem) // MEM_STEP) + 1):
+    #     buf += "{:04d} ".format(i)
+    #     for j in range(MEM_STEP):
+    #         buf += chr(mem[i+j])
+    # return buf
 
 def brainfuck_fmt(code):
     output_ = ""
@@ -65,14 +68,14 @@ class OutOfGasException(Exception):
 
 # Runs a Brainfuck interpreter on code.
 # `memory` is all zeros by default.
-def brainfuck_run(code, memory=defaultdict(int), gas_limit=250000):
+def brainfuck_run(code, input_="", mem=defaultdict(int), gas_limit=250000000000, debugger=False):
     # data pointer
     dp = 0
 
     # output buffer
     output = ""
     # input buffer
-    input_ = ""
+    input_i = 0
 
     # debug log
     class DebugStream:
@@ -95,32 +98,29 @@ def brainfuck_run(code, memory=defaultdict(int), gas_limit=250000):
     # jump table
     jmp_table = create_jump_table(code)
 
-    # is_debugging = True
-    is_debugging = False
-
     # gas metering.
-    GAS_COST_TABLE = {
+    GAS_USE_TABLE = {
         'memory': 3,
         'compute': 1
     }
-    gas_cost = 0
+    gas_used = 0
 
     while True:
         if len(code) - 1 < ip:
             # end of program.
             break
         
-        if gas_limit < gas_cost:
-            raise OutOfGasException()
+        if gas_limit < gas_used:
+            raise OutOfGasException("gas_limit = {}, gas_used = {}".format(gas_limit, gas_used))
 
         opcode = code[ip]
         
-        gas_cost += GAS_COST_TABLE["compute"]
+        gas_used += GAS_USE_TABLE["compute"]
         
         # "00100 +"
         debug("{:05d} {}\n".format(ip, opcode))
 
-        if is_debugging:
+        if debugger:
             input("op={} dp={:05d} d={:02d} >".format(opcode, dp, mem[dp]))
 
         if opcode == '>':
@@ -131,19 +131,24 @@ def brainfuck_run(code, memory=defaultdict(int), gas_limit=250000):
             dp -= 1
         elif opcode == '+':
             # Increment the byte at the data pointer by one. 
-            gas_cost += GAS_COST_TABLE["memory"]
+            gas_used += GAS_USE_TABLE["memory"]
             mem[dp] += 1
         elif opcode == '-':
             # Decrement the byte at the data pointer by one. 
-            gas_cost += GAS_COST_TABLE["memory"]
+            gas_used += GAS_USE_TABLE["memory"]
             mem[dp] -= 1
         elif opcode == '.':
             # Output the byte at the data pointer. 
-            output += chr(mem[dp])
+            # print(mem[dp])
+            output += chr(mem[dp] % 256)
         elif opcode == ',':
             # Accept one byte of input, storing its value in the byte at the data pointer. 
-            # TODO.
-            pass
+            if input_i < len(input_) - 1:
+                mem[dp] = ord(input_[input_i])
+                input_i += 1
+            else:
+                # TODO. exception?
+                mem[dp] = 0
         elif opcode == '[':
             # Jump If Zero
             # Jumps to the matching ] instruction if the value of the current cell is zero
@@ -154,6 +159,11 @@ def brainfuck_run(code, memory=defaultdict(int), gas_limit=250000):
             # Jumps to the matching [ instruction if the value of the current cell is nonzero
             if mem[dp] != 0:
                 jmp_register = jmp_table[ip]
+        elif opcode == ';':
+            # Comment.
+            # Skip all characters until the next semicolon.
+            while code[ip] != ';':
+                ip += 1
 
         # Advance instruction pointer if not a jump instruction.
         if jmp_register == -1:
@@ -165,33 +175,58 @@ def brainfuck_run(code, memory=defaultdict(int), gas_limit=250000):
         
         continue
     
-    return (output, debug_stream.log, mem, gas_cost)
+    return (output, debug_stream.log, mem, gas_used)
 
 class BrainfuckVM:
     def __init__(self):
         self.memory = defaultdict(int)
     
-    def eval(self, code, gas_limit):
+    def eval(self, code="", gas_limit=0):
         memory1 = self.memory.copy()
-        brainfuck_run(code, memory1, gas_limit)
+        (output, debug, mem, gas_cost) = brainfuck_run(code, memory1, gas_limit)
 
-    def apply(self, code, gas_limit):
+    def apply(self, code="", gas_limit=0):
         memory1 = self.memory.copy()
-        brainfuck_run(code, memory1, gas_limit)
+        (output, debug, mem, gas_cost) = brainfuck_run(code, "", mem=memory1, gas_limit=gas_limit)
         self.memory = memory1
+        return (output, gas_cost)
+    
+    def dump_memory(self):
+        buf = ""
+        for key, value in self.memory.items():
+            buf += "{:04d}: {}\n".format(key, chr(value))
+        return buf
 
 
 if __name__ == "__main__":
     # print "Hello world" to screen.
     # (output, debug, mem, gas_cost) = brainfuck_run("++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.")
-    (output, debug, mem, gas_cost) = brainfuck_run(">>>>>++")
+    # (output, debug, mem, gas_cost) = brainfuck_run(">>>>>++")
+    
+    
+    
+    # (output, debug, mem, gas_cost) = brainfuck_run(
+    #     open('brainfuck/bf-interpreter.bf').read(),
+    #     # input=open('brainfuck/helloworld.bf').read()
+    #     input_="++"
+    # )
+
+
+    (output, debug, mem, gas_cost) = brainfuck_run(
+        open('brainfuck/solong.bf').read(),
+        # "+++++>++++++temp0[-]x[temp0+x-]y[x+y-]temp0[y+temp0-]",
+        # input=open('brainfuck/helloworld.bf').read()
+        # input_="++"
+    )
+
+
     # (output, debug, mem) = brainfuck_run("[->+<]")
     # print(brainfuck_fmt("+[-->-[>>+>-----<<]<--<---]>-.>>>+.>>..+++[.>]<<<<.+++.------.<<-.>>>>+."))
     # (output, debug, mem, gas_cost) = brainfuck_run("+[-->-[>>+>-----<<]<--<---]>-.>>>+.>>..+++[.>]<<<<.+++.------.<<-.>>>>+.")
 
     print("output: {}".format(output))
     print("gas_cost: {}".format(gas_cost))
-    # print(dump_mem(mem))
+    print(dump_mem(mem))
     # print(mem)
 
 

@@ -1,4 +1,4 @@
-from tinychain.encoding import json_repr
+
 
 
 # How this works:
@@ -48,20 +48,33 @@ from tinychain.encoding import json_repr
 # The context is simple - the transaction (from, to, data).
 
 
+from sequencer import FileSystemSequencer
+from state_machine import StateMachine
+from gas_market import GasMarket
 
 class Node:
-    def __init__(self, sequencer):
+    def __init__(self):
         pass
 
-    def run():
+    def run(self):
         # The node is the orchestrator:
         # - the state machine combines a VM to run transactions, with the context of state and gas usage.
         # - the sequencer provides the order of transactions.
         # - the node runs the state machine on each transaction, in order.
         # - the node also provides RPC API's so users can read the state.
-        pass
+        gas_market = GasMarket()
+        state_machine = StateMachine(gas_market)
+        
+        state_machine.accounts["945b45ec3cc2e838e9ef50b70c9065e5a1ad4d992050320ae6a5b70c6b744f3a91abb481b653067cd4aeacc2b7ad37cac04ddd422c22611499b7da18138c3ec6"] = 100
 
+        sequencer = FileSystemSequencer("../testnet-1/txs")
+        for tx in sequencer.txs:
+            print("processing tx: {}".format(tx.id()))
+            state_machine.apply(tx)
+
+        print(state_machine.vm.dump_memory())
 
 
 if __name__ == "__main__":
-    pass
+    node = Node()
+    node.run()
