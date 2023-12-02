@@ -47,18 +47,24 @@ from tinychain.encoding import json_repr
 # In a normal blockchain, we have an additional "context" that the state machine gets which is used for access checks.
 # The context is simple - the transaction (from, to, data).
 
+from tinychain.vms.brainfuck import BrainfuckVM
+
+class StateMachine:
+    def __init__(self):
+        self.vm = BrainfuckVM()
+
+    # Evaluates a transaction and applies its effects.
+    def apply(self, tx):
+        self.vm.apply(tx.data)
+
+    # Evaluates a transaction and doesn't persist its effects.
+    def eval(self, tx):
+        self.vm.eval(tx.data)
 
 
-class Transaction:
-    def __init__(self, from_acc, to_acc, data):
-        pass
 
 class Block:
     def __init__(self, transactions, prev_block):
-        pass
-
-class VM:
-    def __init__(self):
         pass
 
 class Sequencer:

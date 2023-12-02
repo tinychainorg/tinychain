@@ -59,11 +59,11 @@ def brainfuck_fmt(code):
             output_ += char
     return output_
 
-def brainfuck_run(code):
+# Runs a Brainfuck interpreter on code.
+# `memory` is all zeros by default.
+def brainfuck_run(code, memory=defaultdict(int)):
     # data pointer
     dp = 0
-    # memory cells
-    mem = defaultdict(int) # default cell value of 0
 
     # output buffer
     output = ""
@@ -158,7 +158,20 @@ def brainfuck_run(code):
         continue
     
     return (output, debug_stream.log, mem, gas_cost)
+
+class BrainfuckVM:
+    def __init__(self):
+        self.memory = defaultdict(int)
     
+    def eval(self, code):
+        memory1 = self.memory.copy()
+        brainfuck_run(code, memory1)
+
+    def apply(self, code):
+        memory1 = self.memory.copy()
+        brainfuck_run(code, memory1)
+        self.memory = memory1
+
 
 if __name__ == "__main__":
     # print "Hello world" to screen.
