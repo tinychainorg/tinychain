@@ -1,7 +1,14 @@
 tinychain
 =========
 
-a simple and powerful smart contract blockchain. 
+the tiny smart contract blockchain.
+
+```sh
+$ find . -type f -name "*.py" -exec cat {} + | grep -v '^ *#' | grep -v '^\s*$' | wc -l
+341
+```
+
+only *341* lines of code (50% done).
 
 ## why?
 
