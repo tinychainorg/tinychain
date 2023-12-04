@@ -1,4 +1,5 @@
 from blockchain import Blockchain
+from protocol_http import HttpProtocolPeer
 
 CLIENT_VERSION = '0.0.1'
 PROTOCOL_VERSION = '0.0.1'

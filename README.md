@@ -3,7 +3,14 @@ tinychain
 
 the tiny smart contract blockchain. 590 lines of code.
 
-tinychain runs the Brainfuck VM, uses ECDSA for signing transactions, and a Git-based sequencer (yes you PR txs to get them into the mempool).
+| **Area**     | **Description**                                                                                                                                                                                                                                                                                            | **Status**  |
+|--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| VM           | [Brainfuck](https://en.wikipedia.org/wiki/Brainfuck) smart contracts                                                                                                                                                                                                                                       | ✅⚠️ 60% Done |
+| Consensus    | Bitcoin / Nakamoto / POW with ZK-friendly hash function                                                                                                                                                                                                                                                    | ⚠️ WIP       |
+| Tokenomics   | Ethereum-like - native token + fixed exchange rate to gas                                                                                                                                                                                                                                                  | ✅ Done      |
+| Cryptography | ECDSA wallets, SECP256k1 curve (same as BTC), SHA-2 256 bit hash function                                                                                                                                                                                                                                  | ✅ Done      |
+| Networking   | P2P and RPC servers both use HTTP, gossip network architecture                                                                                                                                                                                                                                             | ⚠️ WIP       |
+| ZK proofs    | ZK for compression of tinychain. Use either [groth16](https://github.com/erhant/zkbrainfuck) or [halo2](https://github.com/cryptape/ckb-bf-zkvm) SNARK proofs for brainfuck. TBA we will rework consensus/crypto to use SNARK-friendly tech (MiMC/Poseidon hash function, SNARK-friendly signature scheme) |             |
 
 ## usage.
 
@@ -63,13 +70,19 @@ The goal of this project is to elucidate the primitives throughout this inventio
 see `node.py` for design.
 
 
-## featureset
+## Featureset
 
- - **VM**. Brainfuck is used as the programming runtime. It includes its own gas metering - 1 gas for computation, 3 gas for writing to memory.
 
- - **Cryptography**. ECDSA is used for public-private cryptography.
 
- - **Networking**. Nodes run a HTTP API server, containing all methods. 
+ - **VM** and **state machine model**. Brainfuck is used as the programming runtime. It includes its own gas metering - 1 gas for computation, 3 gas for writing to memory. There is no in-built object model for now - there is only the Brainfuck VM, and its memory. Any program can write to memory and overwrite other Brainfuck.
+
+ - **Gas market / tokenomics**. Like Ethereum, this chain has a token and an internal unit of account called gas. There is no progressive gas auctions (PGA's) yet - for now it is a fixed exchange rate (see `gas_market.py`).
+
+ - **Consensus**. Bitcoin/Nakamoto consensus is currently being implemented, meaning the network runs via proof-of-work. In future, I hope to implement Tendermint proof-of-stake (see `consensus/tendermint.py` for more) with the token being staked actually hosted on an Ethereum network (L1/L2).
+
+ - **Cryptography**. ECDSA is used for public-private cryptography, with the SECP256k1 curve (used by Bitcoin) and the SHA-2 hash function with size set to 256 bits.
+
+ - **Networking**. The P2P protocol and node API server both run over HTTP. This was easy.
 
 ```
 curl -X GET http://0.0.0.0:5100/api/machine_eval -H "Content-Type: application/json" -d '{"from_acc":"","to_acc":"","data":"+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++."}'
