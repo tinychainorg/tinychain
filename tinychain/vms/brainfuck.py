@@ -183,7 +183,8 @@ class BrainfuckVM:
     
     def eval(self, code="", gas_limit=0):
         memory1 = self.memory.copy()
-        (output, debug, mem, gas_cost) = brainfuck_run(code, memory1, gas_limit)
+        (output, debug, mem, gas_cost) = brainfuck_run(code, "", mem=memory1, gas_limit=gas_limit)
+        return (output, gas_cost)
 
     def apply(self, code="", gas_limit=0):
         memory1 = self.memory.copy()

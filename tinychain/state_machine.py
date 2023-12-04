@@ -27,7 +27,6 @@ class StateMachine:
         if gas_balance == 0:
             raise InsufficientFundsException()
         
-        print("gas_balance: {}".format(gas_balance))
         gas_limit = gas_balance
 
         # 1. Apply the tx.
@@ -44,4 +43,5 @@ class StateMachine:
     # Evaluates a transaction and doesn't persist its effects.
     def eval(self, tx):
         EVAL_GAS_LIMIT = 12_000_000
-        self.vm.eval(tx.data, gas_limit=EVAL_GAS_LIMIT)
+        (output, gas_used) = self.vm.eval(tx.data, gas_limit=EVAL_GAS_LIMIT)
+        return (output, gas_used)

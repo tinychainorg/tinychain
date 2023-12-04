@@ -52,9 +52,11 @@ from sequencer import FileSystemSequencer
 from state_machine import StateMachine
 from gas_market import GasMarket
 
-class Node:
+class Blockchain:
     def __init__(self):
-        pass
+        self.gas_market = GasMarket()
+        self.state_machine = StateMachine(self.gas_market)
+        self.state_machine.accounts["945b45ec3cc2e838e9ef50b70c9065e5a1ad4d992050320ae6a5b70c6b744f3a91abb481b653067cd4aeacc2b7ad37cac04ddd422c22611499b7da18138c3ec6"] = 100
 
     def run(self):
         # The node is the orchestrator:
@@ -62,19 +64,14 @@ class Node:
         # - the sequencer provides the order of transactions.
         # - the node runs the state machine on each transaction, in order.
         # - the node also provides RPC API's so users can read the state.
-        gas_market = GasMarket()
-        state_machine = StateMachine(gas_market)
-        
-        state_machine.accounts["945b45ec3cc2e838e9ef50b70c9065e5a1ad4d992050320ae6a5b70c6b744f3a91abb481b653067cd4aeacc2b7ad37cac04ddd422c22611499b7da18138c3ec6"] = 100
-
         sequencer = FileSystemSequencer("../testnet-1/txs")
         for tx in sequencer.txs:
             print("processing tx: {}".format(tx.id()))
-            state_machine.apply(tx)
+            self.state_machine.apply(tx)
 
-        print(state_machine.vm.dump_memory())
+        print(self.state_machine.vm.dump_memory())
 
 
 if __name__ == "__main__":
-    node = Node()
-    node.run()
+    chain = Blockchain()
+    chain.run()
