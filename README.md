@@ -1,7 +1,7 @@
 tinychain
 =========
 
-the tiny smart contract blockchain.
+the tiny smart contract blockchain. 590 lines of code.
 
 tinychain runs the Brainfuck VM, uses ECDSA for signing transactions, and a Git-based sequencer (yes you PR txs to get them into the mempool).
 
