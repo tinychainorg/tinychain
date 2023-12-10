@@ -21,13 +21,11 @@
 import struct
 import time
 from hashlib import sha256
-from tinychain import tinychain
-
+from tinychain.utils import *
 
 
 import queue
 import threading
-
 
 
 
@@ -72,18 +70,40 @@ class MinerThread(threading.Thread):
         return self._stop_event.is_set()
 
 
+
+
+# How does mining work?
+# (block) -> difficulty-target -> while true, mine -> if value < difficulty-target, we have solution
+# difficulty-target(chain) = history compute
+
 class BitcoinConsensusEngine:
     def __init__(self, genesis_block):
         self.genesis_block = genesis_block
     
+    def start_mining(self):
+        self.mining = True
+
+    def stop_mining(self):
+        pass
+    
     def on_new_block(self):
         # cancel current mining.
         # begin mining new thing.
-
+        pass
 
     def on_solution(self, block):
         pass
     
+    def find_solution(self, block):
+        difficulty_target = 2**256 - 1
+
+        # 2. Solve proof-of-work puzzle.
+        while self.mining:
+            block.nonce += 1
+            h = block.hash()
+            if int.from_bytes(h) < difficulty_target:
+                break
+
     # Hashcash works by finding a number such that the hash of the number has a certain number of leading zeros.
     # Encoded at a low level, this means that the hash of the number is less than a certain value.
     # This value is the difficulty target.
@@ -156,8 +176,15 @@ if __name__ == '__main__':
     print("genesis block:")
     print(genesis_block.hash().hex())
 
-    # mine the next block
-    consensus_engine = BitcoinConsensusEngine(genesis_block)
-    consensus_engine.mine(genesis_block)
+    def start_node(self):
+        engine = BitcoinConsensusEngine()
+        engine.set_chain([genesis_block])
+        miner = engine.start_mining()
+        # await miner solution.
+        # when solution found, broadcast block to network, start mining on new chain.
+        # if we receive a block in the meantime, stop miner.
+
+
+        
 
     
