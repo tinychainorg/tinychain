@@ -21,12 +21,12 @@
 import struct
 import time
 from hashlib import sha256
-from tinychain.utils import *
+
 
 
 import queue
 import threading
-
+from concurrent.futures import *
 
 
 class Block:
@@ -58,51 +58,54 @@ class Block:
 
 
 
-class MinerThread(threading.Thread):
-    def __init__(self,  *args, **kwargs):
-        super(MinerThread, self).__init__(*args, **kwargs)
-        self._stop_event = threading.Event()
+from abc import ABC, abstractmethod
 
-    def stop(self):
-        self._stop_event.set()
-
-    def stopped(self):
-        return self._stop_event.is_set()
+class ConsensusProtocol(ABC):
+    @abstractmethod
+    def download_block(self, block_id):
+        pass
 
 
-
-
-# How does mining work?
-# (block) -> difficulty-target -> while true, mine -> if value < difficulty-target, we have solution
-# difficulty-target(chain) = history compute
-
+# How does the consensus engine work? 
+# The height of a block refers to its depth in the DAG, which begins at the genesis block.
+# The tip of the DAG is the block with the most accumulated work.
+# Work is defined as the sum of difficulty ie. hashpower.
+# We run two routines:
+# 1. Miner - mine for a solution to the hashcash puzzle.
+# 2. Syncer - process new blocks, determine the longest chain, notify the miner and trigger the on_new_tip event.
 class BitcoinConsensusEngine:
-    def __init__(self, genesis_block):
+    def __init__(self, genesis_block, consensus_protocol):
         self.genesis_block = genesis_block
-    
-    def start_mining(self):
-        self.mining = True
+        self.blocks_by_id = {}
+        self.consensus_protocol = consensus_protocol
 
-    def stop_mining(self):
-        pass
-    
-    def on_new_block(self):
-        # cancel current mining.
-        # begin mining new thing.
-        pass
+    def process_new_block(self, new_block):
+        dag_path = []
+        block = new_block
 
-    def on_solution(self, block):
-        pass
-    
-    def find_solution(self, block):
-        difficulty_target = 2**256 - 1
+        # 1. Download all blocks in the path that we don't know of.
+        while True:
+            parent_block_id = block.prev_block_hash
+            if parent_block_id not in self.blocks_by_id:
+                # Download parent block.
+                block = self.consensus_protocol.download_block(parent_id)
+                # Verify work.
+                # TODO.
+                dag_path.append(block)
+        
+        # 2. Compute the accumulated work in this path.
+        # As part of this, the following constraints hold:
+        # 1) the hashcash POW solution is valid for each block.
+        # 2) the block's timestamp is greater than the parent's timestamp.
+        # 3) the difficulty adjustment algorithm is followed.
+        # TODO.
 
-        # 2. Solve proof-of-work puzzle.
-        while self.mining:
-            block.nonce += 1
-            h = block.hash()
-            if int.from_bytes(h) < difficulty_target:
-                break
+        # 3. Save the new tip + blocks.
+        # TODO.
+
+        # 4. If tip != new_tip, restart mining on the new tip.
+        # TODO.
+
 
     # Hashcash works by finding a number such that the hash of the number has a certain number of leading zeros.
     # Encoded at a low level, this means that the hash of the number is less than a certain value.
@@ -111,7 +114,7 @@ class BitcoinConsensusEngine:
     # The difficulty target is retargeted such that the average time to solve the puzzle is 10 minutes.
     # The difficulty is adjusted every 2016 blocks, which is approximately every 2 weeks.
     # The difficulty is adjusted by a factor of 4 in either direction.    
-    def mine(self, block):
+    def mine1(self, block):
         chain = []
 
         # 1. Set difficulty.
@@ -162,29 +165,44 @@ class BitcoinConsensusEngine:
 
             next_block = Block(int.from_bytes(h), [])
             block = next_block
+    
+    # def mine2(self, block):
+    #     chain = []
+
+    #     # 1. Set difficulty.
+    #     difficulty_target = 2**256 - 1
+        
+    #     with concurrent.futures.ThreadPoolExecutor() as executor:
+    #         miner_get_next_block = executor.submit(solve_proof_of_work, difficulty_target, block)
+    #         network_get_next_block = executor.submit()
+
+    #         # Wait for either of the futures to complete
+    #         # get the next block - await [self.miner.next_block, self.network.next_block]
+    #         done, not_done = concurrent.futures.wait([future_1, future_2], return_when=concurrent.futures.FIRST_COMPLETED)
+
+    #         # Get the result from the completed future
+    #         result = done.pop().result()  # Get the result of the completed future
+
+    #         # Cancel the other future which hasn't completed
+    #         for future in not_done:
+    #             future.cancel()
 
 
-# Basic function of consensus engine:
-# - maintain current block
-# - mine on that block for a nonce
-# - when nonce is found, broadcast block to network
-# - when new block is received, check if it is valid. then swap to mining on that block.
-# - all the consensus engine does is tell us (1) the current tip of the chain
+def solve_proof_of_work(difficulty_target, block):
+    while True:
+        block.nonce += 1
+        h = block.hash()
+        if int.from_bytes(h) < difficulty_target:
+            break
+        time.sleep(1/1000) # 1ms
+    print(f"POW solution block={len(chain)} target={difficulty_target} nonce={block.nonce} hash={h.hex()}")
+    return block.nonce
 
+
+# PYTHONPATH=. python3 tinychain/consensus/bitcoin.py
 if __name__ == '__main__':
     genesis_block = Block(0, [])
     print("genesis block:")
     print(genesis_block.hash().hex())
-
-    def start_node(self):
-        engine = BitcoinConsensusEngine()
-        engine.set_chain([genesis_block])
-        miner = engine.start_mining()
-        # await miner solution.
-        # when solution found, broadcast block to network, start mining on new chain.
-        # if we receive a block in the meantime, stop miner.
-
-
-        
 
     
