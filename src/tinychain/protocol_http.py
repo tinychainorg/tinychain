@@ -24,6 +24,7 @@ import requests
 from flask import Flask, jsonify, request
 from blockchain import Blockchain
 from protocol import Protocol
+from threading import Thread
 
 class HttpProtocolNode:
     def __init__(self, addr, port, protocol):
@@ -33,9 +34,10 @@ class HttpProtocolNode:
         self.protocol = protocol
         self.registered_methods = []
 
-        self.register_read_method(self.protocol.net_getPeers)
-        self.register_read_method(self.protocol.user_getBalance)
-        self.register_read_method(self.protocol.machine_eval)
+        self.register_method(self.protocol.net_getPeers)
+        self.register_method(self.protocol.user_getBalance)
+        self.register_method(self.protocol.machine_eval)
+        self.register_method(self.protocol.consensus_block)
 
     def listen(self):
         self.app.add_url_rule(
@@ -50,7 +52,7 @@ class HttpProtocolNode:
     def index_methods(self):
         return "Registered methods:<ul><li>{}</ul>".format("<li>".join(self.registered_methods))
 
-    def register_read_method(self, method):
+    def register_method(self, method):
         self.registered_methods.append(method.__name__)
         partial_wrap = functools.partial(self.wrap_method, method, 'POST')
         partial_wrap.__name__ = method.__name__
@@ -58,17 +60,6 @@ class HttpProtocolNode:
         self.app.add_url_rule(
             '/api/{}'.format(method.__name__), 
             view_func=partial_wrap,
-            methods=['POST']
-        )
-
-    def register_write_method(self, method):
-        self.registered_methods.append(method.__name__)
-        partial_wrap = functools.partial(self.wrap_method, method, 'POST')
-        partial_wrap.__name__ = method.__name__
-
-        self.app.add_url_rule(
-            '/api/{}'.format(method.__name__),
-            view_func=partial_wrap(method),
             methods=['POST']
         )
 
@@ -114,7 +105,35 @@ class HttpProtocolPeer:
             raise Exception("Error calling method {}: {}".format(name, res.json()))
         
         return res.json()['result']
+
+
+def test_start_node(host="0.0.0.0", port):
+    protocol = Protocol(Blockchain())
+
     
+    # Create a hTTP node.
+    node = HttpProtocolNode(host, port, protocol)
+    # Create the protocol.
+    # Add consensus gossip to the protocol.
+    # Register method on node.
+    # Connect the consensus module to the protocol.
+    # Start the miner.
+
+
+    
+
+def test_miners(self):
+    # two nodes
+    
+    # node_b = HttpProtocolNode("0.0.0.0", 5200, protocol)
+
+    # python start two threads
+    Thread(target=node_a.listen()).start()
+    # Thread(target=node_b.listen()).start()
+
+
+
+
 
 
 if __name__ == "__main__":

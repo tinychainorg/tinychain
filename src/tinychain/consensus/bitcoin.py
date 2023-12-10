@@ -21,6 +21,15 @@
 import struct
 import time
 from hashlib import sha256
+from tinychain import tinychain
+
+
+
+import queue
+import threading
+
+
+
 
 class Block:
     def __init__(self, prev_block_hash, txs):
@@ -48,21 +57,32 @@ class Block:
 
     def hash(self):
         return sha256(self.envelope()).digest()
-        
+
+
+
+class MinerThread(threading.Thread):
+    def __init__(self,  *args, **kwargs):
+        super(MinerThread, self).__init__(*args, **kwargs)
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
+
 
 class BitcoinConsensusEngine:
     def __init__(self, genesis_block):
         self.genesis_block = genesis_block
     
     def on_new_block(self):
+        # cancel current mining.
+        # begin mining new thing.
+
+
+    def on_solution(self, block):
         pass
-    
-    def solve_pow(self, challenge_fn, difficulty):
-        nonce = 0
-        while True:
-            nonce += 1
-            if challenge_fn(nonce) < difficulty:
-                return nonce
     
     # Hashcash works by finding a number such that the hash of the number has a certain number of leading zeros.
     # Encoded at a low level, this means that the hash of the number is less than a certain value.
@@ -77,7 +97,7 @@ class BitcoinConsensusEngine:
         # 1. Set difficulty.
         difficulty_target = 2**256 - 1
 
-        # 2. Solve proof-of-work puzzle.    
+        # 2. Solve proof-of-work puzzle.
         while True:
             # Mine.
             while True:
@@ -87,26 +107,34 @@ class BitcoinConsensusEngine:
                     break
             
             block.timestamp = time.time()
+            self.on_solution(block)
             print(f"POW solution block={len(chain)} target={difficulty_target} nonce={block.nonce} hash={h.hex()}")
             chain.append(block)
 
+            # A difficulty epoch is `EPOCH_LENGTH_BLOCKS`.
+            # The target block rate is `TARGET_BLOCK_RATE_SECOND`.
+            # The target epoch duration is `EPOCH_TARGET_DURATION_SECONDS`.
+            # e.g. 8 blocks per epoch, 1 block per 3 seconds, 24 seconds per epoch.
             EPOCH_LENGTH_BLOCKS = 8
             TARGET_BLOCK_RATE_SECOND = 1 * 3
             EPOCH_TARGET_DURATION_SECONDS = EPOCH_LENGTH_BLOCKS * TARGET_BLOCK_RATE_SECOND
 
+            # Retarget difficulty every epoch.
             if len(chain) % EPOCH_LENGTH_BLOCKS == 0:
-                # retarget difficulty
-                # get all blocks of last epoch
+                # Get all blocks of last epoch
                 epoch_span = chain[-EPOCH_LENGTH_BLOCKS:]
                 epoch_start = epoch_span[0]
                 epoch_end = epoch_span[-1]
+                # Calculate epoch duration.
                 epoch_duration = epoch_end.timestamp - epoch_start.timestamp
-
                 print(f"epoch duration={epoch_duration} difficulty={difficulty_target}")
+                
+                
+                # Rescale difficulty target.
+                difficulty_scale_f = epoch_duration / EPOCH_TARGET_DURATION_SECONDS
                 
                 # to make blocks faster, lower the difficulty target
                 # to make blocks slower, increase the difficulty target
-                difficulty_scale_f = epoch_duration / EPOCH_TARGET_DURATION_SECONDS
                 difficulty_target *= difficulty_scale_f
 
                 print(f"epoch duration={epoch_duration} difficulty={difficulty_target}")
@@ -116,11 +144,14 @@ class BitcoinConsensusEngine:
             block = next_block
 
 
-
-
+# Basic function of consensus engine:
+# - maintain current block
+# - mine on that block for a nonce
+# - when nonce is found, broadcast block to network
+# - when new block is received, check if it is valid. then swap to mining on that block.
+# - all the consensus engine does is tell us (1) the current tip of the chain
 
 if __name__ == '__main__':
-    
     genesis_block = Block(0, [])
     print("genesis block:")
     print(genesis_block.hash().hex())
@@ -128,3 +159,5 @@ if __name__ == '__main__':
     # mine the next block
     consensus_engine = BitcoinConsensusEngine(genesis_block)
     consensus_engine.mine(genesis_block)
+
+    

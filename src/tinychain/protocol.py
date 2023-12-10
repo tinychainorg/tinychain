@@ -18,9 +18,10 @@ PROTOCOL_VERSION = '0.0.1'
 # - user_getTransaction
 # - user_getBalance
 class Protocol:
-    def __init__(self, blockchain: Blockchain):
+    def __init__(self, blockchain: Blockchain, consensus_engine: BitcoinConsensusEngine):
         self.peers = []
         self.blockchain = blockchain
+        self.consensus_engine = consensus_engine
     
     def run(self):
         # Routine: Run the peer bootstrap subroutine.
@@ -28,6 +29,13 @@ class Protocol:
         # Routine: Run the consensus subroutine.
         # Routine: Run the transaction gossip subroutine.
         pass
+
+    def broadcast_block(self, block):
+        for peer in self.peers:
+            peer.consensus_block(block)
+
+    def on_new_block(self):
+        print(f"new block {block.hash().hex()}")
 
     def routine_bootstrap_peers(self):
         # Connect to the configured bootstrap peers.
@@ -83,3 +91,7 @@ class Protocol:
         
         (output, gas_used) = self.blockchain.state_machine.eval(DummyTx(from_acc, to_acc, data))
         return { 'output': output, 'gas_used': gas_used }
+    
+    def consensus_block(self, block):
+        self.on_new_block(block)
+
