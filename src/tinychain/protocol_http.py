@@ -107,9 +107,8 @@ class HttpProtocolPeer:
         return res.json()['result']
 
 
-def test_start_node(host="0.0.0.0", port):
+def test_start_node(host="0.0.0.0", port=5000):
     protocol = Protocol(Blockchain())
-
     
     # Create a hTTP node.
     node = HttpProtocolNode(host, port, protocol)
