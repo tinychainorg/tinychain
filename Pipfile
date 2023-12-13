@@ -9,6 +9,8 @@ ecdsa = "*"
 pyyaml = "*"
 flask = "*"
 requests = "*"
+peewee = "*"
+sqlalchemy = "*"
 
 [dev-packages]
 
