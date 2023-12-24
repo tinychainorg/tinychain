@@ -10,25 +10,32 @@ from concurrent.futures import *
 from abc import ABC, abstractmethod
 
 
+# Difficulty information.
+EPOCH_LENGTH_BLOCKS = 8
+TARGET_BLOCK_RATE_SECOND = 1 * 3
+EPOCH_TARGET_DURATION_SECONDS = EPOCH_LENGTH_BLOCKS * TARGET_BLOCK_RATE_SECOND
+INITIAL_DIFFICULTY_TARGET = 2**256 - 1
+
+
 # Base block data structure.
 # 
 
 class Block:
-    def __init__(self, prev_block_hash, txs = []):
-        self.prev_block_hash = prev_block_hash
+    def __init__(self, parent_block_hash, txs = [], difficulty_target = INITIAL_DIFFICULTY_TARGET):
+        self.parent_block_hash = parent_block_hash
         self.txs = txs
         self.timestamp = 0
-        self.difficulty_target = 0
+        self.difficulty_target = difficulty_target
         self.nonce = 0
     
     # The envelope is the data we are hashing.
     def envelope(self):
         return b"".join([
-            self.prev_block_hash.to_bytes(32, byteorder='big'),
+            self.parent_block_hash.to_bytes(32, byteorder='big'),
             self.nonce.to_bytes(32, byteorder='big'),
+            self.difficulty_target.to_bytes(32, byteorder='big'),
             struct.pack(
-                "<QQ",
-                self.difficulty_target,
+                "<Q",
                 int(self.timestamp)
             )
         ])
@@ -42,21 +49,17 @@ import yaml
 def decode_block_yaml(txt):
     data = yaml.safe_load(txt)
     return Block(
-        data['prev_block_hash'],
-        data['nonce'],
-        data['difficulty'],
-        data['timestamp'],
-        data['coinbase_acc'],
-        data['txs']
+        data['parent_block_hash'],
+        data['txs'],
+        data['difficulty_target']
     )
 
 def encode_block_yaml(d):
     data = {
-        'prev_block_hash': d.prev_block_hash,
+        'parent_block_hash': d.parent_block_hash,
         'nonce': d.nonce,
-        'difficulty': d.difficulty,
+        'difficulty_target': d.difficulty_target,
         'timestamp': d.timestamp,
-        'coinbase_acc': d.coinbase_acc,
         'txs': d.txs
     }
     # Dump keys in order defined above.
@@ -80,10 +83,9 @@ class DAGBlock(Base):
     __tablename__ = 'dag_blocks'
 
     # === Base block details. === #
-    prev_block_hash = Column(String)
     txs = Column(String)
     timestamp = Column(Float, default=0.0)
-    difficulty_target = Column(String, default=0)
+    difficulty_target = Column(String, default="")
     nonce = Column(Integer, default=0)
 
     # === DAG metadata. === #
@@ -91,35 +93,37 @@ class DAGBlock(Base):
     height = Column(Integer, default=0)
     acc_work = Column(Integer, default=0)
     parent = relationship("DAGBlock", remote_side=[blockhash], backref='child', uselist=False)
-    parent_blockhash = Column(String, ForeignKey('dag_blocks.blockhash'))
-    # child = [inferred]
+    parent_blockhash = Column(String, ForeignKey('dag_blocks.blockhash'), nullable=True) 
+    # child = inferred
 
-def get_database():
-    DATABASE_URI = 'sqlite:///example.db'
-
+def get_database(name):
+    DATABASE_URI = f'sqlite:///bitcoin_{name}.db'
     engine = create_engine(DATABASE_URI)
+    Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     return Session
 
+class MockDbSessionMaker():
+    def __init__():
+        pass
+    def __call__(self):
+        return None
+
+    
 
 
-# Difficulty information.
-EPOCH_LENGTH_BLOCKS = 8
-TARGET_BLOCK_RATE_SECOND = 1 * 3
-EPOCH_TARGET_DURATION_SECONDS = EPOCH_LENGTH_BLOCKS * TARGET_BLOCK_RATE_SECOND
-INITIAL_DIFFICULTY_TARGET = 2**256 - 1
 
 
 # 
 # Core consensus engine.
 # 
 class BitcoinConsensusEngine:
-    def __init__(self, genesis_block, consensus_protocol):
+    def __init__(self, genesis_block, consensus_protocol, db):
         self.genesis_block = genesis_block
         self.blocks_by_id = {}
         self.blocks_by_height = {}
         self.consensus_protocol = consensus_protocol
-        self.db_session = get_database()
+        self.db = db
     
     # Verifies a block.
     def verify_block(self):
@@ -127,11 +131,12 @@ class BitcoinConsensusEngine:
 
     # Adds the block to the DAG.
     def add_block(self, raw_block):
-        session = self.db_session()
+        session = self.db()
 
         # 1. Create the core block details.
         dag_block = DAGBlock()
-        dag_block.prev_block_hash = raw_block.prev_block_hash.to_bytes(32, byteorder='big').hex()
+        print(raw_block.hash().hex())
+        dag_block.blockhash = raw_block.hash().hex()
         dag_block.txs = "" #TODO
         dag_block.timestamp = raw_block.timestamp
         dag_block.difficulty_target = raw_block.difficulty_target
@@ -141,10 +146,11 @@ class BitcoinConsensusEngine:
         # height = height + 1
         # acc_work = acc_work + difficulty
         # parent = parent.id
-        parent = session.query(DAGBlock).filter(DAGBlock.blockhash == raw_block.prev_block_hash).first()
+        dag_block.parent_blockhash = raw_block.parent_block_hash.to_bytes(32, byteorder='big').hex()
+        parent = session.query(DAGBlock).filter(DAGBlock.blockhash == dag_block.parent_blockhash).first()
         if parent:
             dag_block.height = parent.height + 1
-            dag_block.acc_work = parent.acc_work + raw_block.difficulty_target
+            dag_block.acc_work = parent.acc_work + (2**256 - raw_block.difficulty_target)
             dag_block.parent_hash = parent.blockhash
         else:
             # This block has no parent, so it's a root block in the DAG.
@@ -154,13 +160,6 @@ class BitcoinConsensusEngine:
         # 3. Save the new block.
         session.add(dag_block)
         session.commit()
-
-        # 4. Update + save the parent.
-        # parent.child = block.id
-        # if parent:
-        #     parent.child_backref.append(dag_block)
-        #     session.add(parent)
-        #     session.commit()
 
         session.close()
 
@@ -180,13 +179,14 @@ class BitcoinConsensusEngine:
         # 2. Solve proof-of-work puzzle.
         while len(chain) < n_blocks:
             # Mine.
+            block.difficulty_target = difficulty_target
             while True:
                 block.nonce += 1
+                block.timestamp = time.time()
                 h = block.hash()
                 if int.from_bytes(h, byteorder='big') < difficulty_target:
                     break
             
-            block.timestamp = time.time()
             # self.on_solution(block)
             print(f"POW solution block={len(chain)} target={difficulty_target} nonce={block.nonce} hash={h.hex()}")
             chain.append(block)
@@ -240,15 +240,23 @@ if __name__ == '__main__':
     print("genesis block:")
     print(genesis_block.hash().hex())
 
+    db = get_database('testnet')
+
+
     consensus_proto = MockConsensusProto()
-    consensus = BitcoinConsensusEngine(genesis_block, consensus_proto)
+    consensus = BitcoinConsensusEngine(genesis_block, consensus_proto, db)
     
     # Mine 16 blocks.
     print("mining 16 blocks...")
     chain = consensus.mine1(genesis_block, n_blocks=8)
     print("mined 16 blocks")
     print(chain)
-
+    
+    # Add blocks to DAG.
+    print("adding blocks to DAG...")
+    for block in chain:
+        consensus.add_block(block)
+    
 
 
 # PYTHONPATH=. python3 tinychain/consensus/bitcoin.py
