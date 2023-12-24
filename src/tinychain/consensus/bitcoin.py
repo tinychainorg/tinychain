@@ -27,10 +27,9 @@ class Block:
             self.prev_block_hash.to_bytes(32, byteorder='big'),
             self.nonce.to_bytes(32, byteorder='big'),
             struct.pack(
-                "<QQQ",
+                "<QQ",
                 self.difficulty_target,
-                int(self.timestamp),
-                self.coinbase_acc
+                int(self.timestamp)
             )
         ])
 
@@ -169,6 +168,7 @@ class BitcoinConsensusEngine:
     def get_tips(self):
         # Query the DAG for top 6 blocks by acc_work.
         # return []
+        pass
     
 
     def mine1(self, block, n_blocks=16):
