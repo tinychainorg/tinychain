@@ -37,6 +37,7 @@ class Block:
             struct.pack(
                 "<Q",
                 int(self.timestamp)
+                # self.difficulty_target
             )
         ])
 
@@ -85,13 +86,13 @@ class DAGBlock(Base):
     # === Base block details. === #
     txs = Column(String)
     timestamp = Column(Float, default=0.0)
-    difficulty_target = Column(String, default="")
+    difficulty_target = Column(String, default="0")
     nonce = Column(Integer, default=0)
 
     # === DAG metadata. === #
     blockhash = Column(String, primary_key=True)
     height = Column(Integer, default=0)
-    acc_work = Column(Integer, default=0)
+    acc_work = Column(String, default="0")
     parent = relationship("DAGBlock", remote_side=[blockhash], backref='child', uselist=False)
     parent_blockhash = Column(String, ForeignKey('dag_blocks.blockhash'), nullable=True) 
     # child = inferred
@@ -135,11 +136,10 @@ class BitcoinConsensusEngine:
 
         # 1. Create the core block details.
         dag_block = DAGBlock()
-        print(raw_block.hash().hex())
         dag_block.blockhash = raw_block.hash().hex()
         dag_block.txs = "" #TODO
         dag_block.timestamp = raw_block.timestamp
-        dag_block.difficulty_target = raw_block.difficulty_target
+        dag_block.difficulty_target = str(raw_block.difficulty_target)
         dag_block.nonce = raw_block.nonce
 
         # 2. Get its parent and compute accumulators.
@@ -148,14 +148,20 @@ class BitcoinConsensusEngine:
         # parent = parent.id
         dag_block.parent_blockhash = raw_block.parent_block_hash.to_bytes(32, byteorder='big').hex()
         parent = session.query(DAGBlock).filter(DAGBlock.blockhash == dag_block.parent_blockhash).first()
+        
         if parent:
             dag_block.height = parent.height + 1
-            dag_block.acc_work = parent.acc_work + (2**256 - raw_block.difficulty_target)
-            dag_block.parent_hash = parent.blockhash
+            # handle a max of 2^256 blocks
+            # the max value of difficulty is 2^256
+            # 2^256 * 2^256 = 2^512
+            work = (2**256 - raw_block.difficulty_target)
+            acc_work = int(parent.acc_work, 16) + work
+            dag_block.acc_work = acc_work.to_bytes(64, byteorder='big').hex()
         else:
             # This block has no parent, so it's a root block in the DAG.
-            dag_block.height = 1
-            dag_block.acc_work = raw_block.difficulty_target
+            dag_block.height = 0
+            acc_work = (2**256 - raw_block.difficulty_target)
+            dag_block.acc_work = acc_work.to_bytes(64, byteorder='big').hex()
 
         # 3. Save the new block.
         session.add(dag_block)
@@ -208,6 +214,7 @@ class BitcoinConsensusEngine:
                 # to make blocks faster, lower the difficulty target
                 # to make blocks slower, increase the difficulty target
                 difficulty_target *= difficulty_scale_f
+                difficulty_target = int(difficulty_target)
 
                 print(f"epoch duration={epoch_duration} difficulty={difficulty_target}")
                 print(f"difficulty retarget factor={difficulty_scale_f} difficulty={difficulty_target}")
@@ -248,7 +255,8 @@ if __name__ == '__main__':
     
     # Mine 16 blocks.
     print("mining 16 blocks...")
-    chain = consensus.mine1(genesis_block, n_blocks=8)
+    # chain = consensus.mine1(genesis_block, n_blocks=8)
+    chain = consensus.mine1(genesis_block, n_blocks=16)
     print("mined 16 blocks")
     print(chain)
     
