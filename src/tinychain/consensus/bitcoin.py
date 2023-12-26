@@ -12,6 +12,8 @@ from abc import ABC, abstractmethod
 def u256_to_str(x):
     return x.to_bytes(32, byteorder='big').hex()
 
+def str_to_u256(x):
+    return int(x, 16)
 
 # Difficulty information.
 EPOCH_LENGTH_BLOCKS = 8
@@ -39,11 +41,9 @@ def get_epoch_difficulty(epoch_span, difficulty_target_0):
     
     # to make blocks faster, lower the difficulty target
     # to make blocks slower, increase the difficulty target
-    difficulty_target *= difficulty_scale_f
-    difficulty_target = int(difficulty_target)
-
-    print(f"epoch duration={epoch_duration} difficulty={difficulty_target}")
-    print(f"difficulty retarget factor={difficulty_scale_f} difficulty={difficulty_target}")
+    difficulty_target *= difficulty_scale_f # scale difficulty
+    difficulty_target = int(difficulty_target) # round to int
+    difficulty_target = min(difficulty_target, INITIAL_DIFFICULTY_TARGET) # clamp to max
 
     return difficulty_target
 
@@ -154,11 +154,9 @@ class MockDbSessionMaker():
 # Core consensus engine.
 # 
 class BitcoinConsensusEngine:
-    def __init__(self, genesis_block, consensus_protocol, db):
-        self.genesis_block = genesis_block
+    def __init__(self, db):
         self.blocks_by_id = {}
         self.blocks_by_height = {}
-        self.consensus_protocol = consensus_protocol
         self.db = db
     
     # Verifies a block.
@@ -170,6 +168,8 @@ class BitcoinConsensusEngine:
         pass
 
     def on_block_gossip(self, raw_block):
+        print("BLOCK GOSSIP WAT WAT")
+        
         # request ancestors via gossip.
         # then verify each block, and ingest.
         pass
@@ -226,9 +226,8 @@ class BitcoinConsensusEngine:
 
         return tips
     
+    # Gets the difficulty target for a block.
     def get_difficulty(self, parent_block_hash):
-        # assert isinstance(parent_block_hash, int)
-
         # Case: genesis block.
         if parent_block_hash == 0:
             return INITIAL_DIFFICULTY_TARGET
@@ -280,7 +279,7 @@ class BitcoinConsensusEngine:
                 # update timestamp every 500ms (throttled).
                 # https://bitcoin.stackexchange.com/questions/3165/what-hash-rate-can-a-raspberry-pi-achieve-can-the-gpu-be-used 
                 # 0.2 MH/s - 200 KH/s - 200,000 H/s
-                if block.nonce % 200_000:
+                if block.nonce % (200_000 / 2):
                     block.timestamp = time.time()
                 
                 # increment nonce.
@@ -289,10 +288,10 @@ class BitcoinConsensusEngine:
                 # hash.
                 h = block.hash()
 
+                # check POW solution
                 if int.from_bytes(h, byteorder='big') < difficulty_target:
                     break
             
-            # self.on_solution(block)
             print(f"POW solution block={len(chain)} target={difficulty_target} nonce={block.nonce} hash={h.hex()}")
             chain.append(block)
             self.add_block(block)
@@ -326,8 +325,7 @@ def test_mining():
     genesis_block = Block(0, [])
     db = get_database('mining', memory=False)
     # db = get_database('mining', memory=True)
-    consensus_proto = MockConsensusProto()
-    consensus = BitcoinConsensusEngine(genesis_block, consensus_proto, db)
+    consensus = BitcoinConsensusEngine(db)
     
     # Mine 16 blocks.
     print("mining 16 blocks...")
@@ -341,8 +339,92 @@ def test_mining():
     chain1 = consensus.mine1(ancestor_block.hash_int(), start_nonce=1, n_blocks=4)
     chain2 = consensus.mine1(ancestor_block.hash_int(), start_nonce=2, n_blocks=4)
 
-    
+class MinerThread():
+    def __init__(self):
+        pass
 
+
+import multiprocessing
+from threading import Thread
+
+from tinychain.protocol_http import HttpProtocolNode
+from tinychain.protocol import Protocol
+
+class SimpleConsensusNode:
+    def __init__(self):
+        pass
+
+    # main loop:
+    # 1. Mine blocks using latest state.
+    # 2. Await new blocks, verify and download them.
+    # 3. Update the state machine.
+    def run(self, datakey, peer_listen_addr, bootstrap_peers: list = []):
+        db = get_database(f"{datakey}", memory=False)
+        consensus = BitcoinConsensusEngine(db)
+
+        # after every block solution, broadcast to network.
+        # after every received block, download and verify it
+        # after every consensus tip update, rejog the state machine.
+
+        blockchain = None
+        protocol = Protocol(blockchain, None)
+        laddr, lport = peer_listen_addr.split(":")
+        peer = HttpProtocolNode(laddr, lport, protocol)
+
+        for peer_addr in bootstrap_peers:
+            paddr, pport = peer_addr.split(":")
+            protocol.connect_bootstrap_peer(paddr, pport)
+
+        self.peer = peer
+        self.protocol = protocol
+        self.consensus = consensus
+        self.protocol.on_new_block = consensus.on_block_gossip
+
+        # Now run threads.
+        Thread(target=self.run_miner).start()
+        # Thread(target=self.run_main).start()
+        Thread(target=self.run_peer).start()
+    
+    def run_main(self):
+        while True:
+            time.sleep(1)
+            print(1111111111)
+
+    def run_peer(self):
+        self.peer.listen()
+
+    def run_miner(self):
+        genesis_block = Block(0, [])
+        if self.consensus.get_block_by_hash(genesis_block.hash().hex()):
+            print("genesis block already exists")
+        else:
+            self.consensus.add_block(genesis_block)
+
+        while True:
+            tips = self.consensus.get_tips()
+            latest_tip = tips[0]
+            print(f"mining on tip: hash={latest_tip.blockhash}")
+            chain = self.consensus.mine1(str_to_u256(latest_tip.blockhash), n_blocks=1)
+            print("mined 1 block")
+            # Broadcast.
+            self.protocol.broadcast_block(block=chain[0])
+
+
+
+import socket
+from contextlib import closing
+   
+def is_port_open(port):
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        return sock.connect_ex(("0.0.0.0", port)) == 0
+
+def test_networking():
+    if not is_port_open(5100):
+        x = SimpleConsensusNode()
+        x.run("node1", "0.0.0.0:5100", ["0.0.0.0:5101"])
+    else:
+        x = SimpleConsensusNode()
+        x.run("node2", "0.0.0.0:5101", ["0.0.0.0:5100"])
 
 
 
@@ -355,7 +437,7 @@ def test_1():
 
 
     consensus_proto = MockConsensusProto()
-    consensus = BitcoinConsensusEngine(genesis_block, consensus_proto, db)
+    consensus = BitcoinConsensusEngine(db)
     
     # Mine 16 blocks.
     print("mining 16 blocks...")
@@ -373,7 +455,7 @@ def test_2_tips():
     genesis_block = Block(0, [])
     db = get_database('testnet1')
     consensus_proto = MockConsensusProto()
-    consensus = BitcoinConsensusEngine(genesis_block, consensus_proto, db)
+    consensus = BitcoinConsensusEngine(db)
     
 
 
@@ -389,7 +471,8 @@ def test_2_tips():
     
 
 if __name__ == '__main__':
-    test_mining()
+    test_networking()
+    # test_mining()
     # test_2_tips()
     
 

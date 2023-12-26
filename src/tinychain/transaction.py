@@ -1,7 +1,7 @@
 from hashlib import sha256
 import yaml
-from wallet import Wallet
-from crypto import verify_sig
+from tinychain.wallet import Wallet
+from tinychain.crypto import verify_sig
 
 # A transaction.
 class Tx:

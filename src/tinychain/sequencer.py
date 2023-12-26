@@ -1,6 +1,6 @@
 import os
-from transaction import decode_tx_yaml
-from crypto import verify_sig
+from tinychain.transaction import decode_tx_yaml
+from tinychain.crypto import verify_sig
 
 class FileSystemSequencer():
     def __init__(self, data_path):

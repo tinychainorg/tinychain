@@ -48,9 +48,9 @@
 # The context is simple - the transaction (from, to, data).
 
 
-from sequencer import FileSystemSequencer
-from state_machine import StateMachine
-from gas_market import GasMarket
+from tinychain.sequencer import FileSystemSequencer
+from tinychain.state_machine import StateMachine
+from tinychain.gas_market import GasMarket
 
 class Blockchain:
     def __init__(self):

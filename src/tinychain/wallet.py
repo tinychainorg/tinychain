@@ -2,7 +2,7 @@ import ecdsa
 from ecdsa import VerifyingKey, BadSignatureError, SECP256k1
 from ecdsa.util import sigdecode_der
 from hashlib import sha256
-from crypto import sign_msg, verify_sig
+from tinychain.crypto import sign_msg, verify_sig
 
 # A wallet is a public-private keypair.
 # The public key is the address.

@@ -22,9 +22,10 @@ import functools
 import traceback
 import requests
 from flask import Flask, jsonify, request
-from blockchain import Blockchain
-from protocol import Protocol
+from tinychain.blockchain import Blockchain
+# from tinychain.protocol import Protocol
 from threading import Thread
+
 
 class HttpProtocolNode:
     def __init__(self, addr, port, protocol):
@@ -37,7 +38,7 @@ class HttpProtocolNode:
         self.register_method(self.protocol.net_getPeers)
         self.register_method(self.protocol.user_getBalance)
         self.register_method(self.protocol.machine_eval)
-        self.register_method(self.protocol.consensus_block)
+        self.register_method(self.protocol.recv_block)
 
     def listen(self):
         self.app.add_url_rule(
@@ -80,18 +81,20 @@ def methods(cls):
     return [x for x, y in cls.__dict__.items() if type(y) == FunctionType]
 
 class HttpProtocolPeer:
-    def __init__(self, addr, port):
+    def __init__(self, addr, port, protocol):
         self.addr = addr
         self.port = port
-        self.methods = methods(Protocol)
+        self.methods = methods(protocol)
+        # self.methods = methods(Protocol)
 
     def __getattr__(self, name):
-        if name in self.methods:
-            return functools.partial(self.call_method, name)
-        else:
-            raise AttributeError("{} has no attribute {}".format(self.__class__.__name__, name))
+        return functools.partial(self.call_method, name)
+        # if name in self.methods:
+        #     return functools.partial(self.call_method, name)
+        # else:
+        #     raise AttributeError("{} has no attribute {}".format(self.__class__.__name__, name))
     
-    def call_method(self, name, typ, *args, **kwargs):
+    def call_method(self, name, *args, **kwargs):
         print("calling method {} with args={} kwargs={}".format(name, args, kwargs))
 
         # HTTP request to node.
@@ -108,15 +111,16 @@ class HttpProtocolPeer:
 
 
 def test_start_node(host="0.0.0.0", port=5000):
-    protocol = Protocol(Blockchain())
+    # protocol = Protocol(Blockchain())
     
     # Create a hTTP node.
-    node = HttpProtocolNode(host, port, protocol)
+    # node = HttpProtocolNode(host, port, protocol)
     # Create the protocol.
     # Add consensus gossip to the protocol.
     # Register method on node.
     # Connect the consensus module to the protocol.
     # Start the miner.
+    pass
 
 
     

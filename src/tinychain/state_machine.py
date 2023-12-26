@@ -1,6 +1,6 @@
-from vms.brainfuck import BrainfuckVM
+from tinychain.vms.brainfuck import BrainfuckVM
 from collections import defaultdict
-from gas_market import GasMarket
+from tinychain.gas_market import GasMarket
 
 class InsufficientFundsException(Exception):
     pass

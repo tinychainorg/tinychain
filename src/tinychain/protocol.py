@@ -1,5 +1,5 @@
-from blockchain import Blockchain
-from protocol_http import HttpProtocolPeer
+from tinychain.blockchain import Blockchain
+from tinychain.protocol_http import HttpProtocolPeer
 
 CLIENT_VERSION = '0.0.1'
 PROTOCOL_VERSION = '0.0.1'
@@ -18,7 +18,7 @@ PROTOCOL_VERSION = '0.0.1'
 # - user_getTransaction
 # - user_getBalance
 class Protocol:
-    def __init__(self, blockchain: Blockchain, consensus_engine: BitcoinConsensusEngine):
+    def __init__(self, blockchain: Blockchain, consensus_engine):
         self.peers = []
         self.blockchain = blockchain
         self.consensus_engine = consensus_engine
@@ -30,12 +30,12 @@ class Protocol:
         # Routine: Run the transaction gossip subroutine.
         pass
 
-    def broadcast_block(self, block):
+    def broadcast_block(self, block=None):
         for peer in self.peers:
-            peer.consensus_block(block)
-
-    def on_new_block(self):
-        print(f"new block {block.hash().hex()}")
+            peer.recv_block(block={
+                'hash': block.hash().hex(),
+                'txs': block.txs,
+            })
 
     def routine_bootstrap_peers(self):
         # Connect to the configured bootstrap peers.
@@ -52,7 +52,7 @@ class Protocol:
 
 
     def connect_bootstrap_peer(self, addr, port):
-        peer = HttpProtocolPeer(addr, port)
+        peer = HttpProtocolPeer(addr, port, self)
         self.peers.append(peer)
 
         # dial and discover other peers.
@@ -92,6 +92,6 @@ class Protocol:
         (output, gas_used) = self.blockchain.state_machine.eval(DummyTx(from_acc, to_acc, data))
         return { 'output': output, 'gas_used': gas_used }
     
-    def consensus_block(self, block):
+    def recv_block(self, block=None):
         self.on_new_block(block)
 
