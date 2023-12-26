@@ -4,6 +4,27 @@ from tinychain.protocol_http import HttpProtocolPeer
 CLIENT_VERSION = '0.0.1'
 PROTOCOL_VERSION = '0.0.1'
 
+import yaml
+def decode_block_yaml(txt):
+    data = yaml.safe_load(txt)
+    b = Block(
+        data['parent_block_hash'],
+        data['txs']
+    )
+    b.nonce = data['nonce']
+    b.difficulty_target = data['difficulty_target']
+    b.timestamp = data['timestamp']
+    return b
+
+class Block:
+    def __init__(self, parent_block_hash: int, txs = []):
+        self.parent_block_hash = parent_block_hash
+        self.txs = txs
+        self.timestamp = 0
+        self.difficulty_target = 0
+        self.nonce = 0
+
+
 # This is the core of our protocol.
 # Message types:
 # - net_getPeers
@@ -30,12 +51,9 @@ class Protocol:
         # Routine: Run the transaction gossip subroutine.
         pass
 
-    def broadcast_block(self, block=None):
+    def broadcast_block(self, block=""):
         for peer in self.peers:
-            peer.recv_block(block={
-                'hash': block.hash().hex(),
-                'txs': block.txs,
-            })
+            peer.recv_block(block=block)
 
     def routine_bootstrap_peers(self):
         # Connect to the configured bootstrap peers.
@@ -92,6 +110,20 @@ class Protocol:
         (output, gas_used) = self.blockchain.state_machine.eval(DummyTx(from_acc, to_acc, data))
         return { 'output': output, 'gas_used': gas_used }
     
-    def recv_block(self, block=None):
-        self.on_new_block(block)
+    def broadcast_block(self, block=None):
+        self.on_broadcast_block(block)
 
+    def get_blocks(self, blockhashes=[]):
+        return self.on_get_blocks(blockhashes)
+
+    def peer_get_blocks(self, blockhashes=[]):
+        blocks = []
+        for peer in self.peers:
+            res = peer.get_blocks(blockhashes)
+            for d in res:
+                block = decode_block_yaml(d)
+                blocks.append(block)
+            if len(blocks) == len(blockhashes):
+                break
+        
+        return blocks

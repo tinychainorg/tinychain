@@ -83,11 +83,14 @@ class Block:
 import yaml
 def decode_block_yaml(txt):
     data = yaml.safe_load(txt)
-    return Block(
+    b = Block(
         data['parent_block_hash'],
-        data['txs'],
-        data['difficulty_target']
+        data['txs']
     )
+    b.nonce = data['nonce']
+    b.difficulty_target = data['difficulty_target']
+    b.timestamp = data['timestamp']
+    return b
 
 def encode_block_yaml(d):
     data = {
@@ -154,35 +157,60 @@ class MockDbSessionMaker():
 # Core consensus engine.
 # 
 class BitcoinConsensusEngine:
-    def __init__(self, db):
-        self.blocks_by_id = {}
-        self.blocks_by_height = {}
+    def __init__(self, db, protocol):
         self.db = db
+        self.protocol = protocol
+        self.session = self.db()
     
     # Verifies a block.
-    def verify_block(self):
-        # verify timestamp.
-        # compute next epoch if need be.
-        # verify POW solution / difficulty.
-        # verify tx signatures.
-        pass
+    def verify_block(self, block):
+        # 1. Get the block's parent.
+        # 2. Verify the timestamp is monotonically increasing (ie. A < B)
+        # 3. Verify the POW solution.
+        # 4. Verify the difficulty is computed correctly.
+        # 5. Verify the transaction signatures are valid.
+        return True
 
-    def on_block_gossip(self, raw_block):
-        print("BLOCK GOSSIP WAT WAT")
-        
-        
+    def on_recv_block(self, raw_block):
+        # blocks to ingest.
+        blocks = []
+
+        # download all the unknown blocks in this path.
         # request ancestors via gossip.
-        # then verify each block, and ingest.
-        pass
+        while True:
+            parent_blockhash = raw_block.parent_block_hash.to_bytes(32, byteorder='big').hex()
+            parent_block = self.get_block_by_hash(parent_blockhash)
+            if parent_block:
+                break
+            else:
+                block_datums = self.protocol.peer_get_blocks([parent_blockhash])
+                if len(block_datums) == 0:
+                    raise Exception(f"block not found: {parent_blockhash}")
+                for block_data in block_datums:
+                    block = decode_block_yaml(block_data)
+                    blocks.append(block)
+                    # TODO verify the right block is received.
+        
+        # now verify them in order of age (oldest first).
+        # sort by age- 
+        blocks = sorted(blocks, key=lambda x: x.timestamp)
+
+        # verify each block.
+        for block in blocks:
+            is_valid = self.verify_block(block)
+            if is_valid:
+                self.add_block(block)
+            else:
+                raise Exception(f"block is invalid: {block}")
 
     def get_block_by_hash(self, block_hash):
         assert isinstance(block_hash, str)
-        session = self.db()
-        return session.query(DAGBlock).filter(DAGBlock.blockhash == block_hash).first()
+        print(f"get_block_by_hash: {block_hash}")
+        return self.session.query(DAGBlock).filter(DAGBlock.blockhash == block_hash).first()
 
     # Adds the block to the DAG.
     def add_block(self, raw_block):
-        session = self.db()
+        session = self.session
 
         # 1. Create the core block details.
         dag_block = DAGBlock()
@@ -216,15 +244,11 @@ class BitcoinConsensusEngine:
         # 3. Save the new block.
         session.add(dag_block)
         session.commit()
-
-        session.close()
     
     def get_tips(self):
         # Query the DAG for top 6 blocks by acc_work.
-        session = self.db()
+        session = self.session
         tips = session.query(DAGBlock).order_by(DAGBlock.acc_work.desc()).limit(6).all()
-        session.close()
-
         return tips
     
     # Gets the difficulty target for a block.
@@ -268,9 +292,11 @@ class BitcoinConsensusEngine:
 
         # 1. Solve proof-of-work puzzle.
         while len(chain) < n_blocks:
+            parent_block = self.get_block_by_hash(u256_to_str(block.parent_block_hash))
             block.timestamp = time.time()
             block.nonce = start_nonce
-
+            block.height = parent_block.height + 1 or 0
+            
             # 1. Get difficulty for block.
             difficulty_target = self.get_difficulty(block.parent_block_hash)
             print(f"difficulty_target: {difficulty_target}")
@@ -293,7 +319,7 @@ class BitcoinConsensusEngine:
                 if int.from_bytes(h, byteorder='big') < difficulty_target:
                     break
             
-            print(f"POW solution block={len(chain)} target={difficulty_target} nonce={block.nonce} hash={h.hex()}")
+            print(f"POW solution block={block.height} target={difficulty_target} nonce={block.nonce} hash={h.hex()}")
             chain.append(block)
             self.add_block(block)
 
@@ -303,19 +329,6 @@ class BitcoinConsensusEngine:
         
         return chain
 
-
-# Networking.
-# 
-
-class ConsensusProtocol(ABC):
-    @abstractmethod
-    def download_block(self, block_id):
-        pass
-
-class MockConsensusProto:
-    def download_block(self, block_id):
-        print(f"downloading block {block_id}")
-        return Block(block_id, [])
 
 
 # Run.
@@ -351,6 +364,10 @@ from threading import Thread
 from tinychain.protocol_http import HttpProtocolNode
 from tinychain.protocol import Protocol
 
+GENESIS_BLOCK = Block(0, [])
+# nearest 12am to the present time
+GENESIS_BLOCK.timestamp = int(time.time()) - (int(time.time()) % 86400)
+
 class SimpleConsensusNode:
     def __init__(self):
         pass
@@ -360,9 +377,6 @@ class SimpleConsensusNode:
     # 2. Await new blocks, verify and download them.
     # 3. Update the state machine.
     def run(self, datakey, peer_listen_addr, bootstrap_peers: list = []):
-        db = get_database(f"{datakey}", memory=False)
-        consensus = BitcoinConsensusEngine(db)
-
         # after every block solution, broadcast to network.
         # after every received block, download and verify it
         # after every consensus tip update, rejog the state machine.
@@ -370,32 +384,44 @@ class SimpleConsensusNode:
         blockchain = None
         protocol = Protocol(blockchain, None)
         laddr, lport = peer_listen_addr.split(":")
-        peer = HttpProtocolNode(laddr, lport, protocol)
+        node = HttpProtocolNode(laddr, lport)
+        node.register_method("get_blocks", protocol.get_blocks)
+        node.register_method("broadcast_block", protocol.broadcast_block)
+        protocol.on_broadcast_block = self.on_broadcast_block
+        protocol.on_get_blocks = self.on_get_blocks
+
+
+        db = get_database(f"{datakey}", memory=False)
+        consensus = BitcoinConsensusEngine(db, protocol)
 
         for peer_addr in bootstrap_peers:
             paddr, pport = peer_addr.split(":")
             protocol.connect_bootstrap_peer(paddr, pport)
 
-        self.peer = peer
+        self.node = node
         self.protocol = protocol
         self.consensus = consensus
-        self.protocol.on_new_block = consensus.on_block_gossip
+        
+        
 
         # Now run threads.
         Thread(target=self.run_miner).start()
         # Thread(target=self.run_main).start()
-        Thread(target=self.run_peer).start()
+        Thread(target=self.run_node).start()
     
     def run_main(self):
         while True:
             time.sleep(1)
             print(1111111111)
 
-    def run_peer(self):
-        self.peer.listen()
+    def run_node(self):
+        self.node.listen()
 
     def run_miner(self):
-        genesis_block = Block(0, [])
+        genesis_block = GENESIS_BLOCK
+        print(f"genesis block: {genesis_block.hash().hex()}")
+        assert genesis_block.hash().hex() == "da7a58879c46a9066190deee9d4a1d1118233a1dab9d5c4188b378015860a648"
+
         if self.consensus.get_block_by_hash(genesis_block.hash().hex()):
             print("genesis block already exists")
         else:
@@ -408,7 +434,28 @@ class SimpleConsensusNode:
             chain = self.consensus.mine1(str_to_u256(latest_tip.blockhash), n_blocks=1)
             print("mined 1 block")
             # Broadcast.
-            self.protocol.broadcast_block(block=chain[0])
+            self.broadcast_block(chain[0])
+            # Thread(target=self.broadcast_block, args=(chain[0],)).start()
+    
+    def broadcast_block(self, block):
+        print(f"broadcasting block: {block.hash().hex()}")
+        self.protocol.broadcast_block(block=encode_block_yaml(block))
+    
+    def on_broadcast_block(self, block):
+        b = decode_block_yaml(block)
+        self.consensus.on_recv_block(b)
+    
+    def on_get_blocks(self, blockhashes):
+        print(f"on_get_blocks hashes={blockhashes}")
+        lis = []
+        for blockhash in blockhashes:
+            b = self.consensus.get_block_by_hash(blockhash)
+            if b:
+                lis.append(encode_block_yaml(b))
+            else:
+                print(f"block not found: {blockhash}")
+        print(f"ret: {lis}")
+        return lis
 
 
 

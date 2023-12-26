@@ -28,17 +28,11 @@ from threading import Thread
 
 
 class HttpProtocolNode:
-    def __init__(self, addr, port, protocol):
+    def __init__(self, addr, port):
         self.app = Flask(__name__)
         self.addr = addr
         self.port = port
-        self.protocol = protocol
         self.registered_methods = []
-
-        self.register_method(self.protocol.net_getPeers)
-        self.register_method(self.protocol.user_getBalance)
-        self.register_method(self.protocol.machine_eval)
-        self.register_method(self.protocol.recv_block)
 
     def listen(self):
         self.app.add_url_rule(
@@ -53,18 +47,19 @@ class HttpProtocolNode:
     def index_methods(self):
         return "Registered methods:<ul><li>{}</ul>".format("<li>".join(self.registered_methods))
 
-    def register_method(self, method):
-        self.registered_methods.append(method.__name__)
-        partial_wrap = functools.partial(self.wrap_method, method, 'POST')
-        partial_wrap.__name__ = method.__name__
+    def register_method(self, method_name, method):
+        self.registered_methods.append(method_name)
+        partial_wrap = functools.partial(self.wrap_method, method_name, method, 'POST')
+        partial_wrap.__name__ = method_name
 
         self.app.add_url_rule(
-            '/api/{}'.format(method.__name__), 
+            f"/api/{method_name}",
             view_func=partial_wrap,
             methods=['POST']
         )
 
-    def wrap_method(self, method, *args, **kwargs):
+    def wrap_method(self, method_name, method, *args, **kwargs):
+        print(f"[{self.addr}:{self.port}] handling request for method {method_name} ({method.__name__}) with args={args} kwargs={kwargs}")
         # print(request.json)
         try:
             res = method(**request.json)
@@ -84,7 +79,7 @@ class HttpProtocolPeer:
     def __init__(self, addr, port, protocol):
         self.addr = addr
         self.port = port
-        self.methods = methods(protocol)
+        # self.methods = methods(protocol)
         # self.methods = methods(Protocol)
 
     def __getattr__(self, name):
@@ -95,9 +90,10 @@ class HttpProtocolPeer:
         #     raise AttributeError("{} has no attribute {}".format(self.__class__.__name__, name))
     
     def call_method(self, name, *args, **kwargs):
-        print("calling method {} with args={} kwargs={}".format(name, args, kwargs))
+        print(f"[{self.addr}:{self.port}] calling method {name} with args={args} kwargs={kwargs}")
 
         # HTTP request to node.
+        # Handle Connection refused
         res = requests.post("http://{}:{}/api/{}".format(self.addr, self.port, name), json=kwargs)
         
         print(res.json())
