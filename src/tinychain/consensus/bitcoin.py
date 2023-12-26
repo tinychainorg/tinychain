@@ -9,6 +9,9 @@ import threading
 from concurrent.futures import *
 from abc import ABC, abstractmethod
 
+def u256_to_str(x):
+    return x.to_bytes(32, byteorder='big').hex()
+
 
 # Difficulty information.
 EPOCH_LENGTH_BLOCKS = 8
@@ -16,16 +19,44 @@ TARGET_BLOCK_RATE_SECOND = 1 * 3
 EPOCH_TARGET_DURATION_SECONDS = EPOCH_LENGTH_BLOCKS * TARGET_BLOCK_RATE_SECOND
 INITIAL_DIFFICULTY_TARGET = 2**256 - 1
 
+# epoch_span is a list of blocks in the epoch.
+# difficulty_target_0 is the difficulty target of the first block in the epoch.
+def get_epoch_difficulty(epoch_span, difficulty_target_0):
+    for block in epoch_span:
+        print(f"block {block.height}: {block.blockhash} {block.difficulty_target} {block.timestamp}")
+
+    difficulty_target = difficulty_target_0
+    epoch_start = epoch_span[0]
+    epoch_end = epoch_span[-1]
+
+    # Calculate epoch duration.
+    epoch_duration = epoch_end.timestamp - epoch_start.timestamp
+    print(f"epoch duration={epoch_duration} difficulty={difficulty_target}")
+    
+    # Rescale difficulty target.
+    difficulty_scale_f = epoch_duration / EPOCH_TARGET_DURATION_SECONDS
+    print(f"difficulty retarget factor={difficulty_scale_f} difficulty={difficulty_target}")
+    
+    # to make blocks faster, lower the difficulty target
+    # to make blocks slower, increase the difficulty target
+    difficulty_target *= difficulty_scale_f
+    difficulty_target = int(difficulty_target)
+
+    print(f"epoch duration={epoch_duration} difficulty={difficulty_target}")
+    print(f"difficulty retarget factor={difficulty_scale_f} difficulty={difficulty_target}")
+
+    return difficulty_target
+
 
 # Base block data structure.
 # 
 
 class Block:
-    def __init__(self, parent_block_hash, txs = [], difficulty_target = INITIAL_DIFFICULTY_TARGET):
+    def __init__(self, parent_block_hash: int, txs = []):
         self.parent_block_hash = parent_block_hash
         self.txs = txs
         self.timestamp = 0
-        self.difficulty_target = difficulty_target
+        self.difficulty_target = INITIAL_DIFFICULTY_TARGET
         self.nonce = 0
     
     # The envelope is the data we are hashing.
@@ -43,6 +74,9 @@ class Block:
 
     def hash(self):
         return sha256(self.envelope()).digest()
+    
+    def hash_int(self):
+        return int.from_bytes(self.hash(), byteorder='big')
 
 
 # Block encoding/decoding.
@@ -97,8 +131,10 @@ class DAGBlock(Base):
     parent_blockhash = Column(String, ForeignKey('dag_blocks.blockhash'), nullable=True) 
     # child = inferred
 
-def get_database(name):
+def get_database(name, memory=False):
     DATABASE_URI = f'sqlite:///bitcoin_{name}.db'
+    if memory:
+        DATABASE_URI = 'sqlite:///:memory:'
     engine = create_engine(DATABASE_URI)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
@@ -110,7 +146,6 @@ class MockDbSessionMaker():
     def __call__(self):
         return None
 
-    
 
 
 
@@ -128,7 +163,21 @@ class BitcoinConsensusEngine:
     
     # Verifies a block.
     def verify_block(self):
+        # verify timestamp.
+        # compute next epoch if need be.
+        # verify POW solution / difficulty.
+        # verify tx signatures.
         pass
+
+    def on_block_gossip(self, raw_block):
+        # request ancestors via gossip.
+        # then verify each block, and ingest.
+        pass
+
+    def get_block_by_hash(self, block_hash):
+        assert isinstance(block_hash, str)
+        session = self.db()
+        return session.query(DAGBlock).filter(DAGBlock.blockhash == block_hash).first()
 
     # Adds the block to the DAG.
     def add_block(self, raw_block):
@@ -168,59 +217,89 @@ class BitcoinConsensusEngine:
         session.commit()
 
         session.close()
-
     
     def get_tips(self):
         # Query the DAG for top 6 blocks by acc_work.
-        # return []
-        pass
+        session = self.db()
+        tips = session.query(DAGBlock).order_by(DAGBlock.acc_work.desc()).limit(6).all()
+        session.close()
+
+        return tips
     
+    def get_difficulty(self, parent_block_hash):
+        # assert isinstance(parent_block_hash, int)
 
-    def mine1(self, block, n_blocks=16):
+        # Case: genesis block.
+        if parent_block_hash == 0:
+            return INITIAL_DIFFICULTY_TARGET
+        
+        # Get the height in the chain.
+        parent_block = self.get_block_by_hash(u256_to_str(parent_block_hash))
+        if not parent_block:
+            raise Exception(f"parent block not found: {parent_block_hash}")
+        block_height = parent_block.height + 1
+
+        # Detect whether this is a new epoch.
+        is_epoch_boundary = block_height % EPOCH_LENGTH_BLOCKS == 0
+
+        # Case: within epoch.
+        if not is_epoch_boundary:
+            return int(parent_block.difficulty_target)
+        
+        # Case: block on epoch boundary.
+        # Retarget difficulty every epoch.
+
+        # Get all blocks of last epoch, by traversing the DAG upwards (ancestors) to the start of the epoch.
+        epoch_start_height = block_height - EPOCH_LENGTH_BLOCKS
+        curr_block = parent_block
+        chain = [curr_block]
+        while epoch_start_height <= curr_block.height:
+            if curr_block.height == 0:
+                break
+            curr_block = self.get_block_by_hash(curr_block.parent_blockhash)
+            chain.append(curr_block)
+        
+        difficulty_target_1 = get_epoch_difficulty(list(reversed(chain)), int(curr_block.difficulty_target))
+        return difficulty_target_1
+
+    def mine1(self, parent_block_hash: int, start_nonce=0, n_blocks=16):
         chain = []
+        block = Block(parent_block_hash, [])
 
-        # 1. Set difficulty.
-        difficulty_target = INITIAL_DIFFICULTY_TARGET
-
-        # 2. Solve proof-of-work puzzle.
+        # 1. Solve proof-of-work puzzle.
         while len(chain) < n_blocks:
-            # Mine.
+            block.timestamp = time.time()
+            block.nonce = start_nonce
+
+            # 1. Get difficulty for block.
+            difficulty_target = self.get_difficulty(block.parent_block_hash)
+            print(f"difficulty_target: {difficulty_target}")
             block.difficulty_target = difficulty_target
+
             while True:
+                # update timestamp every 500ms (throttled).
+                # https://bitcoin.stackexchange.com/questions/3165/what-hash-rate-can-a-raspberry-pi-achieve-can-the-gpu-be-used 
+                # 0.2 MH/s - 200 KH/s - 200,000 H/s
+                if block.nonce % 200_000:
+                    block.timestamp = time.time()
+                
+                # increment nonce.
                 block.nonce += 1
-                block.timestamp = time.time()
+
+                # hash.
                 h = block.hash()
+
                 if int.from_bytes(h, byteorder='big') < difficulty_target:
                     break
             
             # self.on_solution(block)
             print(f"POW solution block={len(chain)} target={difficulty_target} nonce={block.nonce} hash={h.hex()}")
             chain.append(block)
+            self.add_block(block)
 
-            # Retarget difficulty every epoch.
-            if len(chain) % EPOCH_LENGTH_BLOCKS == 0:
-                # Get all blocks of last epoch
-                epoch_span = chain[-EPOCH_LENGTH_BLOCKS:]
-                epoch_start = epoch_span[0]
-                epoch_end = epoch_span[-1]
-                # Calculate epoch duration.
-                epoch_duration = epoch_end.timestamp - epoch_start.timestamp
-                print(f"epoch duration={epoch_duration} difficulty={difficulty_target}")
-                
-                
-                # Rescale difficulty target.
-                difficulty_scale_f = epoch_duration / EPOCH_TARGET_DURATION_SECONDS
-                
-                # to make blocks faster, lower the difficulty target
-                # to make blocks slower, increase the difficulty target
-                difficulty_target *= difficulty_scale_f
-                difficulty_target = int(difficulty_target)
-
-                print(f"epoch duration={epoch_duration} difficulty={difficulty_target}")
-                print(f"difficulty retarget factor={difficulty_scale_f} difficulty={difficulty_target}")
-
-            next_block = Block(int.from_bytes(h, byteorder='big'), [])
-            block = next_block
+            block = Block(int.from_bytes(h, byteorder='big'), [])
+            block.timestamp = time.time()
+            block.nonce = start_nonce
         
         return chain
 
@@ -242,7 +321,32 @@ class MockConsensusProto:
 # Run.
 # 
 
-if __name__ == '__main__':
+
+def test_mining():
+    genesis_block = Block(0, [])
+    db = get_database('mining', memory=False)
+    # db = get_database('mining', memory=True)
+    consensus_proto = MockConsensusProto()
+    consensus = BitcoinConsensusEngine(genesis_block, consensus_proto, db)
+    
+    # Mine 16 blocks.
+    print("mining 16 blocks...")
+    chain = consensus.mine1(0, n_blocks=4)
+    print("mined 16 blocks")
+    print(chain)
+
+    # Now mine 2 subchains from common ancestor.
+    ancestor_block = chain[-1]
+    print(f"ancestor block hash: {ancestor_block.hash().hex()}")
+    chain1 = consensus.mine1(ancestor_block.hash_int(), start_nonce=1, n_blocks=4)
+    chain2 = consensus.mine1(ancestor_block.hash_int(), start_nonce=2, n_blocks=4)
+
+    
+
+
+
+
+def test_1():
     genesis_block = Block(0, [])
     print("genesis block:")
     print(genesis_block.hash().hex())
@@ -256,7 +360,7 @@ if __name__ == '__main__':
     # Mine 16 blocks.
     print("mining 16 blocks...")
     # chain = consensus.mine1(genesis_block, n_blocks=8)
-    chain = consensus.mine1(genesis_block, n_blocks=16)
+    chain = consensus.mine1(genesis_block, n_blocks=32)
     print("mined 16 blocks")
     print(chain)
     
@@ -264,6 +368,29 @@ if __name__ == '__main__':
     print("adding blocks to DAG...")
     for block in chain:
         consensus.add_block(block)
+
+def test_2_tips():
+    genesis_block = Block(0, [])
+    db = get_database('testnet1')
+    consensus_proto = MockConsensusProto()
+    consensus = BitcoinConsensusEngine(genesis_block, consensus_proto, db)
+    
+
+
+    # Mine 2 paths.
+    print("mining 2 paths...")
+    # chain1 = consensus.mine1(genesis_block, n_blocks=8)
+
+    # Get tips.
+    print("getting tips...")
+    tips = consensus.get_tips()
+    for tip in tips:
+        print(f"tip: {tip.blockhash} {tip.acc_work}")
+    
+
+if __name__ == '__main__':
+    test_mining()
+    # test_2_tips()
     
 
 
