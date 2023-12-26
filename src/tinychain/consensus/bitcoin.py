@@ -170,6 +170,7 @@ class BitcoinConsensusEngine:
     def on_block_gossip(self, raw_block):
         print("BLOCK GOSSIP WAT WAT")
         
+        
         # request ancestors via gossip.
         # then verify each block, and ingest.
         pass
