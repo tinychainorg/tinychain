@@ -18,7 +18,7 @@ def str_to_u256(x):
 # Difficulty information.
 EPOCH_LENGTH_BLOCKS = 8
 # TARGET_BLOCK_RATE_SECOND = 1 * 3
-TARGET_BLOCK_RATE_SECOND = 1 / 14
+TARGET_BLOCK_RATE_SECOND = 1
 EPOCH_TARGET_DURATION_SECONDS = EPOCH_LENGTH_BLOCKS * TARGET_BLOCK_RATE_SECOND
 INITIAL_DIFFICULTY_TARGET = 2**256 - 1
 
@@ -53,8 +53,8 @@ def get_epoch_difficulty(epoch_span, difficulty_target_0):
 # 
 
 class Block:
-    def __init__(self, parent_block_hash: int, txs = []):
-        self.parent_block_hash = parent_block_hash
+    def __init__(self, parent_blockhash: int, txs = []):
+        self.parent_blockhash = parent_blockhash
         self.txs = txs
         self.timestamp = 0
         self.difficulty_target = INITIAL_DIFFICULTY_TARGET
@@ -63,7 +63,7 @@ class Block:
     # The envelope is the data we are hashing.
     def envelope(self):
         return b"".join([
-            self.parent_block_hash.to_bytes(32, byteorder='big'),
+            self.parent_blockhash.to_bytes(32, byteorder='big'),
             self.nonce.to_bytes(32, byteorder='big'),
             self.difficulty_target.to_bytes(32, byteorder='big'),
             struct.pack(
@@ -85,7 +85,7 @@ import yaml
 def decode_block_yaml(txt):
     data = yaml.safe_load(txt)
     b = Block(
-        data['parent_block_hash'],
+        data['parent_blockhash'],
         data['txs']
     )
     b.nonce = data['nonce']
@@ -95,7 +95,7 @@ def decode_block_yaml(txt):
 
 def encode_block_yaml(d):
     data = {
-        'parent_block_hash': d.parent_block_hash,
+        'parent_blockhash': d.parent_blockhash,
         'nonce': d.nonce,
         'difficulty_target': d.difficulty_target,
         'timestamp': d.timestamp,
@@ -135,6 +135,16 @@ class DAGBlock(Base):
     parent_blockhash = Column(String, ForeignKey('dag_blocks.blockhash'), nullable=True) 
     # child = inferred
 
+    def to_block(self):
+        b = Block(
+            str_to_u256(self.parent_blockhash),
+            []
+        )
+        b.timestamp = self.timestamp
+        b.difficulty_target = int(self.difficulty_target)
+        b.nonce = self.nonce
+        return b
+
 def get_database(name, memory=False):
     DATABASE_URI = f'sqlite:///bitcoin_{name}.db'
     if memory:
@@ -162,6 +172,18 @@ class BitcoinConsensusEngine:
         self.db = db
         self.protocol = protocol
         self.session = self.db()
+        
+        genesis_block = GENESIS_BLOCK
+        self.last_tip = genesis_block.hash().hex()
+        print(f"genesis block: {genesis_block.hash().hex()}")
+        # assert genesis_block.hash().hex() == "da7a58879c46a9066190deee9d4a1d1118233a1dab9d5c4188b378015860a648"
+        if self.get_block_by_hash(genesis_block.hash().hex()):
+            print("genesis block already exists")
+        else:
+            self.add_block(genesis_block)
+        
+        # the blockhash of the last tip.
+        self.last_tip = self.get_tips()[0].blockhash
     
     # Verifies a block.
     def verify_block(self, block):
@@ -172,24 +194,32 @@ class BitcoinConsensusEngine:
         # 5. Verify the transaction signatures are valid.
         return True
 
+    def download_unknown(self, blockhash):
+        raw_blocks = self.protocol.peer_get_blocks([blockhash])
+        if len(raw_blocks) == 0:
+            raise Exception(f"download_unknown - block not found: {blockhash}")
+        
+        return self.on_recv_block(raw_blocks[0])
+
     def on_recv_block(self, raw_block):
         # blocks to ingest.
-        blocks = []
+        blocks = [raw_block]
 
         # download all the unknown blocks in this path.
         # request ancestors via gossip.
         while True:
-            parent_blockhash = raw_block.parent_block_hash.to_bytes(32, byteorder='big').hex()
+            parent_blockhash = raw_block.parent_blockhash.to_bytes(32, byteorder='big').hex()
             parent_block = self.get_block_by_hash(parent_blockhash)
             if parent_block:
                 break
             else:
-                block_datums = self.protocol.peer_get_blocks([parent_blockhash])
-                if len(block_datums) == 0:
+                raw_blocks = self.protocol.peer_get_blocks([parent_blockhash])
+                if len(raw_blocks) == 0:
                     raise Exception(f"block not found: {parent_blockhash}")
-                for block_data in block_datums:
-                    block = decode_block_yaml(block_data)
+                for block in raw_blocks:
+                    # block = decode_block_yaml(block_data)
                     blocks.append(block)
+                    raw_block = block # TODO brittle af
                     # TODO verify the right block is received.
         
         # now verify them in order of age (oldest first).
@@ -198,6 +228,10 @@ class BitcoinConsensusEngine:
 
         # verify each block.
         for block in blocks:
+            has_block = self.get_block_by_hash(block.hash().hex()) is not None
+            if has_block:
+                continue
+            
             is_valid = self.verify_block(block)
             if is_valid:
                 self.add_block(block)
@@ -206,7 +240,7 @@ class BitcoinConsensusEngine:
 
     def get_block_by_hash(self, block_hash):
         assert isinstance(block_hash, str)
-        print(f"get_block_by_hash: {block_hash}")
+        # print(f"get_block_by_hash: {block_hash}")
         return self.session.query(DAGBlock).filter(DAGBlock.blockhash == block_hash).first()
 
     # Adds the block to the DAG.
@@ -225,7 +259,7 @@ class BitcoinConsensusEngine:
         # height = height + 1
         # acc_work = acc_work + difficulty
         # parent = parent.id
-        dag_block.parent_blockhash = raw_block.parent_block_hash.to_bytes(32, byteorder='big').hex()
+        dag_block.parent_blockhash = raw_block.parent_blockhash.to_bytes(32, byteorder='big').hex()
         parent = session.query(DAGBlock).filter(DAGBlock.blockhash == dag_block.parent_blockhash).first()
         
         if parent:
@@ -245,6 +279,17 @@ class BitcoinConsensusEngine:
         # 3. Save the new block.
         session.add(dag_block)
         session.commit()
+
+        # Update the new tip
+        self.update_last_tip()
+    
+    def update_last_tip(self):
+        current_tip = self.last_tip
+        self.last_tip = self.get_tips()[0].blockhash
+        if current_tip != self.last_tip:
+            print(f"reorg / tip updated: {current_tip} -> {self.last_tip}")
+            return True
+        
     
     def get_tips(self):
         # Query the DAG for top 6 blocks by acc_work.
@@ -253,15 +298,15 @@ class BitcoinConsensusEngine:
         return tips
     
     # Gets the difficulty target for a block.
-    def get_difficulty(self, parent_block_hash):
+    def get_difficulty(self, parent_blockhash):
         # Case: genesis block.
-        if parent_block_hash == 0:
+        if parent_blockhash == 0:
             return INITIAL_DIFFICULTY_TARGET
         
         # Get the height in the chain.
-        parent_block = self.get_block_by_hash(u256_to_str(parent_block_hash))
+        parent_block = self.get_block_by_hash(u256_to_str(parent_blockhash))
         if not parent_block:
-            raise Exception(f"parent block not found: {parent_block_hash}")
+            raise Exception(f"parent block not found: {parent_blockhash}")
         block_height = parent_block.height + 1
 
         # Detect whether this is a new epoch.
@@ -287,19 +332,19 @@ class BitcoinConsensusEngine:
         difficulty_target_1 = get_epoch_difficulty(list(reversed(chain)), int(curr_block.difficulty_target))
         return difficulty_target_1
 
-    def mine1(self, parent_block_hash: int, start_nonce=0, n_blocks=16):
+    def mine1(self, parent_blockhash: int, start_nonce=0, n_blocks=16):
         chain = []
-        block = Block(parent_block_hash, [])
+        block = Block(parent_blockhash, [])
 
         # 1. Solve proof-of-work puzzle.
         while len(chain) < n_blocks:
-            parent_block = self.get_block_by_hash(u256_to_str(block.parent_block_hash))
+            parent_block = self.get_block_by_hash(u256_to_str(block.parent_blockhash))
             block.timestamp = time.time()
             block.nonce = start_nonce
             block.height = parent_block.height + 1 or 0
             
             # 1. Get difficulty for block.
-            difficulty_target = self.get_difficulty(block.parent_block_hash)
+            difficulty_target = self.get_difficulty(block.parent_blockhash)
             print(f"difficulty_target: {difficulty_target}")
             block.difficulty_target = difficulty_target
 
@@ -377,7 +422,7 @@ class SimpleConsensusNode:
     # 1. Mine blocks using latest state.
     # 2. Await new blocks, verify and download them.
     # 3. Update the state machine.
-    def run(self, datakey, peer_listen_addr, bootstrap_peers: list = []):
+    def run(self, datakey, peer_listen_addr, bootstrap_peers: list = [], run_miner=False):
         # after every block solution, broadcast to network.
         # after every received block, download and verify it
         # after every consensus tip update, rejog the state machine.
@@ -388,8 +433,10 @@ class SimpleConsensusNode:
         node = HttpProtocolNode(laddr, lport)
         node.register_method("get_blocks", protocol.get_blocks)
         node.register_method("broadcast_block", protocol.broadcast_block)
+        node.register_method("get_tip", protocol.get_tip)
         protocol.on_broadcast_block = self.on_broadcast_block
         protocol.on_get_blocks = self.on_get_blocks
+        protocol.on_get_tip = self.on_get_tip
 
 
         db = get_database(f"{datakey}", memory=False)
@@ -402,14 +449,27 @@ class SimpleConsensusNode:
         self.node = node
         self.protocol = protocol
         self.consensus = consensus
-        
-        
 
+        # Sync tips from peers.
+        Thread(target=self.sync_local_tip).start()
         # Now run threads.
-        Thread(target=self.run_miner).start()
+        Thread(target=self.run_miner).start() if run_miner else None
         # Thread(target=self.run_main).start()
         Thread(target=self.run_node).start()
-    
+
+    def sync_local_tip(self):
+        tips = self.consensus.get_tips()
+        latest_tip = tips[0].blockhash
+        remote_tips = self.protocol.peer_sync_tip(local_tip=latest_tip)
+        for remote_tip in remote_tips:
+            print(f"syncing unknown block: {remote_tip}")
+            if not self.consensus.get_block_by_hash(remote_tip):
+                self.consensus.download_unknown(remote_tip)
+
+    def on_get_tip(self, local_tip):
+        tips = self.consensus.get_tips()
+        return tips[0].blockhash
+
     def run_main(self):
         while True:
             time.sleep(1)
@@ -419,14 +479,7 @@ class SimpleConsensusNode:
         self.node.listen()
 
     def run_miner(self):
-        genesis_block = GENESIS_BLOCK
-        print(f"genesis block: {genesis_block.hash().hex()}")
-        assert genesis_block.hash().hex() == "da7a58879c46a9066190deee9d4a1d1118233a1dab9d5c4188b378015860a648"
-
-        if self.consensus.get_block_by_hash(genesis_block.hash().hex()):
-            print("genesis block already exists")
-        else:
-            self.consensus.add_block(genesis_block)
+        last_block = None
 
         while True:
             tips = self.consensus.get_tips()
@@ -434,9 +487,13 @@ class SimpleConsensusNode:
             print(f"mining on tip: hash={latest_tip.blockhash}")
             chain = self.consensus.mine1(str_to_u256(latest_tip.blockhash), n_blocks=1)
             print("mined 1 block")
-            # Broadcast.
-            self.broadcast_block(chain[0])
-            # Thread(target=self.broadcast_block, args=(chain[0],)).start()
+            last_block = chain[0]
+            # Broadcast.      
+            Thread(target=self.broadcast_block, args=(chain[0],)).start()
+
+            # Mine max 1 block per second.
+            diff = time.time() - last_block.timestamp
+            time.sleep(max(0, 1 - diff))
     
     def broadcast_block(self, block):
         print(f"broadcasting block: {block.hash().hex()}")
@@ -452,7 +509,7 @@ class SimpleConsensusNode:
         for blockhash in blockhashes:
             b = self.consensus.get_block_by_hash(blockhash)
             if b:
-                lis.append(encode_block_yaml(b))
+                lis.append(encode_block_yaml(b.to_block()))
             else:
                 print(f"block not found: {blockhash}")
         print(f"ret: {lis}")
@@ -470,10 +527,10 @@ def is_port_open(port):
 def test_networking():
     if not is_port_open(5100):
         x = SimpleConsensusNode()
-        x.run("node1", "0.0.0.0:5100", ["0.0.0.0:5101"])
+        x.run("node1", "0.0.0.0:5100", ["0.0.0.0:5101"], run_miner=True)
     else:
         x = SimpleConsensusNode()
-        x.run("node2", "0.0.0.0:5101", ["0.0.0.0:5100"])
+        x.run("node2", "0.0.0.0:5101", ["0.0.0.0:5100"], run_miner=True)
 
 
 

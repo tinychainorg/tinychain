@@ -8,7 +8,7 @@ import yaml
 def decode_block_yaml(txt):
     data = yaml.safe_load(txt)
     b = Block(
-        data['parent_block_hash'],
+        data['parent_blockhash'],
         data['txs']
     )
     b.nonce = data['nonce']
@@ -16,13 +16,34 @@ def decode_block_yaml(txt):
     b.timestamp = data['timestamp']
     return b
 
+import struct
+from hashlib import sha256
 class Block:
-    def __init__(self, parent_block_hash: int, txs = []):
-        self.parent_block_hash = parent_block_hash
+    def __init__(self, parent_blockhash: int, txs = []):
+        self.parent_blockhash = parent_blockhash
         self.txs = txs
         self.timestamp = 0
         self.difficulty_target = 0
         self.nonce = 0
+
+    # The envelope is the data we are hashing.
+    def envelope(self):
+        return b"".join([
+            self.parent_blockhash.to_bytes(32, byteorder='big'),
+            self.nonce.to_bytes(32, byteorder='big'),
+            self.difficulty_target.to_bytes(32, byteorder='big'),
+            struct.pack(
+                "<Q",
+                int(self.timestamp)
+                # self.difficulty_target
+            )
+        ])
+
+    def hash(self):
+        return sha256(self.envelope()).digest()
+    
+    def hash_int(self):
+        return int.from_bytes(self.hash(), byteorder='big')
 
 
 # This is the core of our protocol.
@@ -116,10 +137,13 @@ class Protocol:
     def get_blocks(self, blockhashes=[]):
         return self.on_get_blocks(blockhashes)
 
+    def get_tip(self, local_tip):
+        return self.on_get_tip(local_tip)
+
     def peer_get_blocks(self, blockhashes=[]):
         blocks = []
         for peer in self.peers:
-            res = peer.get_blocks(blockhashes)
+            res = peer.get_blocks(blockhashes=blockhashes)
             for d in res:
                 block = decode_block_yaml(d)
                 blocks.append(block)
@@ -127,3 +151,10 @@ class Protocol:
                 break
         
         return blocks
+
+    def peer_sync_tip(self, local_tip):
+        tips = []
+        for peer in self.peers:
+            res = peer.get_tip(local_tip=local_tip)
+            tips.append(res)
+        return tips
