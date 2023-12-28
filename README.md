@@ -1,10 +1,21 @@
 tinychain
 =========
 
-![fe5f2450-7b82-49d0-8a66-414f96adcc35](https://github.com/liamzebedee/tinychain/assets/584141/36979f58-d2a3-490b-8cd0-91fa71e7a46a)
+**an ultralight blockchain core, written in Python.**
 
+tinychain is the smallest implementation of a blockchain (BFT replicated state machine) you will ever find. It reimplements the full bitcoin consensus (nakamoto consensus) with a custom VM based on Brainfuck.
 
-the tiny smart contract blockchain. 1058 lines of code.
+1366 lines of code so far.
+
+ * cryptography
+ * transactions
+ * consensus - Nakamoto POW
+ * VM’s - Brainfuck
+ * state machine
+ * gas markets
+ * protocol, RPC, and P2P networking
+
+Let the devs do what they do best - building cool stuff.
 
 | **Area**     | **Description**                                                                                                                                                                                                                                                                                            | **Status**  |
 |--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
