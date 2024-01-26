@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "20e9b45290edc51564633f18de9aed4687a6d475edfac2a5c86d7a35e1b5f0a7"
+            "sha256": "c01596eaca5732c460a942e5e1833bc025ddc6e3ed5480d6793350ae5e4d0f19"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -135,6 +135,14 @@
             ],
             "markers": "python_version >= '3.7'",
             "version": "==8.1.7"
+        },
+        "colored-traceback": {
+            "hashes": [
+                "sha256:6da7ce2b1da869f6bb54c927b415b95727c4bb6d9a84c4615ea77d9872911b05",
+                "sha256:f76c21a4b4c72e9e09763d4d1b234afc469c88693152a763ad6786467ef9e79f"
+            ],
+            "index": "pypi",
+            "version": "==0.3.0"
         },
         "ecdsa": {
             "hashes": [
@@ -320,6 +328,14 @@
             ],
             "index": "pypi",
             "version": "==3.17.0"
+        },
+        "pygments": {
+            "hashes": [
+                "sha256:b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c",
+                "sha256:da46cec9fd2de5be3a8a784f434e4c4ab670b4ff54d605c4c2717e9d49c4c367"
+            ],
+            "markers": "python_version >= '3.7'",
+            "version": "==2.17.2"
         },
         "pyparsing": {
             "hashes": [

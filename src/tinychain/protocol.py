@@ -72,10 +72,6 @@ class Protocol:
         # Routine: Run the transaction gossip subroutine.
         pass
 
-    def broadcast_block(self, block=""):
-        for peer in self.peers:
-            peer.recv_block(block=block)
-
     def routine_bootstrap_peers(self):
         # Connect to the configured bootstrap peers.
         pass
@@ -130,16 +126,11 @@ class Protocol:
         
         (output, gas_used) = self.blockchain.state_machine.eval(DummyTx(from_acc, to_acc, data))
         return { 'output': output, 'gas_used': gas_used }
+
+    def broadcast_block(self, block=""):
+        for peer in self.peers:
+            peer.new_block(block=block)
     
-    def broadcast_block(self, block=None):
-        self.on_broadcast_block(block)
-
-    def get_blocks(self, blockhashes=[]):
-        return self.on_get_blocks(blockhashes)
-
-    def get_tip(self, local_tip):
-        return self.on_get_tip(local_tip)
-
     def peer_get_blocks(self, blockhashes=[]):
         blocks = []
         for peer in self.peers:

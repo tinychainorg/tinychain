@@ -414,6 +414,8 @@ GENESIS_BLOCK = Block(0, [])
 # nearest 12am to the present time
 GENESIS_BLOCK.timestamp = int(time.time()) - (int(time.time()) % 86400)
 
+
+
 class SimpleConsensusNode:
     def __init__(self):
         pass
@@ -426,18 +428,13 @@ class SimpleConsensusNode:
         # after every block solution, broadcast to network.
         # after every received block, download and verify it
         # after every consensus tip update, rejog the state machine.
-
         blockchain = None
         protocol = Protocol(blockchain, None)
         laddr, lport = peer_listen_addr.split(":")
         node = HttpProtocolNode(laddr, lport)
-        node.register_method("get_blocks", protocol.get_blocks)
-        node.register_method("broadcast_block", protocol.broadcast_block)
-        node.register_method("get_tip", protocol.get_tip)
-        protocol.on_broadcast_block = self.on_broadcast_block
-        protocol.on_get_blocks = self.on_get_blocks
-        protocol.on_get_tip = self.on_get_tip
-
+        node.handle("get_blocks", self.on_get_blocks)
+        node.handle("new_block", self.on_new_block)
+        node.handle("get_tip", self.on_get_tip)
 
         db = get_database(f"{datakey}", memory=False)
         consensus = BitcoinConsensusEngine(db, protocol)
@@ -466,9 +463,6 @@ class SimpleConsensusNode:
             if not self.consensus.get_block_by_hash(remote_tip):
                 self.consensus.download_unknown(remote_tip)
 
-    def on_get_tip(self, local_tip):
-        tips = self.consensus.get_tips()
-        return tips[0].blockhash
 
     def run_main(self):
         while True:
@@ -499,11 +493,19 @@ class SimpleConsensusNode:
         print(f"broadcasting block: {block.hash().hex()}")
         self.protocol.broadcast_block(block=encode_block_yaml(block))
     
-    def on_broadcast_block(self, block):
+    # 
+    # RPC handlers.
+    # 
+
+    def on_get_tip(self, local_tip=""):
+        tips = self.consensus.get_tips()
+        return tips[0].blockhash
+    
+    def on_new_block(self, block=None):
         b = decode_block_yaml(block)
         self.consensus.on_recv_block(b)
     
-    def on_get_blocks(self, blockhashes):
+    def on_get_blocks(self, blockhashes=[]):
         print(f"on_get_blocks hashes={blockhashes}")
         lis = []
         for blockhash in blockhashes:
@@ -531,8 +533,6 @@ def test_networking():
     else:
         x = SimpleConsensusNode()
         x.run("node2", "0.0.0.0:5101", ["0.0.0.0:5100"], run_miner=True)
-
-
 
 def test_1():
     genesis_block = Block(0, [])
@@ -562,8 +562,6 @@ def test_2_tips():
     db = get_database('testnet1')
     consensus_proto = MockConsensusProto()
     consensus = BitcoinConsensusEngine(db)
-    
-
 
     # Mine 2 paths.
     print("mining 2 paths...")

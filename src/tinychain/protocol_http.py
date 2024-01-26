@@ -47,7 +47,7 @@ class HttpProtocolNode:
     def index_methods(self):
         return "Registered methods:<ul><li>{}</ul>".format("<li>".join(self.registered_methods))
 
-    def register_method(self, method_name, method):
+    def handle(self, method_name, method):
         self.registered_methods.append(method_name)
         partial_wrap = functools.partial(self.wrap_method, method_name, method, 'POST')
         partial_wrap.__name__ = method_name

@@ -43,7 +43,11 @@ pipenv shell
 
 ## Usage.
 
+Demo is a work-in-progress:
+
 ```py
+# Run two nodes which will mine and sync.
+PYTHONPATH=./src python3 src/tinychain/consensus/bitcoin.py
 PYTHONPATH=./src python3 src/tinychain/consensus/bitcoin.py
 ```
 
