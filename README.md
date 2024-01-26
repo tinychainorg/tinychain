@@ -3,9 +3,9 @@ tinychain
 
 **an ultralight blockchain core, written in Python.**
 
-tinychain is the smallest implementation of a blockchain (BFT replicated state machine) you will ever find. It reimplements the full bitcoin consensus (nakamoto consensus) with a custom VM based on Brainfuck.
+tinychain is the smallest implementation of a blockchain (BFT replicated state machine) you will ever find. It reimplements the full bitcoin consensus (Nakamoto consensus) with a custom VM based on Brainfuck.
 
-1366 lines of code so far.
+1366 lines of code so far. inspired by [geohot's tinygrad](https://github.com/geohot/tinygrad).
 
  * cryptography
  * transactions
@@ -26,19 +26,28 @@ Let the devs do what they do best - building cool stuff.
 | Networking   | P2P and RPC servers both use HTTP, gossip network architecture                                                                                                                                                                                                                                             | ⚠️ WIP       |
 | ZK proofs    | ZK for compression of tinychain. Use either [groth16](https://github.com/erhant/zkbrainfuck) or [halo2](https://github.com/cryptape/ckb-bf-zkvm) SNARK proofs for brainfuck. TBA we will rework consensus/crypto to use SNARK-friendly tech (MiMC/Poseidon hash function, SNARK-friendly signature scheme) |             |
 
-## usage.
+## Install.
+
+Requirements:
+
+ * Python 3.
+ * `pipenv`, `pip` or something like it.
+
+Instructions:
 
 ```sh
 # Install dependencies.
 pipenv install
 pipenv shell
-
-# Run the node.
-cd tinychain/
-python node.py
 ```
 
-## why?
+## Usage.
+
+```py
+PYTHONPATH=./src python3 src/tinychain/consensus/bitcoin.py
+```
+
+## Why?
 
 It takes too long to digest the architecture of any modern blockchain like Ethereum, Optimism, etc.
 
@@ -46,7 +55,7 @@ geohot took PyTorch and distilled it into >10,000 LOC. let's do the same for a b
 
 maybe we'll learn some things along the way.
 
-## what is a blockchain?
+## What is a blockchain?
 
 It's really quite an interesting combination of many things.
 
@@ -67,7 +76,7 @@ It's really quite an interesting combination of many things.
 
 The goal of this project is to elucidate the primitives throughout this invention, in a very simple way, so you can experiment and play with different VM's and code.
 
-## roadmap.
+## Roadmap.
 
  - [x] VM
  - [ ] smart contracts
@@ -81,12 +90,9 @@ The goal of this project is to elucidate the primitives throughout this inventio
  - [ ] consensus
  - [ ] networking
 
-see `node.py` for design.
+See `node.py` for design.
 
-
-## Featureset
-
-
+## Feature set.
 
  - **VM** and **state machine model**. Brainfuck is used as the programming runtime. It includes its own gas metering - 1 gas for computation, 3 gas for writing to memory. There is no in-built object model for now - there is only the Brainfuck VM, and its memory. Any program can write to memory and overwrite other Brainfuck.
 

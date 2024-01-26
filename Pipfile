@@ -11,6 +11,7 @@ flask = "*"
 requests = "*"
 peewee = "*"
 sqlalchemy = "*"
+tabulate = "*"
 
 [dev-packages]
 

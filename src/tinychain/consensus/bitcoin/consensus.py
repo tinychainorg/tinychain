@@ -331,6 +331,3 @@ if __name__ == '__main__':
     # test_mining()
     # test_2_tips()
     
-
-
-# PYTHONPATH=. python3 tinychain/consensus/bitcoin.py

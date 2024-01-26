@@ -1,4 +1,0 @@
-Design inspiration taken from:
-
- - ethers.js for the Wallet API
- - Ethereum for most of it (gas market, state machine vs. VM separation)
