@@ -1,4 +1,4 @@
-package core
+package nakamoto
 
 import (
 	"testing"
@@ -11,13 +11,13 @@ import (
 )
 
 func TestBuildBlock(t *testing.T) {
-	genesis_block := Block{}
+	genesis_block := RawBlock{}
 	// test not null
 	t.Log(genesis_block)
 }
 
 func TestGenesisBlockHash(t *testing.T) {
-	genesis_block := Block{}
+	genesis_block := RawBlock{}
 	// get envelope
 	envelope := genesis_block.Envelope()
 	// now hash it
@@ -38,7 +38,7 @@ func TestGenesisBlockHash(t *testing.T) {
 
 func TestProofOfWorkSolver(t *testing.T) {
 	// create a genesis block
-	genesis_block := Block{}
+	genesis_block := RawBlock{}
 	nonce := new(big.Int)
 	target := new(big.Int)
 	target.SetString("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
@@ -54,8 +54,8 @@ func TestBuildChainOfBlocks(t *testing.T) {
 	assert := assert.New(t)
 
 	// Build a chain of 6 blocks.
-	chain := make([]Block, 0)
-	curr_block := Block{}
+	chain := make([]RawBlock, 0)
+	curr_block := RawBlock{}
 
 	// Fixed target for test.
 	target := new(big.Int)
@@ -77,7 +77,7 @@ func TestBuildChainOfBlocks(t *testing.T) {
 
 		// Create a new block.
 		timestamp := uint64(0)
-		curr_block = Block{
+		curr_block = RawBlock{
 			ParentHash: curr_block.Hash(),
 			Timestamp: timestamp,
 			NumTransactions: 0,
@@ -110,8 +110,8 @@ func TestSomething(t *testing.T) {
 	// }
 
 	// Now mine 2 epochs worth of blocks.
-	chain := make([]Block, 0)
-	curr_block := Block{}
+	chain := make([]RawBlock, 0)
+	curr_block := RawBlock{}
 	for {
 		fmt.Printf("Mining block %x\n", curr_block.Hash())
 		solution, err := SolvePOW(curr_block, *new(big.Int), conf.InitialDifficulty, 100000000000)
@@ -128,7 +128,7 @@ func TestSomething(t *testing.T) {
 		chain = append(chain, curr_block)
 
 		// Create a new block.
-		curr_block = Block{
+		curr_block = RawBlock{
 			ParentHash: curr_block.Hash(),
 			Timestamp: 0,
 			NumTransactions: 0,

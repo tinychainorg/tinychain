@@ -16,3 +16,4 @@ func ComputeMerkleHash(items [][]byte) [32]byte {
 	right := ComputeMerkleHash(items[mid:])
 	return sha256.Sum256(append(left[:], right[:]...))
 }
+

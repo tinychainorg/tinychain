@@ -11,6 +11,7 @@ Work breakdown:
 - [x] creating a merkle tree accumulation of transactions
 - [ ] computing the cumulative work in a chain of blocks
 - [ ] constructing a blockdag and then choosing a tip
+- [ ] build a simple mempool module
 - [ ] adding a simple state machine
     - [ ] ValidateBlock
         - first transaction is the coinbase
