@@ -17,6 +17,14 @@ func (w *Wallet) Pubkey() *ecdsa.PublicKey {
 	return &w.prvkey.PublicKey
 }
 
+func (w *Wallet) PubkeyBytes() [64]byte {
+	pubkey := w.Pubkey()
+	buf := elliptic.Marshal(pubkey.Curve, pubkey.X, pubkey.Y)
+	var pubkeyBytes [64]byte
+	copy(pubkeyBytes[:], buf)
+	return pubkeyBytes
+}
+
 func (w *Wallet) PubkeyStr() string {
 	pubkey := w.Pubkey()
 	return hex.EncodeToString(elliptic.Marshal(pubkey.Curve, pubkey.X, pubkey.Y))

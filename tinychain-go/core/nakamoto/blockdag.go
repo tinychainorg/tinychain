@@ -38,17 +38,17 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		// Create tables.
 		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob)")
 		if err != nil {
-			return nil, fmt.Errorf("error creating blocks table: %s", err)
+			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
 		_, err = db.Exec("create table transactions (hash blob primary key, block_hash blob, sig blob, from_pubkey blob, data blob)")
 		if err != nil {
-			return nil, fmt.Errorf("error creating blocks table: %s", err)
+			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
 
 		// Create indexes.
 		_, err = db.Exec("create index blocks_parent_hash on blocks (parent_hash)")
 		if err != nil {
-			return nil, fmt.Errorf("error creating blocks_parent_hash index: %s", err)
+			return nil, fmt.Errorf("error creating 'blocks_parent_hash' index: %s", err)
 		}
 	}
 
@@ -69,6 +69,7 @@ type Block struct {
 	// Metadata.
 	Height uint64
 	Epoch uint64
+	Work big.Int
 	SizeBytes uint64
 }
 
@@ -136,6 +137,8 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 
 	// 4. Verify transactions are valid.
 	for i, block_tx := range raw.Transactions {
+		// TODO: Verify signature.
+		// This depends on where exactly we are verifying the sig.
 		err := dag.stateMachine.VerifyTx(block_tx)
 
 		if err != nil {

@@ -195,10 +195,11 @@ func TestAddBlockSuccess(t *testing.T) {
 
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
+		FromPubkey: [64]byte{},
 		Sig: [64]byte{},
 		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
-	sigHex := "7eeb1de1fef49535659ba495ebdd5266ff80fcb9aed90ddec300fcadae676794ecb1f0253b8c3037b024edbbc1664901ba88650ac385ce8e44af52bf51f57c82"
+	sigHex := "1b7885066a4633c0ffe3e0cf4f6e8d77e2ec94f5eef46851e061aca8d3274f26f49a9dd28c0c1bc6c943b8663a57f9885bcee12fe1245f4bca3830e7927cddb7"
 	sigBytes, err := hex.DecodeString(sigHex)
 	if err != nil {
 		t.Fatalf("Failed to decode signature: %s", err)
@@ -233,10 +234,12 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
+		FromPubkey: [64]byte{},
 		Sig: [64]byte{},
 		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
 	wallets := getTestingWallets(t)
+	tx.FromPubkey = wallets[0].PubkeyBytes()
 	sig, err := wallets[0].Sign(tx.Data)
 	if err != nil {
 		t.Fatalf("Failed to sign transaction: %s", err)

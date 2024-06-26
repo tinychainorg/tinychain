@@ -76,14 +76,16 @@ func (b *RawBlock) SizeBytes() uint64 {
 
 type RawTransaction struct {
 	Sig [64]byte
-	FromPubkey [32]byte
+	FromPubkey [64]byte
 	Data []byte
 }
 
 func (tx *RawTransaction) Envelope() []byte {
 	buf := new(bytes.Buffer)
 
-	err := binary.Write(buf, binary.BigEndian, tx.Sig)
+	err := binary.Write(buf, binary.BigEndian, tx.FromPubkey)
+	if err != nil { panic(err); }
+	err = binary.Write(buf, binary.BigEndian, tx.Sig)
 	if err != nil { panic(err); }
 	err = binary.Write(buf, binary.BigEndian, tx.Data)
 	if err != nil { panic(err); }
