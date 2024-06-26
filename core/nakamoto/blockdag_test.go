@@ -19,12 +19,19 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 
 
 func newBlockdag() BlockDAG {
-	db, err := OpenDB(":memory:")
+	// db, err := OpenDB(":memory:")
+	db, err := OpenDB("test.sqlite3")
 	if err != nil {
 		panic(err)
 	}
 
 	stateMachine := newMockStateMachine()
+
+
+
+	genesis_difficulty := new(big.Int)
+	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+
 	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;) 
 	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
 	if err != nil {
@@ -33,7 +40,14 @@ func newBlockdag() BlockDAG {
 	genesisBlockHash := [32]byte{}
 	copy(genesisBlockHash[:], genesisBlockHash_)
 
-	blockdag, err := NewBlockDAGFromDB(db, stateMachine, genesisBlockHash)
+	conf := ConsensusConfig{
+		EpochLengthBlocks: 5,
+		TargetEpochLengthMillis: 2000,
+		GenesisDifficulty: *genesis_difficulty,
+		GenesisBlockHash: genesisBlockHash,
+	}
+
+	blockdag, err := NewBlockDAGFromDB(db, stateMachine, conf)
 	if err != nil {
 		panic(err)
 	}
@@ -209,7 +223,7 @@ func TestAddBlockSuccess(t *testing.T) {
 	nonceBigInt := big.NewInt(6)
 
 	b := RawBlock{
-		ParentHash: blockdag.GetGenesisBlockHash(),
+		ParentHash: blockdag.consensus.GenesisBlockHash,
 		Timestamp: 1719379532750,
 		NumTransactions: 1,
 		TransactionsMerkleRoot: [32]byte{},
@@ -249,7 +263,7 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	copy(tx.Sig[:], sig)
 
 	b := RawBlock{
-		ParentHash: blockdag.GetGenesisBlockHash(),
+		ParentHash: blockdag.consensus.GenesisBlockHash,
 		Timestamp: 1719379532750,
 		NumTransactions: 1,
 		TransactionsMerkleRoot: [32]byte{},

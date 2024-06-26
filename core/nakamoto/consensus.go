@@ -11,32 +11,6 @@ import (
 	"time"
 )
 
-type ConsensusConfig struct {
-	// The length of an epoch.
-	EpochLengthBlocks uint64
-
-	// The target block production rate in terms of 1 epoch.
-	TargetEpochLengthMillis uint64
-
-	// Initial difficulty target.
-	InitialDifficulty big.Int
-}
-
-// A raw block is the block as transmitted on the network.
-// It contains the block header and the block body.
-// It does not contain any block metadata such as height, epoch, or difficulty.
-type RawBlock struct {
-	// Block header.
-	ParentHash [32]byte
-	Timestamp uint64
-	NumTransactions uint64
-	TransactionsMerkleRoot [32]byte
-	Nonce [32]byte
-	
-	// Block body.
-	Transactions []RawTransaction
-}
-
 func (b *RawBlock) SetNonce(i big.Int) {
 	nonce := [32]byte{}
 	nonceBuf := make([]byte, 32)
@@ -72,12 +46,6 @@ func (b *RawBlock) Hash() [32]byte {
 func (b *RawBlock) SizeBytes() uint64 {
 	// Calculate the size of the block.
 	return uint64(len(b.Envelope()))
-}
-
-type RawTransaction struct {
-	Sig [64]byte
-	FromPubkey [64]byte
-	Data []byte
 }
 
 func (tx *RawTransaction) Envelope() []byte {

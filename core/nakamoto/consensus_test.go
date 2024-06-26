@@ -99,15 +99,18 @@ func TestSomething(t *testing.T) {
 	conf := ConsensusConfig{
 		EpochLengthBlocks: 5,
 		TargetEpochLengthMillis: 2000,
-		InitialDifficulty: *genesis_difficulty,
+		GenesisDifficulty: *genesis_difficulty,
+		GenesisBlockHash: [32]byte{},
 	}
+	difficulty := conf.GenesisDifficulty
+
 
 	// Now mine 2 epochs worth of blocks.
 	chain := make([]RawBlock, 0)
 	curr_block := RawBlock{}
 	for {
 		fmt.Printf("Mining block %x\n", curr_block.Hash())
-		solution, err := SolvePOW(curr_block, *new(big.Int), conf.InitialDifficulty, 100000000000)
+		solution, err := SolvePOW(curr_block, *new(big.Int), difficulty, 100000000000)
 		if err != nil {
 			t.Fatalf("Failed to solve proof of work")
 		}
@@ -146,13 +149,13 @@ func TestSomething(t *testing.T) {
 			// Compute the new difficulty.
 			// difficulty = difficulty * (epoch_duration / target_epoch_length)
 			new_difficulty := new(big.Int)
-			new_difficulty.Mul(&conf.InitialDifficulty, big.NewInt(int64(epoch_duration)))
+			new_difficulty.Mul(&conf.GenesisDifficulty, big.NewInt(int64(epoch_duration)))
 			new_difficulty.Div(new_difficulty, big.NewInt(int64(target_epoch_length)))
 
 			fmt.Printf("New difficulty: %x\n", new_difficulty.String())
 
 			// Update the difficulty.
-			conf.InitialDifficulty = *new_difficulty
+			difficulty = *new_difficulty
 		}
 
 		fmt.Printf("Chain length: %d\n", len(chain))
