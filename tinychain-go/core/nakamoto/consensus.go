@@ -69,6 +69,11 @@ func (b *RawBlock) Hash() [32]byte {
 	return sha256.Sum256(h.Sum(nil))
 }
 
+func (b *RawBlock) SizeBytes() uint64 {
+	// Calculate the size of the block.
+	return uint64(len(b.Envelope()))
+}
+
 type RawTransaction struct {
 	Sig [64]byte
 	FromPubkey [32]byte
@@ -84,6 +89,13 @@ func (tx *RawTransaction) Envelope() []byte {
 	if err != nil { panic(err); }
 
 	return buf.Bytes()
+}
+
+func (tx *RawTransaction) Hash() [32]byte {
+	// Hash the envelope.
+	h := sha256.New()
+	h.Write(tx.Envelope())
+	return sha256.Sum256(h.Sum(nil))
 }
 
 func VerifyPOW(blockhash [32]byte, target big.Int) bool {

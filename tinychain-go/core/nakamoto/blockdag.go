@@ -14,22 +14,45 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Check to perform migrations.
+	_, err = db.Exec("create table if not exists tinychain_version (version int)")
+	if err != nil {
+		return nil, fmt.Errorf("error checking database version: %s", err)
+	}
+	// Check the database version.
+	rows, err := db.Query("select version from tinychain_version limit 1")
+	if err != nil {
+		return nil, fmt.Errorf("error checking database version: %s", err)
+	}
+	databaseVersion := 0
+	if rows.Next() {
+		rows.Scan(&databaseVersion)
+	}
+
+	// Log version.
+	fmt.Printf("Database version: %d\n", databaseVersion)
+	if databaseVersion == 0 {
+		// Perform migrations.
+		
+		// Create tables.
+		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob)")
+		if err != nil {
+			return nil, fmt.Errorf("error creating blocks table: %s", err)
+		}
+		_, err = db.Exec("create table transactions (hash blob primary key, block_hash blob, sig blob, from_pubkey blob, data blob)")
+		if err != nil {
+			return nil, fmt.Errorf("error creating blocks table: %s", err)
+		}
+
+		// Create indexes.
+		_, err = db.Exec("create index blocks_parent_hash on blocks (parent_hash)")
+		if err != nil {
+			return nil, fmt.Errorf("error creating blocks_parent_hash index: %s", err)
+		}
+	}
+
 	return db, err
-	// defer db.Close()
-	
-	// Check schemas.
-	// rows, err := db.Query("select text from mytable where name regexp '^golang'")
-	// if err != nil {
-	// 	return err
-	// }
-
-	// for rows.Next() {
-	// 	var text string
-	// 	rows.Scan(&text)
-	// 	fmt.Println(text)
-	// }
-
-	return nil, nil
 }
 
 type Block struct {
@@ -81,11 +104,12 @@ type StateMachine interface {
 }
 
 func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachine, genesisBlockHash [32]byte) (BlockDAG, error) {
-	return BlockDAG{
+	dag := BlockDAG{
 		db: db,
 		stateMachine: stateMachine,
 		genesisBlockHash: genesisBlockHash,
-	}, nil
+	}
+	return dag, nil
 }
 
 func (dag *BlockDAG) GetGenesisBlockHash() ([32]byte) {
@@ -94,37 +118,25 @@ func (dag *BlockDAG) GetGenesisBlockHash() ([32]byte) {
 
 
 func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
-	block := Block{
-		ParentHash: raw.ParentHash,
-		Timestamp: raw.Timestamp,
-		NumTransactions: raw.NumTransactions,
-		TransactionsMerkleRoot: raw.TransactionsMerkleRoot,
-		Nonce: raw.Nonce,
-
-		Transactions: raw.Transactions,
-
-		Height: 0,
-		Epoch: 0,
-		SizeBytes: 0,
-	}
-
 	// 1. Verify parent is known.
-	parent_block := dag.GetBlockByHash(block.ParentHash)
-	if parent_block == nil {
-		return fmt.Errorf("Unknown parent block.")
+	if raw.ParentHash != dag.genesisBlockHash {
+		parent_block := dag.GetBlockByHash(raw.ParentHash)
+		if parent_block == nil {
+			return fmt.Errorf("Unknown parent block.")
+		}
 	}
 
 	// 2. Verify timestamp is within bounds.
 	// TODO: subjectivity.
 
 	// 3. Verify num transactions is the same as the length of the transactions list.
-	if int(block.NumTransactions) != len(block.Transactions) {
+	if int(raw.NumTransactions) != len(raw.Transactions) {
 		return fmt.Errorf("Num transactions does not match length of transactions list.")
 	}
 
 	// 4. Verify transactions are valid.
-	for i, tx := range block.Transactions {
-		err := dag.stateMachine.VerifyTx(tx)
+	for i, block_tx := range raw.Transactions {
+		err := dag.stateMachine.VerifyTx(block_tx)
 
 		if err != nil {
 			return fmt.Errorf("Transaction %d is invalid.", i)
@@ -132,22 +144,22 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 5. Verify transaction merkle root is valid.
-	txlist := make([][]byte, len(block.Transactions))
-	for i, tx := range block.Transactions {
-		txlist[i] = tx.Envelope()
+	txlist := make([][]byte, len(raw.Transactions))
+	for i, block_tx := range raw.Transactions {
+		txlist[i] = block_tx.Envelope()
 	}
 	expectedMerkleRoot := core.ComputeMerkleHash(txlist)
-	if expectedMerkleRoot != block.TransactionsMerkleRoot {
+	if expectedMerkleRoot != raw.TransactionsMerkleRoot {
 		return fmt.Errorf("Merkle root does not match computed merkle root.")
 	}
 
 	// 6. Verify POW solution is valid.
-	epoch, err := dag.GetEpochForBlockHash(block.ParentHash)
+	epoch, err := dag.GetEpochForBlockHash(raw.ParentHash)
 	if epoch == nil {
 		return fmt.Errorf("Parent block epoch not found.")
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to get parent block epoch: %s.", err)
 	}
 	if !VerifyPOW(raw.Hash(), epoch.Difficulty) {
 		return fmt.Errorf("POW solution is invalid.")
@@ -159,6 +171,35 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// Annotations:
 	// 1. Add block height.
 	// 2. Compute block epoch.
+	// block := Block{
+	// 	ParentHash: raw.ParentHash,
+	// 	Timestamp: raw.Timestamp,
+	// 	NumTransactions: raw.NumTransactions,
+	// 	Transactions: raw.Transactions,
+	// 	Height: parent_block.Height + 1,
+	// 	Epoch: parent_block.Epoch,
+	// 	SizeBytes: raw.SizeBytes(),
+	// }
+	
+	// Ingest into database store.
+	tx, err := dag.db.Begin()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce) values (?, ?, ?, ?, ?, ?)", raw.Hash(), raw.ParentHash, raw.Timestamp, raw.NumTransactions, raw.TransactionsMerkleRoot, raw.Nonce)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	for _, block_tx := range raw.Transactions {
+		_, err = tx.Exec("insert into transactions (hash, block_hash, sig, from_pubkey, data) values (?, ?, ?, ?, ?)", block_tx.Hash(), raw.Hash(), block_tx.Sig, block_tx.FromPubkey, block_tx.Data)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	tx.Commit()
+
 	return nil
 }
 
@@ -182,7 +223,20 @@ func (dag *BlockDAG) GetEpochForBlockHash(parentBlockHash [32]byte) (*Epoch, err
 }
 
 func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block) {
-	return &Block{}
+	block := Block{}
+
+	// Query database.
+	rows, err := dag.db.Query("select parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce from blocks where hash = ? limit 1", hash)
+	if err != nil {
+		return nil
+	}
+
+	if rows.Next() {
+		rows.Scan(&block.ParentHash, &block.Timestamp, &block.NumTransactions, &block.TransactionsMerkleRoot, &block.Nonce)
+		return &block
+	} else {
+		return nil
+	}
 }
 
 type BlockDAGInterface interface {

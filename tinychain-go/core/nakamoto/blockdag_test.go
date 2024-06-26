@@ -113,7 +113,7 @@ func TestAddBlockUnknownParent(t *testing.T) {
 	}
 
 	err := blockdag.IngestBlock(b)
-	assert.Equal(err.Error(), "Unknown parent block.")
+	assert.Equal("Unknown parent block.", err.Error())
 }
 
 func TestAddBlockTxCount(t *testing.T) {
@@ -135,7 +135,7 @@ func TestAddBlockTxCount(t *testing.T) {
 	}
 
 	err := blockdag.IngestBlock(b)
-	assert.Equal(err.Error(), "Num transactions does not match length of transactions list.")
+	assert.Equal("Num transactions does not match length of transactions list.", err.Error())
 }
 
 func TestAddBlockTxsValid(t *testing.T) {
@@ -160,7 +160,7 @@ func TestAddBlockTxsValid(t *testing.T) {
 	}
 
 	err := blockdag.IngestBlock(b)
-	assert.Equal(err.Error(), "Transaction 0 is invalid.")
+	assert.Equal("Transaction 0 is invalid.", err.Error())
 }
 
 func TestAddBlockTxMerkleRootValid(t *testing.T) {
@@ -182,7 +182,7 @@ func TestAddBlockTxMerkleRootValid(t *testing.T) {
 	}
 
 	err := blockdag.IngestBlock(b)
-	assert.Equal(err.Error(), "Merkle root does not match computed merkle root.")
+	assert.Equal("Merkle root does not match computed merkle root.", err.Error())
 }
 
 func TestAddBlockPOWSolutionValid(t *testing.T) {
