@@ -1,12 +1,12 @@
 package nakamoto
 
 import (
-	"testing"
-	"math/big"
-	"github.com/stretchr/testify/assert"
 	"encoding/hex"
-	"github.com/liamzebedee/tinychain-go/core"
+	"math/big"
+	"testing"
 
+	"github.com/liamzebedee/tinychain-go/core"
+	"github.com/stretchr/testify/assert"
 )
 
 type MockStateMachine struct {}
@@ -273,6 +273,9 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	b.SetNonce(solution)
 
 	err = blockdag.IngestBlock(b)
+	if err != nil {
+		t.Fatalf("Failed to ingest block: %s", err)
+	}
 	assert.Equal(nil, err)
 }
 
