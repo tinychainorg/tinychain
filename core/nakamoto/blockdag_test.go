@@ -27,8 +27,6 @@ func newBlockdag() BlockDAG {
 
 	stateMachine := newMockStateMachine()
 
-
-
 	genesis_difficulty := new(big.Int)
 	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
 

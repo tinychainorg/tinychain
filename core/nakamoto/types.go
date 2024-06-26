@@ -101,17 +101,15 @@ type Epoch struct {
 	// Start height.
 	StartHeight uint64
 
-	// End block.
-	EndBlockHash [32]byte
-	// End time.
-	EndTime uint64
-
 	// Difficulty target.
 	Difficulty big.Int
 }
 
-// TODO BROKEN
+func GetIdForEpoch(startBlockHash [32]byte, startHeight uint64) (string) {
+	return strconv.FormatUint(uint64(startHeight), 10) + "_" + hex.EncodeToString(startBlockHash[:])
+}
+
 // The epoch unique ID is the height ++ startblockhash.
 func (e *Epoch) Id() (string) {
-	return strconv.FormatUint(uint64(e.StartHeight), 10) + "_" + hex.EncodeToString(e.StartBlockHash[:])
+	return GetIdForEpoch(e.StartBlockHash, e.StartHeight)
 }

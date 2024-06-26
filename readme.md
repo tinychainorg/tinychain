@@ -1,3 +1,6 @@
+# tinychain
+
+A full blockchain in Go;
 
 ## To Do.
 
