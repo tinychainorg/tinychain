@@ -167,13 +167,15 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 6. Verify POW solution is valid.
-	epoch, err := dag.GetEpochForBlockHash(raw.ParentHash)
-	if epoch == nil {
-		return fmt.Errorf("Parent block epoch not found.")
-	}
-	if err != nil {
-		return fmt.Errorf("Failed to get parent block epoch: %s.", err)
-	}
+	// TODO just compute difficulty here.
+	// If we are on an epoch boundary, compute new difficulty and insert epoch.
+	// epoch, err := dag.GetEpochForBlockHash(raw.ParentHash)
+	// if epoch == nil {
+	// 	return fmt.Errorf("Parent block epoch not found.")
+	// }
+	// if err != nil {
+	// 	return fmt.Errorf("Failed to get parent block epoch: %s.", err)
+	// }
 	if !VerifyPOW(raw.Hash(), epoch.Difficulty) {
 		return fmt.Errorf("POW solution is invalid.")
 	}
@@ -235,6 +237,8 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	return nil
 }
 
+// Gets the epoch for a given block hash.
+// If the parent block is the final block in an epoch, then we compute the new epoch difficulty and create a new epoch.
 func (dag *BlockDAG) GetEpochForBlockHash(parentBlockHash [32]byte) (*Epoch, error) {
 	// Lookup the parent block.
 	parentBlock := Block{}
@@ -263,78 +267,35 @@ func (dag *BlockDAG) GetEpochForBlockHash(parentBlockHash [32]byte) (*Epoch, err
 	// Check if this is the epoch boundary.
 	// If it is, we need to recompute the difficulty.
 	if parentBlock.Height % dag.consensus.EpochLengthBlocks == 0 {
-		// Get epoch start block.
-		// Get epoch end block (parent block).
 		// Compute the epoch duration.
+		epoch_start := epoch.StartTime
+		epoch_end := parentBlock.Timestamp
+		epoch_duration := epoch_end - epoch_start
+		if epoch_duration == 0 {
+			epoch_duration = 1
+		}
+		epoch_index := parentBlock.Height / int(dag.consensus.EpochLengthBlocks)
+
+		fmt.Printf("epoch i=%d start_time=%d end_time=%d duration=%d \n", epoch_index, epoch_start, epoch_end, epoch_duration)
+
+		// Compute the target epoch length.
+		target_epoch_length := dag.consensus.TargetEpochLengthMillis * dag.consensus.EpochLengthBlocks
+
 		// Rescale the difficulty.
-		// Create a new epoch.
+		// difficulty = epoch.difficulty * (epoch.duration / target_epoch_length)
+		new_difficulty := new(big.Int)
+		new_difficulty.Mul(
+			epoch.Difficulty, 
+			big.NewInt(int64(epoch_duration))
+		)
+		new_difficulty.Div(
+			new_difficulty, 
+			big.NewInt(int64(target_epoch_length))
+		)
+
+		fmt.Printf("New difficulty: %x\n", new_difficulty.String())
+
 	}
-
-	// Recompute the difficulty.
-	// if height % int(dag.consensus.EpochLengthBlocks) == 0 {
-	// 	// Get the current epoch from the database.
-	// 	curr_epoch := Epoch{}
-	// 	rows, err := dag.db.Query("select id, start_block_hash, start_time, start_height, end_block_hash, end_time, difficulty from epochs order by id desc limit 1")
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	if rows.Next() {
-	// 		rows.Scan(&curr_epoch.Number, &curr_epoch.StartBlockHash, &curr_epoch.StartTime, &curr_epoch.StartHeight, &curr_epoch.EndBlockHash, &curr_epoch.EndTime, &curr_epoch.Difficulty)
-	// 	} else {
-	// 		return nil, fmt.Errorf("No epochs found.")
-	// 	}
-
-	// 	// Load the chain of blocks.
-	// 	chain := make([]Block, dag.consensus.EpochLengthBlocks)
-	// 	rows, err := dag.db.Query("select hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce from blocks where height >= ? order by height asc limit ?", height - dag.consensus.EpochLengthBlocks, dag.consensus.EpochLengthBlocks)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	for i := 0; rows.Next(); i++ {
-	// 		block := Block{}
-	// 		rows.Scan(&block.Hash, &block.ParentHash, &block.Timestamp, &block.NumTransactions, &block.TransactionsMerkleRoot, &block.Nonce)
-	// 		chain[i] = block
-	// 	}
-
-	// 	// Compute the time taken to mine the current epoch.
-	// 	epoch_start := chain[0].Timestamp
-	// 	epoch_end := chain[-1].Timestamp
-	// 	epoch_duration := epoch_end - epoch_start
-	// 	if epoch_duration == 0 {
-	// 		epoch_duration = 1
-	// 	}
-	// 	epoch_index := height / int(dag.consensus.EpochLengthBlocks)
-
-	// 	fmt.Printf("epoch i=%d start_time=%d end_time=%d duration=%d \n", epoch_index, epoch_start, epoch_end, epoch_duration)
-
-	// 	// Compute the target epoch length.
-	// 	target_epoch_length := dag.consensus.TargetEpochLengthMillis * dag.consensus.EpochLengthBlocks
-
-	// 	// Compute the new difficulty.
-	// 	// difficulty = epoch.difficulty * (epoch.duration / target_epoch_length)
-	// 	new_difficulty := new(big.Int)
-	// 	new_difficulty.Mul(
-	// 		curr_epoch, 
-	// 		big.NewInt(int64(epoch_duration))
-	// 	)
-	// 	new_difficulty.Div(
-	// 		new_difficulty, 
-	// 		big.NewInt(int64(target_epoch_length))
-	// 	)
-
-	// 	fmt.Printf("New difficulty: %x\n", new_difficulty.String())
-
-	// 	// Finalise prev epoch.
-	// 	// Create new epoch.
-	// 	// new_epoch := Epoch{
-	// 	// 	Number: epoch_index,
-	// 	// 	StartBlockHash: chain[0].Hash,
-	// 	// 	StartTime: epoch_start,
-	// 	// 	StartHeight: chain[0].Height,
-	// 	// 	EndBlockHash: chain[len(chain) - 1].Hash,
-	// 	// }
-	// }
-
 
 	return nil, nil
 }

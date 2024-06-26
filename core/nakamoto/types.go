@@ -58,6 +58,14 @@ type Block struct {
 	Epoch uint64
 	Work big.Int
 	SizeBytes uint64
+	Hash [32]byte
+}
+
+type Transaction struct {
+	Sig [64]byte
+	FromPubkey [64]byte
+	Data []byte
+	Hash [32]byte
 }
 
 type BlockDAGInterface interface {
