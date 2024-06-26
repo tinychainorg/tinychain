@@ -22,6 +22,9 @@ type ConsensusConfig struct {
 	InitialDifficulty big.Int
 }
 
+// A raw block is the block as transmitted on the network.
+// It contains the block header and the block body.
+// It does not contain any block metadata such as height, epoch, or difficulty.
 type RawBlock struct {
 	// Block header.
 	ParentHash [32]byte
@@ -66,6 +69,7 @@ func (b *RawBlock) Hash() [32]byte {
 
 type RawTransaction struct {
 	Sig [64]byte
+	FromPubkey [32]byte
 	Data []byte
 }
 

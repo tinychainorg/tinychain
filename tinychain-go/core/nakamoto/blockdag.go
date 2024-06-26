@@ -9,12 +9,13 @@ import (
 )
 
 
-func OpenDB(dbPath string) (error) {
+func OpenDB(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer db.Close()
+	return db, err
+	// defer db.Close()
 	
 	// Check schemas.
 	// rows, err := db.Query("select text from mytable where name regexp '^golang'")
@@ -28,7 +29,7 @@ func OpenDB(dbPath string) (error) {
 	// 	fmt.Println(text)
 	// }
 
-	return nil
+	return nil, nil
 }
 
 type Block struct {
@@ -67,6 +68,7 @@ type Epoch struct {
 }
 
 type BlockDAG struct {
+	// The backing SQL database store.
 	db *sql.DB
 	stateMachine StateMachine
 }
@@ -82,11 +84,8 @@ func NewFromDB(db *sql.DB, stateMachine StateMachine) (BlockDAG, error) {
 	}, nil
 }
 
-func (dag *BlockDAG) IngestBlock(b Block) error {
-	return nil
-}
 
-func (dag *BlockDAG) CheckRawBlock(raw RawBlock) error {
+func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	block := Block{
 		ParentHash: raw.ParentHash,
 		Timestamp: raw.Timestamp,
@@ -104,7 +103,7 @@ func (dag *BlockDAG) CheckRawBlock(raw RawBlock) error {
 	// 1. Verify parent is known.
 	parent_block := dag.GetBlockByHash(block.ParentHash)
 	if parent_block == nil {
-		return fmt.Errorf("Parent block not found.")
+		return fmt.Errorf("Unknown parent block.")
 	}
 
 	// 2. Verify timestamp is within bounds.
@@ -114,10 +113,11 @@ func (dag *BlockDAG) CheckRawBlock(raw RawBlock) error {
 	if int(block.NumTransactions) != len(block.Transactions) {
 		return fmt.Errorf("Num transactions does not match length of transactions list.")
 	}
-	
+
 	// 4. Verify transactions are valid.
 	for i, tx := range block.Transactions {
 		err := dag.stateMachine.VerifyTx(tx)
+
 		if err != nil {
 			return fmt.Errorf("Transaction %d is invalid.", i)
 		}

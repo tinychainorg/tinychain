@@ -81,7 +81,7 @@ func TestBuildChainOfBlocks(t *testing.T) {
 			ParentHash: curr_block.Hash(),
 			Timestamp: timestamp,
 			NumTransactions: 0,
-			Transactions: []Transaction{},
+			Transactions: []RawTransaction{},
 		}
 
 		// Exit if the chain is long enough.
@@ -101,13 +101,6 @@ func TestSomething(t *testing.T) {
 		TargetEpochLengthMillis: 2000,
 		InitialDifficulty: *genesis_difficulty,
 	}
-	// epoch := Epoch{
-	// 	Index: 0,
-	// 	StartTime: 0,
-	// 	EndTime: 0,
-	// 	Duration: 0,
-	// 	Difficulty: *genesis_difficulty,
-	// }
 
 	// Now mine 2 epochs worth of blocks.
 	chain := make([]RawBlock, 0)
@@ -132,7 +125,7 @@ func TestSomething(t *testing.T) {
 			ParentHash: curr_block.Hash(),
 			Timestamp: 0,
 			NumTransactions: 0,
-			Transactions: []Transaction{},
+			Transactions: []RawTransaction{},
 		}
 
 		// Recompute the difficulty.
