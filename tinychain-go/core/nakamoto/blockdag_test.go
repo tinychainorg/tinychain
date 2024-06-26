@@ -4,8 +4,19 @@ import (
 	"testing"
 	"math/big"
 	"github.com/stretchr/testify/assert"
+	"encoding/hex"
+	"github.com/liamzebedee/tinychain-go/core"
 
 )
+
+type MockStateMachine struct {}
+func newMockStateMachine() *MockStateMachine {
+	return &MockStateMachine{}
+}
+func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
+	return nil
+}
+
 
 func newBlockdag() BlockDAG {
 	db, err := OpenDB(":memory:")
@@ -13,7 +24,16 @@ func newBlockdag() BlockDAG {
 		panic(err)
 	}
 
-	blockdag, err := NewFromDB(db, nil)
+	stateMachine := newMockStateMachine()
+	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;) 
+	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
+	if err != nil {
+		panic(err)
+	}
+	genesisBlockHash := [32]byte{}
+	copy(genesisBlockHash[:], genesisBlockHash_)
+
+	blockdag, err := NewBlockDAGFromDB(db, stateMachine, genesisBlockHash)
 	if err != nil {
 		panic(err)
 	}
@@ -21,12 +41,12 @@ func newBlockdag() BlockDAG {
 	return blockdag
 }
 
-func getTestingWallets() ([]Wallet) {
-	wallet1, err := WalletFromPrivateKey("2053e3c0d239d12a554ef55895b89e5d044af7d09d8be9a8f6da22460f8260ca")
+func getTestingWallets(t *testing.T) ([]core.Wallet) {
+	wallet1, err := core.WalletFromPrivateKey("2053e3c0d239d12a554ef55895b89e5d044af7d09d8be9a8f6da22460f8260ca")
 	if err != nil {
 		t.Fatalf("Failed to create wallet: %s", err)
 	}
-	return []Wallet{wallet1}
+	return []core.Wallet{*wallet1}
 }
 
 func TestOpenDB(t *testing.T) {
@@ -135,7 +155,7 @@ func TestAddBlockTxsValid(t *testing.T) {
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
 		Nonce: [32]byte{0xBB},
 		Transactions: []RawTransaction{
-			tx
+			tx,
 		},
 	}
 
@@ -178,37 +198,79 @@ func TestAddBlockSuccess(t *testing.T) {
 		Sig: [64]byte{},
 		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
-	wallets := getTestingWallets()
+	sigHex := "7eeb1de1fef49535659ba495ebdd5266ff80fcb9aed90ddec300fcadae676794ecb1f0253b8c3037b024edbbc1664901ba88650ac385ce8e44af52bf51f57c82"
+	sigBytes, err := hex.DecodeString(sigHex)
+	if err != nil {
+		t.Fatalf("Failed to decode signature: %s", err)
+	}
+	copy(tx.Sig[:], sigBytes)
+
+	nonceBigInt := big.NewInt(6)
+
+	b := RawBlock{
+		ParentHash: blockdag.GetGenesisBlockHash(),
+		Timestamp: 1719379532750,
+		NumTransactions: 1,
+		TransactionsMerkleRoot: [32]byte{},
+		Nonce: [32]byte{},
+		Transactions: []RawTransaction{
+			tx,
+		},
+	}
+	b.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	b.SetNonce(*nonceBigInt)
+
+	err = blockdag.IngestBlock(b)
+	assert.Equal(nil, err)
+}
+
+// This test creates a block from a signature created at runtime, and as such is non-deterministic.
+// Creating a new signature will result in different solutions for the POW puzzle, since the blockhash is dependent on
+// the merklized transaction list, whose hash will change based on the content of tx[0].Sig.
+func TestAddBlockWithDynamicSignature(t *testing.T) {
+	assert := assert.New(t)
+	blockdag := newBlockdag()
+
+	// Create a tx with a valid signature.
+	tx := RawTransaction{
+		Sig: [64]byte{},
+		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
+	}
+	wallets := getTestingWallets(t)
 	sig, err := wallets[0].Sign(tx.Data)
 	if err != nil {
 		t.Fatalf("Failed to sign transaction: %s", err)
 	}
+	// Log the signature.
+	t.Logf("Signature: %s\n", hex.EncodeToString(sig))
 	copy(tx.Sig[:], sig)
 
-	b = RawBlock{
-		ParentHash: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
-		Timestamp: Timestamp(),
+	b := RawBlock{
+		ParentHash: blockdag.GetGenesisBlockHash(),
+		Timestamp: 1719379532750,
 		NumTransactions: 1,
 		TransactionsMerkleRoot: [32]byte{},
-		Nonce: [32]byte{0xBB},
+		Nonce: [32]byte{},
 		Transactions: []RawTransaction{
-			tx
+			tx,
 		},
 	}
-	b.TransactionsMerkleRoot = ComputeMerkleHash([][]byte{tx.Envelope()})
+	b.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
 
 	// Mine the POW solution.
-	target := new(big.Int)
-	target.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-	solution, err := SolvePOW(b, *new(big.Int), *target, 1000000000000)
+	epoch, err := blockdag.GetEpochForBlockHash(b.ParentHash)
+	if err != nil {
+		t.Fatalf("Failed to get epoch for block hash: %s", err)
+	}
+	solution, err := SolvePOW(b, *big.NewInt(0), epoch.Difficulty, 1000000000000)
 	if err != nil {
 		t.Fatalf("Failed to solve POW: %s", err)
 	}
+	t.Logf("Solution: %s\n", solution.String())
 	b.SetNonce(solution)
 
-
-	err := blockdag.IngestBlock(b)
-	assert.Equal(err.Error(), "Transaction 0 is invalid.")
+	err = blockdag.IngestBlock(b)
+	assert.Equal(nil, err)
 }
 
 func TestGetBlock(t *testing.T) {

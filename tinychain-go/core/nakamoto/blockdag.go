@@ -71,17 +71,25 @@ type BlockDAG struct {
 	// The backing SQL database store.
 	db *sql.DB
 	stateMachine StateMachine
+
+	// The genesis block hash.
+	genesisBlockHash [32]byte
 }
 
 type StateMachine interface {
 	VerifyTx(tx RawTransaction) error
 }
 
-func NewFromDB(db *sql.DB, stateMachine StateMachine) (BlockDAG, error) {
+func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachine, genesisBlockHash [32]byte) (BlockDAG, error) {
 	return BlockDAG{
 		db: db,
 		stateMachine: stateMachine,
+		genesisBlockHash: genesisBlockHash,
 	}, nil
+}
+
+func (dag *BlockDAG) GetGenesisBlockHash() ([32]byte) {
+	return dag.genesisBlockHash
 }
 
 
@@ -154,7 +162,22 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	return nil
 }
 
-func (dag *BlockDAG) GetEpochForBlockHash(hash [32]byte) (*Epoch, error) {
+func (dag *BlockDAG) GetEpochForBlockHash(parentBlockHash [32]byte) (*Epoch, error) {
+	// Special case: genesis block.
+	if parentBlockHash == dag.genesisBlockHash {
+		target := new(big.Int)
+		target.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+
+		return &Epoch{
+			Number: 0,
+			StartBlockHash: dag.genesisBlockHash,
+			StartTime: 0,
+			EndBlockHash: [32]byte{},
+			EndTime: 0,
+			Difficulty: *target,
+		}, nil
+	}
+
 	return nil, nil
 }
 
@@ -170,7 +193,7 @@ type BlockDAGInterface interface {
 	GetBlockByHash(hash [32]byte) (Block)
 
 	// Get epoch for block.
-	GetEpochForBlockHash(hash [32]byte) (uint64, error)
+	GetEpochForBlockHash(parentBlockHash [32]byte) (uint64, error)
 	
 	// Get a list of blocks at height.
 	GetBlocksByHeight(height uint64) ([]Block, error)

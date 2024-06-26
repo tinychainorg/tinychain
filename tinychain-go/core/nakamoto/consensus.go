@@ -38,9 +38,11 @@ type RawBlock struct {
 }
 
 func (b *RawBlock) SetNonce(i big.Int) {
-	nonce := make([]byte, 32)
-	i.FillBytes(nonce)
-	b.Nonce = sha256.Sum256(nonce)
+	nonce := [32]byte{}
+	nonceBuf := make([]byte, 32)
+	i.FillBytes(nonceBuf)
+	copy(nonce[:], nonceBuf)
+	b.Nonce = nonce
 }
 
 func (b *RawBlock) Envelope() []byte {
@@ -85,11 +87,15 @@ func (tx *RawTransaction) Envelope() []byte {
 }
 
 func VerifyPOW(blockhash [32]byte, target big.Int) bool {
+	fmt.Printf("VerifyPOW target: %s\n", target.String())
+
 	hash := new(big.Int).SetBytes(blockhash[:])
 	return hash.Cmp(&target) == -1
 }
 
 func SolvePOW(b RawBlock, startNonce big.Int, target big.Int, maxIterations uint64) (big.Int, error) {
+	fmt.Printf("SolvePOW target: %s\n", target.String())
+
 	block := b
 	nonce := startNonce
 	var i uint64 = 0
@@ -114,7 +120,7 @@ func SolvePOW(b RawBlock, startNonce big.Int, target big.Int, maxIterations uint
 		if hash.Cmp(&target) == -1 {
 			fmt.Printf("Solved in %d iterations\n", i)
 			fmt.Printf("Hash: %x\n", hash.String())
-			fmt.Printf("Nonce: %x\n", nonce.String())
+			fmt.Printf("Nonce: %s\n", nonce.String())
 			return nonce, nil
 		}
 	}
