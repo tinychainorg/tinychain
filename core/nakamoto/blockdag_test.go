@@ -26,10 +26,20 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
-	db, err := OpenDB("file:memdb1?mode=memory")
-	// db, err := OpenDB("test.sqlite3")
+	useMemoryDB := true
+	var connectionString string
+	if useMemoryDB {
+		connectionString = "file:memdb1?mode=memory"
+	} else {
+		connectionString = "test.sqlite3"
+	}
+
+	db, err := OpenDB(connectionString)
 	if err != nil {
 		panic(err)
+	}
+	if useMemoryDB {
+		db.SetMaxOpenConns(1)
 	}
 	_, err = db.Exec("PRAGMA journal_mode = WAL;")
 	if err != nil {

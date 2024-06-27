@@ -40,6 +40,11 @@ type RawBlock struct {
 	Transactions []RawTransaction
 }
 
+func (b *RawBlock) HashStr() (string) {
+	sl := b.Hash()
+	return hex.EncodeToString(sl[:])
+}
+
 type RawTransaction struct {
 	Sig [64]byte
 	FromPubkey [65]byte
