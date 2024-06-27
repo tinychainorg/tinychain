@@ -2,4 +2,3 @@ package nakamoto
 
 import (
 )
-

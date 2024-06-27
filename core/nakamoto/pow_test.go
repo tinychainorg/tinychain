@@ -178,7 +178,6 @@ func TestCalculateWork(t *testing.T) {
 	// work = 2^256 / (target + 1)
 	// difficulty = max_target / target
 
-
 	// Solve 30 blocks, adjust difficulty every 10.
 	for i := 0; i < 30; i++ {
 		solution, err := SolvePOW(block_template, *new(big.Int), *diff_target, 100000000000)

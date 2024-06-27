@@ -27,3 +27,11 @@ func Bytes32ToString(b [32]byte) string {
 	sl := b[:]
 	return hex.EncodeToString(sl)
 }
+
+func PadBytes(src []byte, length int) []byte {
+    if len(src) >= length {
+        return src
+    }
+    padding := make([]byte, length-len(src))
+    return append(padding, src...)
+}

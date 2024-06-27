@@ -514,12 +514,51 @@ func TestGetCurrentTips(t *testing.T) {
 	blockdag, _, _ := newBlockdag()
 
 	// The genesis will be the first tip.
-	block, err := blockdag.GetCurrentTip()
+	current_tip, err := blockdag.GetCurrentTip()
 	assert.Equal(nil, err)
-	assert.Equal(blockdag.consensus.GenesisBlockHash, block.Hash)
+	assert.Equal(blockdag.consensus.GenesisBlockHash, current_tip.Hash)
 
 	// Mine a few blocks.
-	
+	tx, err := newValidTx(t)
+	if err != nil {
+		t.Fatalf("Failed to create valid tx: %s", err)
+	}
+
+	// Construct block template for mining.
+	raw := RawBlock{
+		ParentHash: current_tip.Hash,
+		Timestamp: Timestamp(),
+		NumTransactions: 1,
+		TransactionsMerkleRoot: [32]byte{},
+		Nonce: [32]byte{},
+		Transactions: []RawTransaction{
+			tx,
+		},
+	}
+	raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+
+	// Mine the POW solution.
+	epoch, err := blockdag.GetEpochForBlockHash(raw.ParentHash)
+	if err != nil {
+		t.Fatalf("Failed to get epoch for block hash: %s", err)
+	}
+	solution, err := SolvePOW(raw, *big.NewInt(0), epoch.Difficulty, 1000000000000)
+	if err != nil {
+		t.Fatalf("Failed to solve POW: %s", err)
+	}
+
+	raw.SetNonce(solution)
+
+	// Ingest the block.
+	err = blockdag.IngestBlock(raw)
+	if err != nil {
+		t.Fatalf("Failed to ingest block: %s", err)
+	}
+
+	// Check if the block is the latest tip.
+	current_tip, err = blockdag.GetCurrentTip()
+	assert.Equal(nil, err)
+	assert.Equal(raw.Hash(), current_tip.Hash)
 }
 
 

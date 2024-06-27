@@ -158,7 +158,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 		genesisHeight,
 		epoch0.GetId(),
 		genesisBlock.SizeBytes(),
-		accWorkBuf[:],
+		PadBytes(accWorkBuf[:], 32),
 	)
 	if err != nil {
 		return err
@@ -420,5 +420,31 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 func (dag *BlockDAG) GetCurrentTip() (Block, error) {
 	// The tip of the chain is defined as the chain with the longest proof-of-work.
 	// Simply put, given a DAG of blocks, where each block has an accumulated work, we want to find the path with the highest accumulated work.
-	return Block{}, nil
+
+	// Query the highest accumulated work block in the database.
+	rows, err := dag.db.Query("select hash from blocks order by acc_work desc limit 1")
+	if err != nil {
+		return Block{}, err
+	}
+	if !rows.Next() {
+		return Block{}, fmt.Errorf("No blocks found.")
+	}
+
+	hash := []byte{}
+	err = rows.Scan(&hash)
+	if err != nil {
+		return Block{}, err
+	}
+	rows.Close()
+
+	fhash := [32]byte{}
+	copy(fhash[:], hash)
+
+	// Get the block.
+	block, err := dag.GetBlockByHash(fhash)
+	if err != nil {
+		return Block{}, err
+	}
+
+	return *block, nil
 }
