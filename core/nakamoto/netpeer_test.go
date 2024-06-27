@@ -25,6 +25,32 @@ func healthCheck(address string) error {
     return nil
 }
 
+func waitForPeersOnline(peers []*PeerCore) {
+	ready := make(chan bool)
+
+	go func() {
+		goodflags := make([]bool, len(peers))
+		for {
+			for i, peer := range peers {
+				// Dial each peer using TCP to check connection.
+				if err := healthCheck(peer.GetLocalAddr()); err != nil {
+					goodflags[i] = true
+				}
+			}
+
+			// Reduce good.
+			for _, good := range goodflags {
+				if !good {
+					break
+				}
+			}
+
+			ready <- true
+		}
+	}()
+
+	<-ready
+}
 
 func TestStartPeer(t *testing.T) {
 	peer1 := NewPeerCore(PeerConfig{port: "8080"})
@@ -42,21 +68,7 @@ func TestStartPeerHeartbeat(t *testing.T) {
 	go peer2.Start()
 
 	// Wait until both servers are up.
-	ready := make(chan bool)
-	go func() {
-		for {
-			// Dial each peer using TCP to check connection.
-			good1 := healthCheck(fmt.Sprintf("0.0.0.0:%s", peer1.config.port))
-			good2 := healthCheck(fmt.Sprintf("0.0.0.0:%s", peer2.config.port))
-
-			if good1 == nil && good2 == nil {
-				ready <- true
-				break
-			}
-		}
-	}()
-
-	<-ready
+	waitForPeersOnline([]*PeerCore{peer1, peer2})
 
 	// Test bootstrapping.
 	t.Log(peer1.GetLocalAddr())
@@ -83,10 +95,15 @@ func TestStartPeerHeartbeat(t *testing.T) {
 	// Wait for heartbeat.
 	select {
 	case hb := <-heartbeatChan:
-		assert.Equal(hb.Type, "heartbeat")
+		assert.Equal("heartbeat", hb.Type)
 	case <-time.After(5 * time.Second):
 		t.Error("Timed out waiting for heartbeat.")
 	}
+
+	// Wait for other thread to resume.
+	time.Sleep(1 * time.Second)
+	// Check peer added to peer list.
+	assert.Equal(1, len(peer2.peers))
 }
 
 func TestPeerGossip(t *testing.T) {

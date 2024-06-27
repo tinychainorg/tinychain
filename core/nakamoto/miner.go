@@ -12,7 +12,7 @@ import (
 type Miner struct {
 	dag BlockDAG
 	minerWallet *core.Wallet
-	
+	IsRunning bool
 	OnBlockSolution func(block RawBlock)
 }
 
@@ -168,7 +168,9 @@ func (node *Miner) MakeNewPuzzle() (POWPuzzle) {
 	return puzzle
 }
 
-func (node *Miner) Start() {
+func (node *Miner) Start(mineMaxBlocks uint) {
+	node.IsRunning = true
+
 	// The next tip channel.
 	// next_tip := make(chan Block)
 	// block_solutions := make(chan Block)
@@ -177,6 +179,8 @@ func (node *Miner) Start() {
 	solutionChannel := make(chan POWPuzzle, 1)
 
 	go MineWithStatus(hashrateChannel, solutionChannel, puzzleChannel)
+
+	var blocksMined uint = 0
 
 	puzzleChannel <- node.MakeNewPuzzle()
 	for {
@@ -196,6 +200,13 @@ func (node *Miner) Start() {
 
 			if node.OnBlockSolution != nil {
 				node.OnBlockSolution(*raw)
+			}
+			
+			blocksMined += 1
+			if mineMaxBlocks <= blocksMined {
+				fmt.Println("Mined max blocks; stopping miner")
+				node.IsRunning = false
+				return
 			}
 
 			fmt.Println("Making new puzzle")

@@ -11,7 +11,7 @@ import (
     "net"
     "github.com/pion/stun"
     "bytes"
-
+    "sort"
 )
 
 var peerLogger = log.New(os.Stdout, "peer: ", log.Lshortfile)
@@ -83,6 +83,7 @@ func (s *PeerServer) Start() {
         for k := range s.messageHandlers {
             handlers = append(handlers, k)
         }
+        sort.Strings(handlers)
         return handlers
     }())
 
@@ -199,7 +200,7 @@ func SendMessageToPeer(peerUrl string, message any) ([]byte, error) {
 }
 
 type PeerCore struct {
-    peers []string
+    peers []Peer
     server *PeerServer
     config PeerConfig
     externalIp string
@@ -218,7 +219,7 @@ type Peer struct {
 
 func NewPeerCore(config PeerConfig) *PeerCore {
     p := &PeerCore{
-        peers: []string{},
+        peers: []Peer{},
         server: nil,
         config: config,
     }
@@ -231,28 +232,6 @@ func NewPeerCore(config PeerConfig) *PeerCore {
     // p.externalPort = fmt.Sprintf("%d", externalPort)
     p.externalPort = config.port
 
-    return p
-}
-
-type NetworkMessage struct {
-    type_ string `json:"type"`
-}
-
-type HeartbeatMesage struct {
-    Type string `json:"type"`
-    TipHash string `json:"tipHash"`
-    TipHeight int `json:"tipHeight"`
-    ClientVersion string `json:"clientVersion"`
-    ClientAddress string `json:"clientAddress"`
-    Time time.Time
-}
-
-type NewBlockMessage struct {
-    Type string `json:"type"`
-    RawBlock RawBlock `json:"rawBlock"`
-}
-
-func (p *PeerCore) Start() {
     p.server = NewPeerServer(p.config)
 
     // Handle heartbeat.
@@ -279,6 +258,28 @@ func (p *PeerCore) Start() {
         return nil, nil
     })
 
+    return p
+}
+
+type NetworkMessage struct {
+    type_ string `json:"type"`
+}
+
+type HeartbeatMesage struct {
+    Type string `json:"type"`
+    TipHash string `json:"tipHash"`
+    TipHeight int `json:"tipHeight"`
+    ClientVersion string `json:"clientVersion"`
+    ClientAddress string `json:"clientAddress"`
+    Time time.Time
+}
+
+type NewBlockMessage struct {
+    Type string `json:"type"`
+    RawBlock RawBlock `json:"rawBlock"`
+}
+
+func (p *PeerCore) Start() {
     go p.StatusLogger()
     p.server.Start()
 }
@@ -354,13 +355,15 @@ func (p *PeerCore) GetExternalAddr() (string) {
 }
 
 func (p *PeerCore) GossipBlock(block RawBlock) {
+    peerLogger.Printf("Gossiping block %s to %d peers\n", block.HashStr(), len(p.peers))
+    
     // Send block to all peers.
     for _, peer := range p.peers {
         newBlockMsg := NewBlockMessage{
             Type: "new_block",
             RawBlock: block,
         }
-        _, err := SendMessageToPeer(peer, newBlockMsg)
+        _, err := SendMessageToPeer(peer.url, newBlockMsg)
         if err != nil {
             peerLogger.Printf("Failed to send block to peer: %v", err)
         }
@@ -373,8 +376,8 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
     peerLogger.Println("Bootstrapping network from peers...")
 
     // Contact all peers and exchange heartbeats.
-    for _, peerInfo := range peerInfos {
-        peerLogger.Println("Connecting to new peer at ", peerInfo)
+    for i, peerInfo := range peerInfos {
+        peerLogger.Printf("Connecting to bootstrap peer #%d at %s\n", i, peerInfo)
 
         // Parse address and port from URI.
         // url, err := url.Parse(peerInfo)
@@ -400,12 +403,23 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
             Time: time.Now(),
         }
 
+        if peer.url == p.GetExternalAddr() || peer.url == p.GetLocalAddr() {
+            // Skip self.
+            peerLogger.Printf("Bootstrap found peerInfo corresponding to our peer. Skipping #%d.\n", i)
+            continue
+        }
+
         // Send heartbeat message to peer.
         _, err := SendMessageToPeer(peer.url, heartbeatMsg)
         if err != nil {
             peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
             continue
         }
+
+        peerLogger.Println("Peer is alive, adding to peer list")
+        
+        // Add peer to list.
+        p.peers = append(p.peers, peer)
     }
 
     peerLogger.Println("Bootstrapping complete.")

@@ -67,5 +67,5 @@ func TestMiner(t *testing.T) {
 	}
 
 	miner := NewMiner(dag, minerWallet)
-	miner.Start()
+	miner.Start(100)
 }
