@@ -22,8 +22,8 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
-	// db, err := OpenDB("file:memdb1?mode=memory&cache=shared")
-	db, err := OpenDB("test.sqlite3")
+	db, err := OpenDB("file:memdb1?mode=memory&cache=shared")
+	// db, err := OpenDB("test.sqlite3")
 	if err != nil {
 		panic(err)
 	}
@@ -31,7 +31,6 @@ func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	if err != nil {
 		panic(err)
 	}
-
 
 	stateMachine := newMockStateMachine()
 
@@ -238,19 +237,24 @@ func TestAddBlockSuccess(t *testing.T) {
 	blockdag, _, _ := newBlockdag()
 
 	// Create a tx with a valid signature.
+	wallets := getTestingWallets(t)
 	tx := RawTransaction{
 		FromPubkey: [65]byte{},
 		Sig: [64]byte{},
 		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
-	sigHex := "1b7885066a4633c0ffe3e0cf4f6e8d77e2ec94f5eef46851e061aca8d3274f26f49a9dd28c0c1bc6c943b8663a57f9885bcee12fe1245f4bca3830e7927cddb7"
+	tx.FromPubkey = wallets[0].PubkeyBytes()
+	// sig, err := wallets[0].Sign(tx.Envelope())
+	// if err != nil {
+	// 	t.Fatalf("Failed to sign transaction: %s", err)
+	// }
+	// t.Logf("Signature: %s\n", hex.EncodeToString(sig))
+	sigHex := "2b803490a6f14f9937f9ec49f6cc2de7bbb2e77ee54ea1b89d740352846e215601c1417f85c92553ed0972b259ac4009b8e3330c4cec9aded29e5fb2db9d89f2"
 	sigBytes, err := hex.DecodeString(sigHex)
 	if err != nil {
 		t.Fatalf("Failed to decode signature: %s", err)
 	}
 	copy(tx.Sig[:], sigBytes)
-
-	nonceBigInt := big.NewInt(6)
 
 	b := RawBlock{
 		ParentHash: blockdag.consensus.GenesisBlockHash,
@@ -263,6 +267,19 @@ func TestAddBlockSuccess(t *testing.T) {
 		},
 	}
 	b.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+
+	// Mine the POW solution.
+	// epoch, err := blockdag.GetEpochForBlockHash(b.ParentHash)
+	// if err != nil {
+	// 	t.Fatalf("Failed to get epoch for block hash: %s", err)
+	// }
+	// solution, err := SolvePOW(b, *big.NewInt(0), epoch.Difficulty, 1000000000000)
+	// if err != nil {
+	// 	t.Fatalf("Failed to solve POW: %s", err)
+	// }
+	// t.Logf("Solution: %s\n", solution.String())
+
+	nonceBigInt := big.NewInt(44)
 	b.SetNonce(*nonceBigInt)
 
 	err = blockdag.IngestBlock(b)
@@ -284,7 +301,7 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	}
 	wallets := getTestingWallets(t)
 	tx.FromPubkey = wallets[0].PubkeyBytes()
-	sig, err := wallets[0].Sign(tx.Data)
+	sig, err := wallets[0].Sign(tx.Envelope())
 	if err != nil {
 		t.Fatalf("Failed to sign transaction: %s", err)
 	}
