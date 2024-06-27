@@ -2,6 +2,11 @@
 
 A full blockchain in Go;
 
+ * Nakamoto consensus.
+ * Single file SQLite database.
+
+![database view](./assets/db-view.png)
+
 ## Install.
 
 Make sure you have Go 1.2.3+ installed.
