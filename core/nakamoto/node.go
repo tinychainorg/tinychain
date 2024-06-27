@@ -88,11 +88,18 @@ func (n *Node) setup() {
 		// Gossip the block.
 		n.Peer.GossipBlock(b)
 	}
+
+	// Gossip the latest tip.
+	n.Peer.OnGetTip = func(msg GetTipMessage) ([32]byte, error) {
+		tip := n.Dag.Tip.Hash
+		return tip, nil
+	}
 }
 
 func (n *Node) Sync() {
 	// Contact all our peers.
 	// Get their current tips.
+	// Get the blocks for each of these tips.
 	// Select the tip with the highest work according to ParentTotalWork.
 	// Download the blocks from the tip to the common ancestor from all our peers.
 	// Store them in a temporary storage.

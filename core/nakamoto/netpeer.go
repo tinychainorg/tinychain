@@ -202,6 +202,7 @@ type PeerCore struct {
 
     OnNewBlock func(block RawBlock)
     OnGetBlocks func(msg GetBlocksMessage) ([][]byte, error)
+    OnGetTip func(msg GetTipMessage) ([32]byte, error)
 }
 
 type Peer struct {
@@ -276,6 +277,27 @@ func NewPeerCore(config PeerConfig) *PeerCore {
         return nil, nil
     })
 
+    p.server.RegisterMesageHandler("get_tip", func(message []byte) (interface{}, error) {
+        var msg GetTipMessage
+        if err := json.Unmarshal(message, &msg); err != nil {
+            return nil, err
+        }
+
+        if p.OnGetTip != nil {
+            tip, err := p.OnGetTip(msg)
+            if err != nil {
+                return nil, err
+            }
+
+            return GetTipMessage{
+                Type: "get_tip",
+                Tip: Bytes32ToHexString(tip),
+            }, nil
+        }
+
+        return nil, nil
+    })
+
     p.server.RegisterMesageHandler("gossip_peers", func(message []byte) (interface{}, error) {
         var msg GossipPeersMessage
         if err := json.Unmarshal(message, &msg); err != nil {
@@ -301,46 +323,6 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 
 type NetworkMessage struct {
     type_ string `json:"type"`
-}
-
-type HeartbeatMesage struct {
-    Type string `json:"type"`
-    TipHash string `json:"tipHash"`
-    TipHeight int `json:"tipHeight"`
-    ClientVersion string `json:"clientVersion"`
-    WireProtocolVersion uint `json:"wireProtocolVersion"`
-    ClientAddress string `json:"clientAddress"`
-    Time time.Time
-}
-
-type NewBlockMessage struct {
-    Type string `json:"type"`
-    RawBlock RawBlock `json:"rawBlock"`
-}
-
-type NewTransactionMessage struct {
-    Type string `json:"type"`
-    RawTransaction RawTransaction `json:"rawTransaction"`
-}
-
-type GetBlocksMessage struct {
-    Type string `json:"type"`
-    BlockHashes []string `json:"blockHashes"`
-}
-
-type GetBlocksReply struct {
-    Type string `json:"type"`
-    RawBlockDatas [][]byte `json:"rawBockDatas"`
-}
-
-type GossipPeersMessage struct {
-    Type string `json:"type"`
-    Peers []string `json:"myPeers"`
-}
-
-type GossipPeersReply struct {
-    Type string `json:"type"`
-    Peers []string `json:"peers"`
 }
 
 func (p *PeerCore) Start() {

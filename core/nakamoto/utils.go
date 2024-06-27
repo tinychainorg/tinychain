@@ -38,6 +38,10 @@ func HexStringToBytes32(s string) [32]byte {
 	return fbuf
 }
 
+func Bytes32ToHexString(b [32]byte) string {
+    return hex.EncodeToString(b[:])
+}
+
 func PadBytes(src []byte, length int) []byte {
     if len(src) >= length {
         return src

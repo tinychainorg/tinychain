@@ -174,3 +174,44 @@ type PeerConfig struct {
 func NewPeerConfig(port string, bootstrapPeers []string) (PeerConfig) {
 	return PeerConfig{port: port, bootstrapPeers: bootstrapPeers}
 }
+
+
+type HeartbeatMesage struct {
+    Type string `json:"type"` // "heartbeat"
+    TipHash string `json:"tipHash"`
+    TipHeight int `json:"tipHeight"`
+    ClientVersion string `json:"clientVersion"`
+    WireProtocolVersion uint `json:"wireProtocolVersion"`
+    ClientAddress string `json:"clientAddress"`
+    Time time.Time
+}
+
+type GetTipMessage struct {
+    Type string `json:"type"` // "get_tip"
+    Tip string `json:"myTip"`
+}
+
+type NewBlockMessage struct {
+    Type string `json:"type"` // "new_block"
+    RawBlock RawBlock `json:"rawBlock"`
+}
+
+type NewTransactionMessage struct {
+    Type string `json:"type"` // "new_transaction"
+    RawTransaction RawTransaction `json:"rawTransaction"`
+}
+
+type GetBlocksMessage struct {
+    Type string `json:"type"` // "get_blocks"
+    BlockHashes []string `json:"blockHashes"`
+}
+
+type GetBlocksReply struct {
+    Type string `json:"type"` // "get_blocks_reply"
+    RawBlockDatas [][]byte `json:"rawBockDatas"`
+}
+
+type GossipPeersMessage struct {
+    Type string `json:"type"` // "gossip_peers"
+    Peers []string `json:"myPeers"`
+}
