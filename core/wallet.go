@@ -17,17 +17,24 @@ func (w *Wallet) Pubkey() *ecdsa.PublicKey {
 	return &w.prvkey.PublicKey
 }
 
-func (w *Wallet) PubkeyBytes() [64]byte {
+func (w *Wallet) PubkeyBytes() [65]byte {
 	pubkey := w.Pubkey()
+	
+	// 	The length of the buffer returned by elliptic.Marshal depends on the elliptic curve used. For the NIST P-256 curve (also known as elliptic.P256()), the buffer will be 65 bytes long. This includes:
+
+	// 1 byte for the format prefix (0x04 for uncompressed)
+	// 32 bytes for the X coordinate
+	// 32 bytes for the Y coordinate
+
 	buf := elliptic.Marshal(pubkey.Curve, pubkey.X, pubkey.Y)
-	var pubkeyBytes [64]byte
+	var pubkeyBytes [65]byte
 	copy(pubkeyBytes[:], buf)
 	return pubkeyBytes
 }
 
 func (w *Wallet) PubkeyStr() string {
-	pubkey := w.Pubkey()
-	return hex.EncodeToString(elliptic.Marshal(pubkey.Curve, pubkey.X, pubkey.Y))
+	pubkey := w.PubkeyBytes()
+	return hex.EncodeToString(pubkey[:])
 }
 
 func (w *Wallet) PrvkeyStr() string {
@@ -76,6 +83,7 @@ func VerifySignature(pubkeyStr string, sig, msg []byte) bool {
 	if err != nil {
 		return false
 	}
+
 	x, y := elliptic.Unmarshal(elliptic.P256(), pubkeyBytes)
 	if x == nil {
 		return false

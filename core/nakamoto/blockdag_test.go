@@ -62,6 +62,31 @@ func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	return blockdag, conf, db
 }
 
+func newValidTx(t *testing.T) (RawTransaction, error) {
+	wallets := getTestingWallets(t)
+	
+	tx := RawTransaction{
+		FromPubkey: [65]byte{},
+		Sig: [64]byte{},
+		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
+	}
+	tx.FromPubkey = wallets[0].PubkeyBytes()
+
+	sig, err := wallets[0].Sign(tx.Envelope())
+	if err != nil {
+		return RawTransaction{}, err
+	}
+
+	copy(tx.Sig[:], sig)
+
+	// Sanity check verify.
+	if !core.VerifySignature(wallets[0].PubkeyStr(), tx.Sig[:], tx.Envelope()) {
+		t.Fatalf("Failed to verify signature.")
+	}
+
+	return tx, nil
+}
+
 func getTestingWallets(t *testing.T) ([]core.Wallet) {
 	wallet1, err := core.WalletFromPrivateKey("2053e3c0d239d12a554ef55895b89e5d044af7d09d8be9a8f6da22460f8260ca")
 	if err != nil {
@@ -139,10 +164,10 @@ func TestAddBlockUnknownParent(t *testing.T) {
 
 func TestAddBlockTxCount(t *testing.T) {
 	assert := assert.New(t)
-	blockdag, _, _ := newBlockdag()
+	blockdag, consensus, _ := newBlockdag()
 
 	b := RawBlock{
-		ParentHash: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
+		ParentHash: consensus.GenesisBlockHash,
 		Timestamp: 0,
 		NumTransactions: 0,
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
@@ -161,7 +186,7 @@ func TestAddBlockTxCount(t *testing.T) {
 
 func TestAddBlockTxsValid(t *testing.T) {
 	assert := assert.New(t)
-	blockdag, _, _ := newBlockdag()
+	blockdag, consensus, _ := newBlockdag()
 
 	// Create a transaction.
 	tx := RawTransaction{
@@ -170,7 +195,7 @@ func TestAddBlockTxsValid(t *testing.T) {
 	}
 
 	b := RawBlock{
-		ParentHash: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
+		ParentHash: consensus.GenesisBlockHash,
 		Timestamp: 0,
 		NumTransactions: 1,
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
@@ -181,33 +206,31 @@ func TestAddBlockTxsValid(t *testing.T) {
 	}
 
 	err := blockdag.IngestBlock(b)
-	assert.Equal("Transaction 0 is invalid.", err.Error())
+	assert.Equal("Transaction 0 is invalid: signature invalid.", err.Error())
 }
 
 func TestAddBlockTxMerkleRootValid(t *testing.T) {
 	assert := assert.New(t)
-	blockdag, _, _ := newBlockdag()
+	blockdag, consensus, _ := newBlockdag()
+
+	tx, err := newValidTx(t)
+	if err != nil {
+		panic(err)
+	}
 
 	b := RawBlock{
-		ParentHash: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
+		ParentHash: consensus.GenesisBlockHash,
 		Timestamp: 0,
-		NumTransactions: 0,
+		NumTransactions: 1,
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
 		Nonce: [32]byte{0xBB},
 		Transactions: []RawTransaction{
-			RawTransaction{
-				Sig: [64]byte{0xCA, 0xFE, 0xBA, 0xBE},
-				Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
-			},
+			tx,
 		},
 	}
 
-	err := blockdag.IngestBlock(b)
+	err = blockdag.IngestBlock(b)
 	assert.Equal("Merkle root does not match computed merkle root.", err.Error())
-}
-
-func TestAddBlockPOWSolutionValid(t *testing.T) {
-	
 }
 
 func TestAddBlockSuccess(t *testing.T) {
@@ -216,7 +239,7 @@ func TestAddBlockSuccess(t *testing.T) {
 
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
-		FromPubkey: [64]byte{},
+		FromPubkey: [65]byte{},
 		Sig: [64]byte{},
 		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
@@ -255,7 +278,7 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
-		FromPubkey: [64]byte{},
+		FromPubkey: [65]byte{},
 		Sig: [64]byte{},
 		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
@@ -300,17 +323,13 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	assert.Equal(nil, err)
 }
 
-func TestGetBlock(t *testing.T) {
-	// Insert a block into DAG.
-	// Query DAG to verify block inserted.
-}
 
 func TestBlockDAGInitialised(t *testing.T) {
 	assert := assert.New(t)
 	_, conf, db := newBlockdag()
 
 	// Query the blocks column.
-	rows, err := db.Query("SELECT hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes FROM blocks")
+	rows, err := db.Query("SELECT hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes FROM blocks where hash = ?", conf.GenesisBlockHash[:])
 	if err != nil {
 		t.Fatalf("Failed to query blocks table: %s", err)
 	}
@@ -411,7 +430,7 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
-		FromPubkey: [64]byte{},
+		FromPubkey: [65]byte{},
 		Sig: [64]byte{},
 		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}

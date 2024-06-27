@@ -42,7 +42,7 @@ type RawBlock struct {
 
 type RawTransaction struct {
 	Sig [64]byte
-	FromPubkey [64]byte
+	FromPubkey [65]byte
 	Data []byte
 }
 
@@ -67,7 +67,7 @@ type Block struct {
 
 type Transaction struct {
 	Sig [64]byte
-	FromPubkey [64]byte
+	FromPubkey [65]byte
 	Data []byte
 	Hash [32]byte
 }

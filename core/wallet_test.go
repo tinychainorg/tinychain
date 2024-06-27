@@ -53,7 +53,7 @@ func TestSign(t *testing.T) {
 	assert.True(ok)
 }
 
-func TestVerify(t *testing.T) {
+func TestVerifyWithRealSig(t *testing.T) {
 	assert := assert.New(t)
 
 	pubkeyStr := "04e14529aa7c2a392dbe70f30f18cd0c76422d256fa413e151b87417d9232c41374985d8df6cedf084cf107c397ed658bd13dc2b31d4cbc3979c8684edb8b948bf"
@@ -67,6 +67,33 @@ func TestVerify(t *testing.T) {
 	}
 
 	ok := VerifySignature(pubkeyStr, sig, msg)
+	assert.True(ok)
+}
+
+func TestVerify(t *testing.T) {
+	assert := assert.New(t)
+	wallet, err := WalletFromPrivateKey("2053e3c0d239d12a554ef55895b89e5d044af7d09d8be9a8f6da22460f8260ca")
+	if err != nil {
+		t.Fatalf("Failed to create wallet: %s", err)
+	}
+
+	// Log pub key bytes
+	t.Logf("Pubkey: %s", wallet.PubkeyStr())
+	t.Logf("Pubkey: %s", wallet.PubkeyBytes())
+
+	// Sign a message.
+	msg := []byte("Gday, world!")
+	sig, err := wallet.Sign(msg)
+	if err != nil {
+		t.Fatalf("Failed to sign message: %s", err)
+	}
+
+	t.Logf("Signature: %s", hex.EncodeToString(sig))
+
+	// Verify the signature.
+	pubkeyStr := wallet.PubkeyStr()
+	ok := VerifySignature(pubkeyStr, sig, msg)
+
 	assert.True(ok)
 }
 

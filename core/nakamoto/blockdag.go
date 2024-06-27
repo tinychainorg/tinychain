@@ -189,6 +189,16 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// 4. Verify transactions are valid.
 	for i, block_tx := range raw.Transactions {
 		// TODO: Verify signature.
+		fmt.Printf("Verifying transaction %d\n", i)
+		isValid := core.VerifySignature(
+			hex.EncodeToString(block_tx.FromPubkey[:]),
+			block_tx.Sig[:], 
+			block_tx.Envelope(),
+		)
+		if !isValid {
+			return fmt.Errorf("Transaction %d is invalid: signature invalid.", i)
+		}
+
 		// This depends on where exactly we are verifying the sig.
 		err := dag.stateMachine.VerifyTx(block_tx)
 
