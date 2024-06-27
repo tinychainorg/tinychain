@@ -17,6 +17,7 @@ import (
 var peerLogger = log.New(os.Stdout, "peer: ", log.Lshortfile)
 var peerServerLogger = log.New(os.Stdout, "peer-server: ", log.Lshortfile)
 var CLIENT_VERSION = "tinychain v0.0.0 / aggressive alpha"
+var WIRE_PROTOCOL_VERSION = uint(1)
 
 // Bootstrap by connecting to peers.
 // Fill your peer cache with 20 peers max.
@@ -314,6 +315,7 @@ type HeartbeatMesage struct {
     TipHash string `json:"tipHash"`
     TipHeight int `json:"tipHeight"`
     ClientVersion string `json:"clientVersion"`
+    WireProtocolVersion uint `json:"wireProtocolVersion"`
     ClientAddress string `json:"clientAddress"`
     Time time.Time
 }
@@ -340,7 +342,7 @@ type GetBlocksReply struct {
 
 type GossipPeersMessage struct {
     Type string `json:"type"`
-    MyPeers []string `json:"myPeers"`
+    Peers []string `json:"myPeers"`
 }
 
 type GossipPeersReply struct {
@@ -440,7 +442,7 @@ func (p *PeerCore) GossipBlock(block RawBlock) {
 }
 
 func (p *PeerCore) GossipPeers() {
-    peerLogger.Printf("Gossiping peers list %s to %d peers\n", block.HashStr(), len(p.peers))
+    peerLogger.Printf("Gossiping peers list to %d peers\n", len(p.peers))
 
     // Send list to all peers.
     peers := []string{}
@@ -449,7 +451,7 @@ func (p *PeerCore) GossipPeers() {
     }
     gossipPeersMsg := GossipPeersMessage{
         Type: "gossip_peers",
-        MyPeers: peers,
+        Peers: peers,
     }
 
     for _, peer := range p.peers {
@@ -506,6 +508,7 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
             TipHash: "",
             TipHeight: 0,
             ClientVersion: CLIENT_VERSION,
+            WireProtocolVersion: WIRE_PROTOCOL_VERSION,
             ClientAddress: p.GetExternalAddr(),
             Time: time.Now(),
         }

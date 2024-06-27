@@ -59,8 +59,8 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 			<-time.After(3 * time.Second)
 
 			// Print iterations using commas.
-			p := message.NewPrinter(language.English)
-			p.Printf("Hashes: %d\n", numHashes)
+			// p := message.NewPrinter(language.English)
+			// p.Printf("Hashes: %d\n", numHashes)
 
 			// Check if 3s has elapsed since last time.
 			now := Timestamp()
