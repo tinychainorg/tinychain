@@ -66,6 +66,6 @@ func TestMiner(t *testing.T) {
 		t.Fatalf("Failed to create miner wallet: %s", err)
 	}
 
-	miner := NewNode(dag, minerWallet)
+	miner := NewMiner(dag, minerWallet)
 	miner.Start()
 }

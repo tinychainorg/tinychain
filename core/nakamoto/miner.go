@@ -9,13 +9,15 @@ import (
 	"golang.org/x/text/language"
 )
 
-type Node struct {
+type Miner struct {
 	dag BlockDAG
 	minerWallet *core.Wallet
+	
+	OnBlockSolution func(block RawBlock)
 }
 
-func NewNode(dag BlockDAG, minerWallet *core.Wallet) *Node {
-	return &Node{
+func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
+	return &Miner{
 		dag: dag,
 		minerWallet: minerWallet,
 	}
@@ -119,7 +121,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 	}
 }
 
-func (node *Node) MakeNewPuzzle() (POWPuzzle) {
+func (node *Miner) MakeNewPuzzle() (POWPuzzle) {
 	current_tip, err := node.dag.GetCurrentTip()
 	if err != nil {
 		// fmt.Fatalf("Failed to get current tip: %s", err)
@@ -166,7 +168,7 @@ func (node *Node) MakeNewPuzzle() (POWPuzzle) {
 	return puzzle
 }
 
-func (node *Node) Start() {
+func (node *Miner) Start() {
 	// The next tip channel.
 	// next_tip := make(chan Block)
 	// block_solutions := make(chan Block)
@@ -192,19 +194,13 @@ func (node *Node) Start() {
 
 			fmt.Printf("Solution: hash=%s nonce=%s\n", Bytes32ToString(raw.Hash()), solution.String())
 
-			// Ingest block.
-			err := node.dag.IngestBlock(*raw)
-			if err != nil {
-				fmt.Errorf("Failed to ingest block: %s\n", err)
+			if node.OnBlockSolution != nil {
+				node.OnBlockSolution(*raw)
 			}
 
-			// Gossip block.
 			fmt.Println("Making new puzzle")
 			fmt.Println("New puzzle ready")
 			puzzleChannel <- node.MakeNewPuzzle()
-
-			// fmt.Printf("Solution: height=%d hash=%s nonce=%s\n", curr_height, Bytes32ToString(raw.Hash()), solution.String())
 		}
 	}
-	
 }

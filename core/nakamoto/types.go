@@ -29,15 +29,15 @@ type ConsensusConfig struct {
 // It does not contain any block metadata such as height, epoch, or difficulty.
 type RawBlock struct {
 	// Block header.
-	ParentHash [32]byte
-	Difficulty [32]byte
-	Timestamp uint64
-	NumTransactions uint64
-	TransactionsMerkleRoot [32]byte
-	Nonce [32]byte
+	ParentHash [32]byte `json:"parent_hash"`
+	Difficulty [32]byte `json:"difficulty"`
+	Timestamp uint64    `json:"timestamp"`
+	NumTransactions uint64 `json:"num_transactions"`
+	TransactionsMerkleRoot [32]byte `json:"transactions_merkle_root"`
+	Nonce [32]byte `json:"nonce"`
 	
 	// Block body.
-	Transactions []RawTransaction
+	Transactions []RawTransaction `json:"transactions"`
 }
 
 func (b *RawBlock) HashStr() (string) {
@@ -46,9 +46,9 @@ func (b *RawBlock) HashStr() (string) {
 }
 
 type RawTransaction struct {
-	Sig [64]byte
-	FromPubkey [65]byte
-	Data []byte
+	Sig [64]byte 		`json:"sig"`
+	FromPubkey [65]byte `json:"from_pubkey"`
+	Data []byte 		`json:"data"`
 }
 
 type Block struct {
@@ -147,4 +147,9 @@ func GetIdForEpoch(startBlockHash [32]byte, startHeight uint64) (string) {
 // The epoch unique ID is the height ++ startblockhash.
 func (e *Epoch) GetId() (string) {
 	return GetIdForEpoch(e.StartBlockHash, e.StartHeight)
+}
+
+type PeerConfig struct {
+	port string
+    bootstrapPeers []string
 }
