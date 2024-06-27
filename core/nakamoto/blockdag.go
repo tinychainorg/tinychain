@@ -170,7 +170,10 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 
 func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// 1. Verify parent is known.
-	parentBlock := dag.GetBlockByHash(raw.ParentHash)
+	parentBlock, err := dag.GetBlockByHash(raw.ParentHash)
+	if err != nil {
+		return err
+	}
 	if parentBlock == nil {
 		return fmt.Errorf("Unknown parent block.")
 	}
@@ -238,7 +241,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		}
 	} else {
 		// Lookup current epoch.
-		epoch, err := dag.GetEpochForBlockHash(raw.ParentHash)
+		epoch, err = dag.GetEpochForBlockHash(raw.ParentHash)
 		if epoch == nil {
 			return fmt.Errorf("Parent block epoch not found.")
 		}
@@ -265,7 +268,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	
 	blockhash := raw.Hash()
 	_, err = tx.Exec(
-		"insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes) values (?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		blockhash[:],
 		raw.ParentHash[:], 
 		raw.Timestamp, 
@@ -273,7 +276,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		raw.TransactionsMerkleRoot[:], 
 		raw.Nonce[:],
 		height,
-		epoch.Number,
+		epoch.GetId(),
 		raw.SizeBytes(),
 	)
 	if err != nil {
@@ -335,48 +338,86 @@ func RecomputeDifficulty(epochStart uint64, epochEnd uint64, currDifficulty big.
 }
 
 // Gets the epoch for a given block hash.
-// If the parent block is the final block in an epoch, then we compute the new epoch difficulty and create a new epoch.
-func (dag *BlockDAG) GetEpochForBlockHash(parentBlockHash [32]byte) (*Epoch, error) {
+func (dag *BlockDAG) GetEpochForBlockHash(blockhash [32]byte) (*Epoch, error) {
 	// Lookup the parent block.
-	parentBlock := Block{}
-	rows, err := dag.db.Query("select parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch from blocks where hash = ? limit 1", parentBlockHash)
+	parentBlockEpochId := ""
+	rows, err := dag.db.Query("select epoch from blocks where hash = ? limit 1", blockhash[:])
 	if err != nil {
 		return nil, err
 	}
 	if rows.Next() {
-		rows.Scan(&parentBlock.ParentHash, &parentBlock.Timestamp, &parentBlock.NumTransactions, &parentBlock.TransactionsMerkleRoot, &parentBlock.Nonce, &parentBlock.Height, &parentBlock.Epoch)
+		rows.Scan(&parentBlockEpochId)
 	} else {
 		return nil, fmt.Errorf("Parent block not found.")
 	}
+	rows.Close()
 
 	// Get the epoch.
 	epoch := Epoch{}
-	rows, err = dag.db.Query("select id, start_block_hash, start_time, start_height, difficulty from epochs where id = ? limit 1", parentBlock.Epoch)
+	rows, err = dag.db.Query("select id, start_block_hash, start_time, start_height, difficulty from epochs where id = ? limit 1", parentBlockEpochId)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
 	if rows.Next() {
-		rows.Scan(&epoch.Number, &epoch.StartBlockHash, &epoch.StartTime, &epoch.StartHeight, &epoch.Difficulty)
+		startBlockHash := []byte{}
+		difficulty := []byte{}
+		err := rows.Scan(&epoch.Id, &startBlockHash, &epoch.StartTime, &epoch.StartHeight, &difficulty)
+		if err != nil {
+			return nil, err
+		}
+
+		copy(epoch.StartBlockHash[:], startBlockHash)
+		diffBytes32 := [32]byte{}
+		copy(diffBytes32[:], difficulty)
+		epoch.Difficulty = Bytes32ToBigInt(diffBytes32)
 	} else {
 		return nil, fmt.Errorf("Epoch not found.")
 	}
 
-	return nil, nil
+	return &epoch, nil
 }
 
-func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block) {
+func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 	block := Block{}
 
 	// Query database.
-	rows, err := dag.db.Query("select parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce from blocks where hash = ? limit 1", hash)
+	rows, err := dag.db.Query("select hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes from blocks where hash = ? limit 1", hash[:])
 	if err != nil {
-		return nil
+		return nil, err
 	}
+	defer rows.Close()
 
 	if rows.Next() {
-		rows.Scan(&block.ParentHash, &block.Timestamp, &block.NumTransactions, &block.TransactionsMerkleRoot, &block.Nonce)
-		return &block
+		hash := []byte{}
+		parentHash := []byte{}
+		transactionsMerkleRoot := []byte{}
+		nonce := []byte{}
+
+		err := rows.Scan(
+			&hash, 
+			&parentHash, 
+			&block.Timestamp, 
+			&block.NumTransactions, 
+			&transactionsMerkleRoot, 
+			&nonce, 
+			&block.Height, 
+			&block.Epoch, 
+			&block.SizeBytes,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		copy(block.Hash[:], hash)
+		copy(block.ParentHash[:], parentHash)
+		copy(block.TransactionsMerkleRoot[:], transactionsMerkleRoot)
+		copy(block.Nonce[:], nonce)
+
+		return &block, nil
 	} else {
-		return nil
+		return nil, err
 	}
 }

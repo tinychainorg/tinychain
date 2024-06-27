@@ -23,11 +23,15 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
 	// db, err := OpenDB("file:memdb1?mode=memory&cache=shared")
-	// db.SetMaxOpenConns(1)
 	db, err := OpenDB("test.sqlite3")
 	if err != nil {
 		panic(err)
 	}
+	_, err = db.Exec("PRAGMA journal_mode = WAL;")
+	if err != nil {
+		panic(err)
+	}
+
 
 	stateMachine := newMockStateMachine()
 
@@ -363,9 +367,103 @@ func TestBlockDAGInitialised(t *testing.T) {
 
 	// Check the genesis epoch.
 	t.Logf("Genesis epoch: %v\n", epoch.Id)
+
 	assert.Equal(GetIdForEpoch(conf.GenesisBlockHash, 0), epoch.Id)
 	assert.Equal(conf.GenesisBlockHash, epoch.StartBlockHash)
 	assert.Equal(uint64(0), epoch.StartTime)
 	assert.Equal(uint64(0), epoch.StartHeight)
 	assert.Equal(conf.GenesisDifficulty, epoch.Difficulty)
+}
+
+func TestGetEpochForBlockHashGenesis(t *testing.T) {
+	assert := assert.New(t)
+	blockdag, _, _ := newBlockdag()
+
+	// Test we can get the genesis epoch.
+	epoch, err := blockdag.GetEpochForBlockHash(blockdag.consensus.GenesisBlockHash)
+	assert.Equal(nil, err)
+	assert.Equal(GetIdForEpoch(blockdag.consensus.GenesisBlockHash, 0), epoch.Id)
+}
+
+func TestGetBlockByHashGenesis(t *testing.T) {
+	assert := assert.New(t)
+	dag, conf, _ := newBlockdag()
+
+	// Test we can get the genesis block.
+	block, err := dag.GetBlockByHash(conf.GenesisBlockHash)
+	assert.Equal(nil, err)
+
+	// Check the genesis block.
+	t.Logf("Genesis block: %v\n", block.Hash)
+	assert.Equal(conf.GenesisBlockHash, block.Hash)
+	assert.Equal([32]byte{}, block.ParentHash)
+	assert.Equal(uint64(0), block.Timestamp)
+	assert.Equal(uint64(0), block.NumTransactions)
+	assert.Equal([32]byte{}, block.TransactionsMerkleRoot)
+	assert.Equal([32]byte{}, block.Nonce)
+	assert.Equal(uint64(0), block.Height)
+	assert.Equal(GetIdForEpoch(conf.GenesisBlockHash, 0), block.Epoch)
+}
+
+func TestGetEpochForBlockHashNewBlock(t *testing.T) {
+	assert := assert.New(t)
+	blockdag, _, _ := newBlockdag()
+
+	// Create a tx with a valid signature.
+	tx := RawTransaction{
+		FromPubkey: [64]byte{},
+		Sig: [64]byte{},
+		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
+	}
+	wallets := getTestingWallets(t)
+	tx.FromPubkey = wallets[0].PubkeyBytes()
+	sig, err := wallets[0].Sign(tx.Data)
+	if err != nil {
+		t.Fatalf("Failed to sign transaction: %s", err)
+	}
+	// Log the signature.
+	t.Logf("Signature: %s\n", hex.EncodeToString(sig))
+	copy(tx.Sig[:], sig)
+
+	raw := RawBlock{
+		ParentHash: blockdag.consensus.GenesisBlockHash,
+		Timestamp: 1719379532750,
+		NumTransactions: 1,
+		TransactionsMerkleRoot: [32]byte{},
+		Nonce: [32]byte{},
+		Transactions: []RawTransaction{
+			tx,
+		},
+	}
+	raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+
+	// Mine the POW solution.
+	epoch, err := blockdag.GetEpochForBlockHash(raw.ParentHash)
+	if err != nil {
+		t.Fatalf("Failed to get epoch for block hash: %s", err)
+	}
+	solution, err := SolvePOW(raw, *big.NewInt(0), epoch.Difficulty, 1000000000000)
+	if err != nil {
+		t.Fatalf("Failed to solve POW: %s", err)
+	}
+	t.Logf("Solution: %s\n", solution.String())
+	raw.SetNonce(solution)
+
+	err = blockdag.IngestBlock(raw)
+	if err != nil {
+		t.Fatalf("Failed to ingest block: %s", err)
+	}
+	assert.Equal(nil, err)
+
+	// Verify block ingested into data store.
+	block, err := blockdag.GetBlockByHash(raw.Hash())
+	assert.Equal(nil, err)
+	assert.Equal(raw.Hash(), block.Hash)
+	assert.Equal(raw.ParentHash, block.ParentHash)
+	assert.Equal(raw.Timestamp, block.Timestamp)
+	assert.Equal(raw.NumTransactions, block.NumTransactions)
+	assert.Equal(raw.TransactionsMerkleRoot, block.TransactionsMerkleRoot)
+	assert.Equal(raw.Nonce, block.Nonce)
+	assert.Equal(uint64(1), block.Height)
+	assert.Equal(GetIdForEpoch(raw.ParentHash, 0), block.Epoch)
 }
