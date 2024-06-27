@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"fmt"
-	// "encoding/hex"
 )
 
 var logger = log.New(os.Stdout, "corenode: ", log.Lshortfile)
@@ -49,29 +48,28 @@ func (n *Node) setup() {
 	}
 
 	// Upload blocks to other peers.
-	n.Peer.OnGetBlocks = func(msg GetBlocksMessage) ([]RawBlock, error) {
+	n.Peer.OnGetBlocks = func(msg GetBlocksMessage) ([][]byte, error) {
 		// Assert hashes length.
 		MAX_GET_BLOCKS_LEN := 10
 		if MAX_GET_BLOCKS_LEN < len(msg.BlockHashes) {
 			return nil, fmt.Errorf("Too many hashes requested. Max is %d", MAX_GET_BLOCKS_LEN)
 		}
 
-		// reply := make([]RawBlock, 0)
-		// for _, hash := range msg.BlockHashes {
-		// 	hashBytes, err := hex.DecodeString(hash[:])
-		// 	if err != nil {
-		// 		// If there is an error getting the block hash, skip it.
-		// 		continue
-		// 	}
-
-		// 	block, err := n.Dag.GetBlockByHash(hashBytes)
-		// 	if err != nil {
-		// 		// If there is an error getting the block hash, skip it.
-		// 		continue
-		// 	}
+		reply := make([][]byte, 0)
+		for _, hash := range msg.BlockHashes {
+			blockhash := HexStringToBytes32(hash)
 			
-		// 	reply = append(reply, block)
-		// }
+			// block, err := n.Dag.GetBlockByHash(blockhash)
+
+			// Get the raw block.
+			rawBlockData, err := n.Dag.GetRawBlockDataByHash(blockhash)
+			if err != nil {
+				// If there is an error getting the block hash, skip it.
+				continue
+			}
+			
+			reply = append(reply, rawBlockData)
+		}
 		
 		// return reply, nil
 		return nil, nil
@@ -90,6 +88,16 @@ func (n *Node) setup() {
 		// Gossip the block.
 		n.Peer.GossipBlock(b)
 	}
+}
+
+func (n *Node) Sync() {
+	// Contact all our peers.
+	// Get their current tips.
+	// Select the tip with the highest work according to ParentTotalWork.
+	// Download the blocks from the tip to the common ancestor from all our peers.
+	// Store them in a temporary storage.
+	// Ingest the blocks in reverse order.
+	// Begin mining.
 }
 
 func (n *Node) Start() {

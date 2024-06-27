@@ -46,12 +46,17 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
 
-		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, graffiti blob, height integer, epoch TEXT, size_bytes integer, acc_work blob, foreign key (epoch) REFERENCES epochs (id))")
+		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, graffiti blob, height integer, epoch TEXT, size_bytes integer, parent_total_work blob, acc_work blob, foreign key (epoch) REFERENCES epochs (id))")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
 
-		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, data blob)")
+		_, err = db.Exec("create table raw_blocks (hash blob primary key, data blob)")
+		if err != nil {
+			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
+		}
+
+		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, data blob, index int)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
@@ -99,6 +104,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 	genesisBlockHash := dag.consensus.GenesisBlockHash
 	genesisBlock := RawBlock{
 		ParentHash: [32]byte{},
+		ParentTotalWork: *big.NewInt(0),
 		Difficulty: BigIntToBytes32(dag.consensus.GenesisDifficulty),
 		Timestamp: 0,
 		NumTransactions: 0,
@@ -148,12 +154,11 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 	}
 
 	fmt.Printf("Inserted genesis epoch difficulty=%s\n", dag.consensus.GenesisDifficulty.String())
-	accWork := big.NewInt(1)
-	accWorkBuf := BigIntToBytes32(*accWork)
+	accWorkBuf := BigIntToBytes32(*big.NewInt(1)) // parent_total_work + 1
 
 	// Insert the genesis block.
 	_, err = dag.db.Exec(
-		"insert into blocks (hash, parent_hash, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work, parent_total_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
 		dag.consensus.GenesisDifficulty.Bytes(),
@@ -166,6 +171,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 		epoch0.GetId(),
 		genesisBlock.SizeBytes(),
 		PadBytes(accWorkBuf[:], 32),
+		genesisBlock.ParentTotalWork.Bytes(),
 	)
 	if err != nil {
 		return err
@@ -280,6 +286,11 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		return fmt.Errorf("POW solution is invalid.")
 	}
 
+	// 6c. Verify parent total work is correct.
+	if parentBlock.AccumulatedWork.Cmp(&raw.ParentTotalWork) != 0 {
+		return fmt.Errorf("Parent total work is incorrect.")
+	}
+
 	// 7. Verify block size is within bounds.
 	if dag.consensus.MaxBlockSizeBytes < raw.SizeBytes() {
 		return fmt.Errorf("Block size exceeds maximum block size.")
@@ -296,11 +307,13 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	acc_work.Add(&parentBlock.AccumulatedWork, work)
 	acc_work_buf := BigIntToBytes32(*acc_work)
 	
+	// Insert block.
 	blockhash := raw.Hash()
 	_, err = tx.Exec(
-		"insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		blockhash[:],
 		raw.ParentHash[:], 
+		raw.ParentTotalWork.Bytes(),
 		raw.Timestamp, 
 		raw.NumTransactions, 
 		raw.TransactionsMerkleRoot[:], 
@@ -315,15 +328,29 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		tx.Rollback()
 		return err
 	}
-	for _, block_tx := range raw.Transactions {
+
+	// Insert raw block.
+	_, err = tx.Exec(
+		"insert into raw_blocks (hash, data) values (?, ?)",
+		blockhash[:],
+		raw.Bytes(),
+	)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Insert transactions.
+	for i, block_tx := range raw.Transactions {
 		txhash := block_tx.Hash()
 		_, err = tx.Exec(
-			"insert into transactions (hash, block_hash, sig, from_pubkey, data) values (?, ?, ?, ?, ?)", 
+			"insert into transactions (hash, block_hash, sig, from_pubkey, data, index) values (?, ?, ?, ?, ?, ?)", 
 			txhash[:],
 			blockhash[:], 
 			block_tx.Sig[:], 
 			block_tx.FromPubkey[:], 
 			block_tx.Data[:],
+			i,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -439,6 +466,74 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		return nil, err
 	}
 }
+
+func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error) {
+	// Query database, get transactions count for blockhash.
+	rows, err := dag.db.Query("select count(*) from transactions where block_hash = ?", hash[:])
+	if err != nil {
+		return nil, err
+	}
+
+	count := 0
+	if rows.Next() {
+		rows.Scan(&count)
+	}
+	rows.Close()
+
+	// Construct the buffer.
+	txs := make([]Transaction, count)
+
+	// Load the transactions in.
+	rows, err = dag.db.Query("select hash, sig, from_pubkey, data, index from transactions where block_hash = ?", hash[:])
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		tx := Transaction{}
+		hash := []byte{}
+		sig := []byte{}
+		fromPubkey := []byte{}
+		data := []byte{}
+		index := 0
+
+		err := rows.Scan(&hash, &sig, &fromPubkey, &data, &index)
+		if err != nil {
+			return nil, err
+		}
+
+		copy(tx.Hash[:], hash)
+		copy(tx.Sig[:], sig)
+		copy(tx.FromPubkey[:], fromPubkey)
+		copy(tx.Data[:], data)
+
+		txs[index] = tx
+	}
+
+	return &txs, nil
+}
+
+func (dag *BlockDAG) GetRawBlockDataByHash(hash [32]byte) ([]byte, error) {
+	// Load from database.
+	rows, err := dag.db.Query("select data from raw_blocks where hash = ?", hash[:])
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()	
+
+	if rows.Next() {
+		data := []byte{}
+		err := rows.Scan(&data)
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	} else {
+		return nil, fmt.Errorf("Block not found.")
+	}
+}
+
 
 func (dag *BlockDAG) HasBlock(hash [32]byte) (bool) {
 	rows, err := dag.db.Query("select count(*) from blocks where hash = ?", hash[:])

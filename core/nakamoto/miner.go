@@ -134,6 +134,7 @@ func (node *Miner) MakeNewPuzzle() (POWPuzzle) {
 	// Construct block template for mining.
 	raw := RawBlock{
 		ParentHash: current_tip.Hash,
+		ParentTotalWork: current_tip.AccumulatedWork,
 		Timestamp: Timestamp(),
 		NumTransactions: 1,
 		TransactionsMerkleRoot: [32]byte{},

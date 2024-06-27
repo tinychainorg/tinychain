@@ -30,6 +30,7 @@ type ConsensusConfig struct {
 type RawBlock struct {
 	// Block header.
 	ParentHash [32]byte `json:"parent_hash"`
+	ParentTotalWork big.Int `json:"parent_total_work"`
 	Difficulty [32]byte `json:"difficulty"`
 	Timestamp uint64    `json:"timestamp"`
 	NumTransactions uint64 `json:"num_transactions"`
@@ -50,6 +51,14 @@ type RawTransaction struct {
 	Sig [64]byte 		`json:"sig"`
 	FromPubkey [65]byte `json:"from_pubkey"`
 	Data []byte 		`json:"data"`
+}
+
+func (t *RawTransaction) Bytes() ([]byte) {
+	buf := make([]byte, 0)
+	buf = append(buf, t.Sig[:]...)
+	buf = append(buf, t.FromPubkey[:]...)
+	buf = append(buf, t.Data...)
+	return buf
 }
 
 type Block struct {
@@ -90,16 +99,19 @@ type BlockDAGInterface interface {
 	IngestBlock(b Block) error
 
 	// Get block.
-	GetBlockByHash(hash [32]byte) (Block)
+	GetBlockByHash(hash [32]byte) (*Block, error)
+
+	// Get block's transactions.
+	GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 
 	// Get epoch for block.
-	GetEpochForBlockHash(parentBlockHash [32]byte) (uint64, error)
-	
-	// Get a list of blocks at height.
-	GetBlocksByHeight(height uint64) ([]Block, error)
+	GetEpochForBlockHash(blockhash [32]byte) (*Epoch, error)
 
 	// Get the tip of the chain, given a minimum number of confirmations.
 	GetCurrentTip() (Block, error)
+
+	// Get the raw bytes of a block.
+	GetRawBlockDataByHash(hash [32]byte) ([]byte, error)
 }
 
 // The block DAG is the core data structure of the Nakamoto consensus protocol.
