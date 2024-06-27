@@ -117,6 +117,14 @@ func TestOpenDB(t *testing.T) {
 	}
 }
 
+func TestLatestTipIsSet(t *testing.T) {
+	assert := assert.New(t)
+	dag, _, _ := newBlockdag()
+
+	// The genesis block should be the latest tip.
+	assert.Equal(dag.consensus.GenesisBlockHash, dag.Tip.Hash)
+}
+
 func TestImportBlocksIntoDAG(t *testing.T) {
 	// Generate 10 blocks and insert them into DAG.
 	blockdag := BlockDAG{}
@@ -569,6 +577,9 @@ func TestGetCurrentTips(t *testing.T) {
 	current_tip, err = blockdag.GetCurrentTip()
 	assert.Equal(nil, err)
 	assert.Equal(raw.Hash(), current_tip.Hash)
+
+	// Check the in-memory latest tip is updated.
+	assert.Equal(raw.Hash(), blockdag.Tip.Hash)
 }
 
 

@@ -116,6 +116,9 @@ type BlockDAG struct {
 
 	// Consensus settings.
 	consensus ConsensusConfig
+
+	// Latest tip.
+	Tip Block
 }
 
 type StateMachine interface {

@@ -96,7 +96,7 @@ func (w *Wallet) Sign(msg []byte) ([]byte, error) {
 
 func VerifySignature(pubkeyStr string, sig, msg []byte) bool {
 	if len(sig) != 64 {
-		fmt.Printf("Invalid signature length: %s\n", len(sig)) // TODO
+		fmt.Printf("Invalid signature length: %d\n", len(sig)) // TODO
 		return false
 	}
 	if len(pubkeyStr) != 130 {

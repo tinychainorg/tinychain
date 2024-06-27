@@ -86,6 +86,11 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachine, consensus Consensu
 	if err != nil {
 		panic(err)
 	}
+
+	dag.Tip, err = dag.GetCurrentTip()
+	if err != nil {
+		panic(err)
+	}
 	
 	return dag, nil
 }
@@ -324,6 +329,18 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 	tx.Commit()
 
+	// Update the tip.
+	// TODO this is bad for performance.
+	// TODO also this is not atomic.
+	curr_tip, err := dag.GetCurrentTip()
+	if err != nil {
+		return err
+	}
+	if curr_tip.Hash != dag.Tip.Hash {
+		fmt.Printf("New tip: %s\n", curr_tip.HashStr())
+		dag.Tip = curr_tip
+	}
+
 	return nil
 }
 
@@ -415,6 +432,20 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 	} else {
 		return nil, err
 	}
+}
+
+func (dag *BlockDAG) HasBlock(hash [32]byte) (bool) {
+	rows, err := dag.db.Query("select count(*) from blocks where hash = ?", hash[:])
+	if err != nil {
+		return false
+	}
+	count := 0
+	if rows.Next() {
+		rows.Scan(&count)
+	}
+	rows.Close()
+
+	return count > 0
 }
 
 func (dag *BlockDAG) GetCurrentTip() (Block, error) {

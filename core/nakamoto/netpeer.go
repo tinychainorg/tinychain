@@ -207,6 +207,7 @@ type PeerCore struct {
     externalPort string
 
     OnNewBlock func(block RawBlock)
+    OnGetBlocks func(msg GetBlocksMessage) ([]RawBlock, error)
 }
 
 type Peer struct {
@@ -234,7 +235,9 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 
     p.server = NewPeerServer(p.config)
 
-    // Handle heartbeat.
+    // Message handlers.
+    // 
+
     p.server.RegisterMesageHandler("heartbeat", func(message []byte) (interface{}, error) {
         // Decode message into HeartbeatMessage.
         var msg HeartbeatMesage
@@ -258,6 +261,47 @@ func NewPeerCore(config PeerConfig) *PeerCore {
         return nil, nil
     })
 
+    p.server.RegisterMesageHandler("get_blocks", func(message []byte) (interface{}, error) {
+        var msg GetBlocksMessage
+        if err := json.Unmarshal(message, &msg); err != nil {
+            return nil, err
+        }
+
+        if p.OnGetBlocks != nil {
+            blocks, err := p.OnGetBlocks(msg)
+            if err != nil {
+                return nil, err
+            }
+
+            return GetBlocksReply{
+                Type: "get_blocks_reply",
+                Blocks: blocks,
+            }, nil
+        }
+
+        return nil, nil
+    })
+
+    p.server.RegisterMesageHandler("gossip_peers", func(message []byte) (interface{}, error) {
+        var msg GossipPeersMessage
+        if err := json.Unmarshal(message, &msg); err != nil {
+            return nil, err
+        }
+
+        // Ingest new peers.
+        // TODO.
+
+        peers := []string{}
+        for _, peer := range p.peers {
+            peers = append(peers, peer.url)
+        }
+
+        return GossipPeersMessage{
+            Type: "gossip_peers",
+            Peers: peers,
+        }, nil
+    })
+
     return p
 }
 
@@ -277,6 +321,31 @@ type HeartbeatMesage struct {
 type NewBlockMessage struct {
     Type string `json:"type"`
     RawBlock RawBlock `json:"rawBlock"`
+}
+
+type NewTransactionMessage struct {
+    Type string `json:"type"`
+    RawTransaction RawTransaction `json:"rawTransaction"`
+}
+
+type GetBlocksMessage struct {
+    Type string `json:"type"`
+    BlockHashes []string `json:"blockHashes"`
+}
+
+type GetBlocksReply struct {
+    Type string `json:"type"`
+    Blocks []RawBlock `json:"blocks"`
+}
+
+type GossipPeersMessage struct {
+    Type string `json:"type"`
+    MyPeers []string `json:"myPeers"`
+}
+
+type GossipPeersReply struct {
+    Type string `json:"type"`
+    Peers []string `json:"peers"`
 }
 
 func (p *PeerCore) Start() {
@@ -358,17 +427,55 @@ func (p *PeerCore) GossipBlock(block RawBlock) {
     peerLogger.Printf("Gossiping block %s to %d peers\n", block.HashStr(), len(p.peers))
     
     // Send block to all peers.
+    newBlockMsg := NewBlockMessage{
+        Type: "new_block",
+        RawBlock: block,
+    }
     for _, peer := range p.peers {
-        newBlockMsg := NewBlockMessage{
-            Type: "new_block",
-            RawBlock: block,
-        }
         _, err := SendMessageToPeer(peer.url, newBlockMsg)
         if err != nil {
             peerLogger.Printf("Failed to send block to peer: %v", err)
         }
     }
 }
+
+func (p *PeerCore) GossipPeers() {
+    peerLogger.Printf("Gossiping peers list %s to %d peers\n", block.HashStr(), len(p.peers))
+
+    // Send list to all peers.
+    peers := []string{}
+    for _, peer := range p.peers {
+        peers = append(peers, peer.url)
+    }
+    gossipPeersMsg := GossipPeersMessage{
+        Type: "gossip_peers",
+        MyPeers: peers,
+    }
+
+    for _, peer := range p.peers {
+        _, err := SendMessageToPeer(peer.url, gossipPeersMsg)
+        if err != nil {
+            peerLogger.Printf("Failed to send block to peer: %v", err)
+        }
+        // TODO handle peers_reply.
+    }
+}
+
+// func (p *PeerCore) GetBlocks(block RawBlock) {
+//     peerLogger.Printf("Asking peers for blocks\n", block.HashStr(), len(p.peers))
+    
+//     // Send block to all peers.
+//     for _, peer := range p.peers {
+//         newBlockMsg := NewBlockMessage{
+//             Type: "new_block",
+//             RawBlock: block,
+//         }
+//         _, err := SendMessageToPeer(peer.url, newBlockMsg)
+//         if err != nil {
+//             peerLogger.Printf("Failed to send block to peer: %v", err)
+//         }
+//     }
+// }
 
 // Bootstraps the connection to the network.
 func (p *PeerCore) Bootstrap(peerInfos []string) {
