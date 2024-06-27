@@ -5,7 +5,6 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/liamzebedee/tinychain-go/core"
-	"math/big"
 	"encoding/hex"
 )
 
@@ -41,17 +40,17 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		fmt.Printf("Running migration: %d\n", databaseVersion)
 		
 		// Create tables.
-		_, err = db.Exec("create table IF NOT EXISTS epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
+		_, err = db.Exec("create table epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
 
-		_, err = db.Exec("create table IF NOT EXISTS blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, height integer, epoch TEXT, size_bytes integer, foreign key (epoch) REFERENCES epochs (id))")
+		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, height integer, epoch TEXT, size_bytes integer, foreign key (epoch) REFERENCES epochs (id))")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
 
-		_, err = db.Exec("create table IF NOT EXISTS transactions (hash blob primary key, block_hash blob, sig blob, from_pubkey blob, data blob)")
+		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, data blob)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
@@ -229,6 +228,11 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		// Recompute difficulty and create new epoch.
 		fmt.Printf("Recomputing difficulty for epoch %d\n", height / dag.consensus.EpochLengthBlocks)
 
+		// Get current epoch.
+		epoch, err = dag.GetEpochForBlockHash(raw.ParentHash)
+		if err != nil {
+			return err
+		}
 		newDifficulty := RecomputeDifficulty(epoch.StartTime, raw.Timestamp, epoch.Difficulty, dag.consensus.TargetEpochLengthMillis, dag.consensus.EpochLengthBlocks, height)
 
 		epoch = &Epoch{
@@ -311,40 +315,6 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	tx.Commit()
 
 	return nil
-}
-
-
-func RecomputeDifficulty(epochStart uint64, epochEnd uint64, currDifficulty big.Int, targetEpochLengthMillis uint64, epochLengthBlocks uint64, height uint64) (big.Int) {
-	// Compute the epoch duration.
-	epochDuration := epochEnd - epochStart
-	
-	// Special case: clamp the epoch duration so it is at least 1.
-	if epochDuration == 0 {
-		epochDuration = 1
-	}
-
-	epochIndex := height / epochLengthBlocks
-
-	fmt.Printf("epoch i=%d start_time=%d end_time=%d duration=%d \n", epochIndex, epochStart, epochEnd, epochDuration)
-
-	// Compute the target epoch length.
-	targetEpochLength := targetEpochLengthMillis * epochLengthBlocks
-
-	// Rescale the difficulty.
-	// difficulty = epoch.difficulty * (epoch.duration / target_epoch_length)
-	newDifficulty := new(big.Int)
-	newDifficulty.Mul(
-		&currDifficulty, 
-		big.NewInt(int64(epochDuration)),
-	)
-	newDifficulty.Div(
-		newDifficulty, 
-		big.NewInt(int64(targetEpochLength)),
-	)
-
-	fmt.Printf("New difficulty: %x\n", newDifficulty.String())
-	
-	return *newDifficulty
 }
 
 // Gets the epoch for a given block hash.

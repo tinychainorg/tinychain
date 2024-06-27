@@ -1,3 +1,9 @@
+// 
+// This is the core implementation of the block DAG data structure.
+// It mostly does these things:
+// - ingests new blocks, validates transactions
+// - manages reading/writing to the backing SQLite database.
+// 
 package nakamoto
 
 import (
@@ -502,4 +508,66 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	assert.Equal(raw.Nonce, block.Nonce)
 	assert.Equal(uint64(1), block.Height)
 	assert.Equal(GetIdForEpoch(raw.ParentHash, 0), block.Epoch)
+}
+
+func TestMiner(t *testing.T) {
+	dag, conf, _ := newBlockdag()
+
+	// Mine 10 blocks.
+	current_tip := conf.GenesisBlockHash
+	current_height := uint64(0)
+
+	// Get genesis block.
+	genesis, _ := dag.GetBlockByHash(conf.GenesisBlockHash)
+	current_height = genesis.Height + 1
+
+	for i := 0; i < 10; i++ {
+		tx, err := newValidTx(t)
+		if err != nil {
+			t.Fatalf("Failed to create valid tx: %s", err)
+		}
+
+		// Construct block template for mining.
+		raw := RawBlock{
+			ParentHash: current_tip,
+			Timestamp: Timestamp(),
+			NumTransactions: 1,
+			TransactionsMerkleRoot: [32]byte{},
+			Nonce: [32]byte{},
+			Transactions: []RawTransaction{
+				tx,
+			},
+		}
+		raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+
+		// Mine the POW solution.
+
+		// First get the right epoch.
+		var difficulty big.Int
+		epoch, err := dag.GetEpochForBlockHash(raw.ParentHash)
+		if err != nil {
+			t.Fatalf("Failed to get epoch for block hash: %s", err)
+		}
+		if current_height % dag.consensus.EpochLengthBlocks == 0 {
+			difficulty = RecomputeDifficulty(epoch.StartTime, raw.Timestamp, epoch.Difficulty, dag.consensus.TargetEpochLengthMillis, dag.consensus.EpochLengthBlocks, current_height)
+		} else {
+			difficulty = epoch.Difficulty
+		}
+
+		solution, err := SolvePOW(raw, *big.NewInt(0), difficulty, 1000000000000)
+		if err != nil {
+			t.Fatalf("Failed to solve POW: %s", err)
+		}
+		t.Logf("Solution: height=%d hash=%s nonce=%s\n", current_height, raw.Hash(), solution.String())
+		raw.SetNonce(solution)
+
+		// Ingest the block.
+		err = dag.IngestBlock(raw)
+		if err != nil {
+			t.Fatalf("Failed to ingest block: %s", err)
+		}
+
+		current_tip = raw.Hash()
+		current_height += 1
+	}
 }
