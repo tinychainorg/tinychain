@@ -3,7 +3,10 @@ package nakamoto
 import (
 	"math/big"
 	"fmt"
+	"time"
 	"github.com/liamzebedee/tinychain-go/core"
+	"golang.org/x/text/message"
+	"golang.org/x/text/language"
 )
 
 type Node struct {
@@ -44,8 +47,28 @@ type POWPuzzle struct {
 
 func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle, puzzleChannel chan POWPuzzle) (big.Int, error) {
 	// Execute in 3s increments.
-	lastTime := Timestamp()
+	lastHashrateMeasurement := Timestamp()
 	numHashes := 0
+
+	// Measure hashrate.
+	go (func() {
+		for {
+			// Wait 3s.
+			<-time.After(3 * time.Second)
+
+			// Print iterations using commas.
+			p := message.NewPrinter(language.English)
+			p.Printf("Hashes: %d\n", numHashes)
+
+			// Check if 3s has elapsed since last time.
+			now := Timestamp()
+			duration := now - lastHashrateMeasurement
+			hashrate := float64(numHashes) / float64(duration/1000)
+			hashrateChannel <- hashrate
+			numHashes = 0
+			lastHashrateMeasurement = now
+		}
+	})()
 
 	for {
 		var i uint64 = 0
@@ -59,15 +82,6 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 		for {
 			numHashes++
 			i++
-
-			// Check if 3s has elapsed since last time.
-			if Timestamp() - lastTime >= 3 {
-				// Calculate hashrate.
-				hashrate := float64(numHashes) / 3
-				hashrateChannel <- hashrate
-				numHashes = 0
-				lastTime = Timestamp()
-			}
 	
 			// Increment nonce.
 			nonce.Add(&nonce, big.NewInt(1))
@@ -87,6 +101,19 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 				puzzle.solution = nonce
 				solutionChannel <- puzzle
 				break
+			}
+
+			// Check if new puzzle has been received.
+			select {
+			case newPuzzle := <- puzzleChannel:
+				fmt.Println("Received new puzzle")
+				puzzle = newPuzzle
+				block = puzzle.block
+				nonce = puzzle.startNonce
+				target = puzzle.target
+				fmt.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+			default:
+				// Do nothing.
 			}
 		}
 	}
@@ -153,7 +180,9 @@ func (node *Node) Start() {
 	for {
 		select {
 		case hashrate := <-hashrateChannel:
-			fmt.Printf("Hashrate: %.2f H/s\n", hashrate)
+			// Print iterations using commas.
+			p := message.NewPrinter(language.English)
+			p.Printf("Hashrate: %.2f H/s\n", hashrate)
 		case puzzle := <-solutionChannel:
 			fmt.Println("Received solution")
 
@@ -169,6 +198,7 @@ func (node *Node) Start() {
 				fmt.Errorf("Failed to ingest block: %s\n", err)
 			}
 
+			// Gossip block.
 			fmt.Println("Making new puzzle")
 			fmt.Println("New puzzle ready")
 			puzzleChannel <- node.MakeNewPuzzle()
