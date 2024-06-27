@@ -23,7 +23,7 @@ func SolvePOW(b RawBlock, startNonce big.Int, target big.Int, maxIterations uint
 		i++
 		
 		// Exit if iterations is reached.
-		if maxIterations < i {
+		if maxIterations != 0 && maxIterations < i {
 			return big.Int{}, fmt.Errorf("Solution not found in %d iterations", maxIterations)
 		}
 

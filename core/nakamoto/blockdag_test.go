@@ -26,7 +26,7 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
-	db, err := OpenDB("file:memdb1?mode=memory&cache=shared")
+	db, err := OpenDB("file:memdb1?mode=memory")
 	// db, err := OpenDB("test.sqlite3")
 	if err != nil {
 		panic(err)
@@ -563,7 +563,7 @@ func TestGetCurrentTips(t *testing.T) {
 
 
 
-func TestMiner(t *testing.T) {
+func TestMinerProcedural(t *testing.T) {
 	dag, conf, _ := newBlockdag()
 
 	// Mine 10 blocks.
