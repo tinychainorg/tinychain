@@ -5,6 +5,7 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/liamzebedee/tinychain-go/core"
+	"math/big"
 	"encoding/hex"
 )
 
@@ -25,6 +26,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
+	defer rows.Close()
 	databaseVersion := 0
 	if rows.Next() {
 		rows.Scan(&databaseVersion)
@@ -36,17 +38,20 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	// Migration: v0.
 	if databaseVersion == 0 {
 		// Perform migrations.
+		fmt.Printf("Running migration: %d\n", databaseVersion)
 		
 		// Create tables.
-		_, err = db.Exec("create table epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
+		_, err = db.Exec("create table IF NOT EXISTS epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
-		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, height integer, foreign key (epoch) REFERENCES epochs (id), size_bytes integer)")
+
+		_, err = db.Exec("create table IF NOT EXISTS blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, height integer, epoch TEXT, size_bytes integer, foreign key (epoch) REFERENCES epochs (id))")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
-		_, err = db.Exec("create table transactions (hash blob primary key, block_hash blob, sig blob, from_pubkey blob, data blob)")
+
+		_, err = db.Exec("create table IF NOT EXISTS transactions (hash blob primary key, block_hash blob, sig blob, from_pubkey blob, data blob)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
@@ -63,6 +68,8 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error updating database version: %s", err)
 		}
+
+		fmt.Printf("Database upgraded to: %d\n", dbVersion)
 	}
 
 	return db, err
@@ -74,6 +81,12 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachine, consensus Consensu
 		stateMachine: stateMachine,
 		consensus: consensus,
 	}
+	
+	err := dag.initialiseBlockDAG()
+	if err != nil {
+		panic(err)
+	}
+	
 	return dag, nil
 }
 
@@ -81,13 +94,31 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 	genesisBlockHash := dag.consensus.GenesisBlockHash
 	genesisBlock := RawBlock{
 		ParentHash: [32]byte{},
+		Difficulty: BigIntToBytes32(dag.consensus.GenesisDifficulty),
 		Timestamp: 0,
 		NumTransactions: 0,
 		TransactionsMerkleRoot: [32]byte{},
 		Nonce: [32]byte{},
 		Transactions: []RawTransaction{},
 	}
-	genesisHeight := 0
+	genesisHeight := uint64(0)
+
+	// Check if we have already initialised the database.
+	rows, err := dag.db.Query("select count(*) from blocks where hash = ?", genesisBlockHash[:])
+	if err != nil {
+		return err
+	}
+	count := 0
+	if rows.Next() {
+		rows.Scan(&count)
+	}
+	if count > 0 {
+		return nil
+	}
+	rows.Close()
+
+	// Begin initialisation.
+	fmt.Printf("Initialising block DAG...\n")
 	
 	// Insert the genesis epoch.
 	epoch0 := Epoch{
@@ -97,44 +128,51 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 		StartHeight: genesisHeight,
 		Difficulty: dag.consensus.GenesisDifficulty,
 	}
-	_, err := db.Exec(
+	_, err = dag.db.Exec(
 		"insert into epochs (id, start_block_hash, start_time, start_height, difficulty) values (?, ?, ?, ?, ?)",
-		epoch0.Id(),
-		genesisBlockHash[:],
-		0,
-		genesisHeight,
-		dag.consensus.GenesisDifficulty[:],
+		epoch0.GetId(),
+		epoch0.StartBlockHash[:],
+		epoch0.StartTime,
+		epoch0.StartHeight,
+		// BigIntToBytes32(epoch0.Difficulty),
+		epoch0.Difficulty.Bytes(),
 	)
 	if err != nil {
 		return err
 	}
 
+	fmt.Printf("Inserted genesis epoch difficulty=%s\n", dag.consensus.GenesisDifficulty.String())
+
 	// Insert the genesis block.
-	_, err = db.Exec(
-		"insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes) values (?, ?, ?, ?, ?, ?)", 
+	_, err = dag.db.Exec(
+		"insert into blocks (hash, parent_hash, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
+		dag.consensus.GenesisDifficulty.Bytes(),
 		genesisBlock.Timestamp, 
 		genesisBlock.NumTransactions, 
 		genesisBlock.TransactionsMerkleRoot[:], 
 		genesisBlock.Nonce[:],
-		height,
-		epoch.Id(),
-		raw.SizeBytes(),
+		genesisHeight,
+		epoch0.GetId(),
+		genesisBlock.SizeBytes(),
 	)
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("Inserted genesis block hash=%s\n", hex.EncodeToString(genesisBlockHash[:]))
+	
+	return nil
 }
 
 
 
 func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// 1. Verify parent is known.
-	if raw.ParentHash != dag.consensus.GenesisBlockHash {
-		if parent_block := dag.GetBlockByHash(raw.ParentHash); parent_block == nil {
-			return fmt.Errorf("Unknown parent block.")
-		}
+	parentBlock := dag.GetBlockByHash(raw.ParentHash)
+	if parentBlock == nil {
+		return fmt.Errorf("Unknown parent block.")
 	}
 
 	// 2. Verify timestamp is within bounds.
@@ -167,34 +205,59 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 6. Verify POW solution is valid.
-	// TODO just compute difficulty here.
-	// If we are on an epoch boundary, compute new difficulty and insert epoch.
-	// epoch, err := dag.GetEpochForBlockHash(raw.ParentHash)
-	// if epoch == nil {
-	// 	return fmt.Errorf("Parent block epoch not found.")
-	// }
-	// if err != nil {
-	// 	return fmt.Errorf("Failed to get parent block epoch: %s.", err)
-	// }
+	height := uint64(parentBlock.Height + 1)
+	var epoch *Epoch
+
+	// 6a. Compute the current difficulty epoch.
+	// 
+
+	// Are we on an epoch boundary?
+	if height % dag.consensus.EpochLengthBlocks == 0 {
+		// Recompute difficulty and create new epoch.
+		fmt.Printf("Recomputing difficulty for epoch %d\n", height / dag.consensus.EpochLengthBlocks)
+
+		newDifficulty := RecomputeDifficulty(epoch.StartTime, raw.Timestamp, epoch.Difficulty, dag.consensus.TargetEpochLengthMillis, dag.consensus.EpochLengthBlocks, height)
+
+		epoch = &Epoch{
+			Number: height / dag.consensus.EpochLengthBlocks,
+			StartBlockHash: raw.ParentHash,
+			StartTime: raw.Timestamp,
+			StartHeight: height,
+			Difficulty: newDifficulty,
+		}
+		_, err := dag.db.Exec(
+			"insert into epochs (id, start_block_hash, start_time, start_height, difficulty) values (?, ?, ?, ?, ?)",
+			epoch.GetId(),
+			raw.ParentHash[:],
+			raw.Timestamp,
+			height,
+			newDifficulty.Bytes(),
+		)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Lookup current epoch.
+		epoch, err := dag.GetEpochForBlockHash(raw.ParentHash)
+		if epoch == nil {
+			return fmt.Errorf("Parent block epoch not found.")
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	// 6b. Verify POW solution.
 	if !VerifyPOW(raw.Hash(), epoch.Difficulty) {
 		return fmt.Errorf("POW solution is invalid.")
 	}
 
-	// 7. Verify block size is correctly computed.
-
-
-	// Annotations:
-	// 1. Add block height.
-	// 2. Compute block epoch.
-	var height uint64 = 0
-	if raw.ParentHash == dag.consensus.GenesisBlockHash {
-		height = 1
-	} else {
-		parent_block := dag.GetBlockByHash(raw.ParentHash)
-		height = parent_block.Height + 1
+	// 7. Verify block size is within bounds.
+	if dag.consensus.MaxBlockSizeBytes < raw.SizeBytes() {
+		return fmt.Errorf("Block size exceeds maximum block size.")
 	}
-	
-	// Ingest into database store.
+
+	// 8. Ingest block into database store.
 	tx, err := dag.db.Begin()
 	if err != nil {
 		return err
@@ -237,12 +300,46 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	return nil
 }
 
+
+func RecomputeDifficulty(epochStart uint64, epochEnd uint64, currDifficulty big.Int, targetEpochLengthMillis uint64, epochLengthBlocks uint64, height uint64) (big.Int) {
+	// Compute the epoch duration.
+	epochDuration := epochEnd - epochStart
+	
+	// Special case: clamp the epoch duration so it is at least 1.
+	if epochDuration == 0 {
+		epochDuration = 1
+	}
+
+	epochIndex := height / epochLengthBlocks
+
+	fmt.Printf("epoch i=%d start_time=%d end_time=%d duration=%d \n", epochIndex, epochStart, epochEnd, epochDuration)
+
+	// Compute the target epoch length.
+	targetEpochLength := targetEpochLengthMillis * epochLengthBlocks
+
+	// Rescale the difficulty.
+	// difficulty = epoch.difficulty * (epoch.duration / target_epoch_length)
+	newDifficulty := new(big.Int)
+	newDifficulty.Mul(
+		&currDifficulty, 
+		big.NewInt(int64(epochDuration)),
+	)
+	newDifficulty.Div(
+		newDifficulty, 
+		big.NewInt(int64(targetEpochLength)),
+	)
+
+	fmt.Printf("New difficulty: %x\n", newDifficulty.String())
+	
+	return *newDifficulty
+}
+
 // Gets the epoch for a given block hash.
 // If the parent block is the final block in an epoch, then we compute the new epoch difficulty and create a new epoch.
 func (dag *BlockDAG) GetEpochForBlockHash(parentBlockHash [32]byte) (*Epoch, error) {
 	// Lookup the parent block.
 	parentBlock := Block{}
-	rows, err = dag.db.Query("select parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch from blocks where hash = ? limit 1", parentBlockHash)
+	rows, err := dag.db.Query("select parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch from blocks where hash = ? limit 1", parentBlockHash)
 	if err != nil {
 		return nil, err
 	}
@@ -262,39 +359,6 @@ func (dag *BlockDAG) GetEpochForBlockHash(parentBlockHash [32]byte) (*Epoch, err
 		rows.Scan(&epoch.Number, &epoch.StartBlockHash, &epoch.StartTime, &epoch.StartHeight, &epoch.Difficulty)
 	} else {
 		return nil, fmt.Errorf("Epoch not found.")
-	}
-
-	// Check if this is the epoch boundary.
-	// If it is, we need to recompute the difficulty.
-	if parentBlock.Height % dag.consensus.EpochLengthBlocks == 0 {
-		// Compute the epoch duration.
-		epoch_start := epoch.StartTime
-		epoch_end := parentBlock.Timestamp
-		epoch_duration := epoch_end - epoch_start
-		if epoch_duration == 0 {
-			epoch_duration = 1
-		}
-		epoch_index := parentBlock.Height / int(dag.consensus.EpochLengthBlocks)
-
-		fmt.Printf("epoch i=%d start_time=%d end_time=%d duration=%d \n", epoch_index, epoch_start, epoch_end, epoch_duration)
-
-		// Compute the target epoch length.
-		target_epoch_length := dag.consensus.TargetEpochLengthMillis * dag.consensus.EpochLengthBlocks
-
-		// Rescale the difficulty.
-		// difficulty = epoch.difficulty * (epoch.duration / target_epoch_length)
-		new_difficulty := new(big.Int)
-		new_difficulty.Mul(
-			epoch.Difficulty, 
-			big.NewInt(int64(epoch_duration))
-		)
-		new_difficulty.Div(
-			new_difficulty, 
-			big.NewInt(int64(target_epoch_length))
-		)
-
-		fmt.Printf("New difficulty: %x\n", new_difficulty.String())
-
 	}
 
 	return nil, nil

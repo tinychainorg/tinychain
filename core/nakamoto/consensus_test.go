@@ -101,6 +101,7 @@ func TestSomething(t *testing.T) {
 		TargetEpochLengthMillis: 2000,
 		GenesisDifficulty: *genesis_difficulty,
 		GenesisBlockHash: [32]byte{},
+		MaxBlockSizeBytes: 1000000,
 	}
 	difficulty := conf.GenesisDifficulty
 

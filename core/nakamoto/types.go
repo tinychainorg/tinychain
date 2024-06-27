@@ -19,6 +19,9 @@ type ConsensusConfig struct {
 
 	// The genesis block hash.
 	GenesisBlockHash [32]byte
+
+	// Maximum block size.
+	MaxBlockSizeBytes uint64
 }
 
 // A raw block is the block as transmitted on the network.
@@ -27,6 +30,7 @@ type ConsensusConfig struct {
 type RawBlock struct {
 	// Block header.
 	ParentHash [32]byte
+	Difficulty [32]byte
 	Timestamp uint64
 	NumTransactions uint64
 	TransactionsMerkleRoot [32]byte
@@ -55,7 +59,7 @@ type Block struct {
 
 	// Metadata.
 	Height uint64
-	Epoch uint64
+	Epoch string
 	Work big.Int
 	SizeBytes uint64
 	Hash [32]byte
@@ -85,9 +89,18 @@ type BlockDAGInterface interface {
 	GetTips(minConfirmations uint64) ([]Block, error)
 }
 
+// The block DAG is the core data structure of the Nakamoto consensus protocol.
+// It is a directed acyclic graph of blocks, where each block has a parent block.
+// As it is infeasible to store the entirety of the blockchain in-memory, 
+// the block DAG is backed by a SQL database.
 type BlockDAG struct {
-	// The backing SQL database store.
+	// The backing SQL database store, which stores:
+	// - blocks
+	// - epochs
+	// - transactions
 	db *sql.DB
+
+	// The state machine.
 	stateMachine StateMachine
 
 	// Consensus settings.
@@ -101,6 +114,9 @@ type StateMachine interface {
 type Epoch struct {
 	// Epoch number.
 	Number uint64
+
+	// Epoch unique ID.
+	Id string
 
 	// Start block.
 	StartBlockHash [32]byte
@@ -118,6 +134,6 @@ func GetIdForEpoch(startBlockHash [32]byte, startHeight uint64) (string) {
 }
 
 // The epoch unique ID is the height ++ startblockhash.
-func (e *Epoch) Id() (string) {
+func (e *Epoch) GetId() (string) {
 	return GetIdForEpoch(e.StartBlockHash, e.StartHeight)
 }

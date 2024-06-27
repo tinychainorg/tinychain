@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"math/big"
 	"testing"
+	"database/sql"
+	// "os"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
@@ -18,8 +20,10 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 }
 
 
-func newBlockdag() BlockDAG {
-	// db, err := OpenDB(":memory:")
+func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
+	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
+	// db, err := OpenDB("file:memdb1?mode=memory&cache=shared")
+	// db.SetMaxOpenConns(1)
 	db, err := OpenDB("test.sqlite3")
 	if err != nil {
 		panic(err)
@@ -43,6 +47,7 @@ func newBlockdag() BlockDAG {
 		TargetEpochLengthMillis: 2000,
 		GenesisDifficulty: *genesis_difficulty,
 		GenesisBlockHash: genesisBlockHash,
+		MaxBlockSizeBytes: 2*1024*1024, // 2MB
 	}
 
 	blockdag, err := NewBlockDAGFromDB(db, stateMachine, conf)
@@ -50,7 +55,7 @@ func newBlockdag() BlockDAG {
 		panic(err)
 	}
 
-	return blockdag
+	return blockdag, conf, db
 }
 
 func getTestingWallets(t *testing.T) ([]core.Wallet) {
@@ -113,7 +118,7 @@ func TestImportBlocksIntoDAG(t *testing.T) {
 
 func TestAddBlockUnknownParent(t *testing.T) {
 	assert := assert.New(t)
-	blockdag := newBlockdag()
+	blockdag, _, _ := newBlockdag()
 
 	b := RawBlock{
 		ParentHash: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
@@ -130,7 +135,7 @@ func TestAddBlockUnknownParent(t *testing.T) {
 
 func TestAddBlockTxCount(t *testing.T) {
 	assert := assert.New(t)
-	blockdag := newBlockdag()
+	blockdag, _, _ := newBlockdag()
 
 	b := RawBlock{
 		ParentHash: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
@@ -152,7 +157,7 @@ func TestAddBlockTxCount(t *testing.T) {
 
 func TestAddBlockTxsValid(t *testing.T) {
 	assert := assert.New(t)
-	blockdag := newBlockdag()
+	blockdag, _, _ := newBlockdag()
 
 	// Create a transaction.
 	tx := RawTransaction{
@@ -177,7 +182,7 @@ func TestAddBlockTxsValid(t *testing.T) {
 
 func TestAddBlockTxMerkleRootValid(t *testing.T) {
 	assert := assert.New(t)
-	blockdag := newBlockdag()
+	blockdag, _, _ := newBlockdag()
 
 	b := RawBlock{
 		ParentHash: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
@@ -203,7 +208,7 @@ func TestAddBlockPOWSolutionValid(t *testing.T) {
 
 func TestAddBlockSuccess(t *testing.T) {
 	assert := assert.New(t)
-	blockdag := newBlockdag()
+	blockdag, _, _ := newBlockdag()
 
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
@@ -242,7 +247,7 @@ func TestAddBlockSuccess(t *testing.T) {
 // the merklized transaction list, whose hash will change based on the content of tx[0].Sig.
 func TestAddBlockWithDynamicSignature(t *testing.T) {
 	assert := assert.New(t)
-	blockdag := newBlockdag()
+	blockdag, _, _ := newBlockdag()
 
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
@@ -296,4 +301,71 @@ func TestGetBlock(t *testing.T) {
 	// Query DAG to verify block inserted.
 }
 
+func TestBlockDAGInitialised(t *testing.T) {
+	assert := assert.New(t)
+	_, conf, db := newBlockdag()
 
+	// Query the blocks column.
+	rows, err := db.Query("SELECT hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes FROM blocks")
+	if err != nil {
+		t.Fatalf("Failed to query blocks table: %s", err)
+	}
+	genesisBlock := Block{}
+	for rows.Next() {
+		hash := []byte{}
+		parentHash := []byte{}
+		transactionsMerkleRoot := []byte{}
+		nonce := []byte{}
+
+		err := rows.Scan(&hash, &parentHash, &genesisBlock.Timestamp, &genesisBlock.NumTransactions, &transactionsMerkleRoot, &nonce, &genesisBlock.Height, &genesisBlock.Epoch, &genesisBlock.SizeBytes)
+
+		if err != nil {
+			t.Fatalf("Failed to scan row: %s", err)
+		}
+
+		copy(genesisBlock.Hash[:], hash)
+		copy(genesisBlock.ParentHash[:], parentHash)
+		copy(genesisBlock.TransactionsMerkleRoot[:], transactionsMerkleRoot)
+		copy(genesisBlock.Nonce[:], nonce)
+	}
+	rows.Close()
+
+	// Check the genesis block.
+	t.Logf("Genesis block: %v\n", genesisBlock.Hash)
+	assert.Equal(conf.GenesisBlockHash, genesisBlock.Hash)
+	assert.Equal([32]byte{}, genesisBlock.ParentHash)
+	assert.Equal(uint64(0), genesisBlock.Timestamp)
+	assert.Equal(uint64(0), genesisBlock.NumTransactions)
+	assert.Equal([32]byte{}, genesisBlock.TransactionsMerkleRoot)
+	assert.Equal([32]byte{}, genesisBlock.Nonce)
+	assert.Equal(uint64(0), genesisBlock.Height)
+	assert.Equal(GetIdForEpoch(conf.GenesisBlockHash, 0), genesisBlock.Epoch)
+
+	// Query the epochs column.
+	rows, err = db.Query("SELECT id, start_block_hash, start_time, start_height, difficulty FROM epochs")
+	if err != nil {
+		t.Fatalf("Failed to query epochs table: %s", err)
+	}
+	epoch := Epoch{}
+	for rows.Next() {
+		startBlockHash := []byte{}
+		difficulty := []byte{}
+		err := rows.Scan(&epoch.Id, &startBlockHash, &epoch.StartTime, &epoch.StartHeight, &difficulty)
+		if err != nil {
+			t.Fatalf("Failed to scan row: %s", err)
+		}
+
+		copy(epoch.StartBlockHash[:], startBlockHash)
+		diffBytes32 := [32]byte{}
+		copy(diffBytes32[:], difficulty)
+		epoch.Difficulty = Bytes32ToBigInt(diffBytes32)
+	}
+
+	// Check the genesis epoch.
+	t.Logf("Genesis epoch: %v\n", epoch.Id)
+	assert.Equal(GetIdForEpoch(conf.GenesisBlockHash, 0), epoch.Id)
+	assert.Equal(conf.GenesisBlockHash, epoch.StartBlockHash)
+	assert.Equal(uint64(0), epoch.StartTime)
+	assert.Equal(uint64(0), epoch.StartHeight)
+	assert.Equal(conf.GenesisDifficulty, epoch.Difficulty)
+}
