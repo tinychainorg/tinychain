@@ -63,6 +63,12 @@ type Block struct {
 	Work big.Int
 	SizeBytes uint64
 	Hash [32]byte
+	AccumulatedWork big.Int
+}
+
+func (b *Block) HashStr() (string) {
+	sl := b.Hash[:]
+	return hex.EncodeToString(sl)
 }
 
 type Transaction struct {
@@ -86,7 +92,7 @@ type BlockDAGInterface interface {
 	GetBlocksByHeight(height uint64) ([]Block, error)
 
 	// Get the tip of the chain, given a minimum number of confirmations.
-	GetTips(minConfirmations uint64) ([]Block, error)
+	GetCurrentTip() (Block, error)
 }
 
 // The block DAG is the core data structure of the Nakamoto consensus protocol.

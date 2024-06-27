@@ -77,3 +77,11 @@ func RecomputeDifficulty(epochStart uint64, epochEnd uint64, currDifficulty big.
 	
 	return *newDifficulty
 }
+
+func CalculateWork(solution big.Int) *big.Int {
+	// work = 2^256 / (diff_target + 1)
+	work := big.NewInt(2).Exp(big.NewInt(2), big.NewInt(256), nil)
+	solutionPtr := &solution
+	work.Div(work, big.NewInt(0).Add(solutionPtr, big.NewInt(1)))
+	return work
+}

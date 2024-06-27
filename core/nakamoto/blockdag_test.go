@@ -11,8 +11,6 @@ import (
 	"math/big"
 	"testing"
 	"database/sql"
-	// "os"
-
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
 )
@@ -77,7 +75,8 @@ func newValidTx(t *testing.T) (RawTransaction, error) {
 	}
 	tx.FromPubkey = wallets[0].PubkeyBytes()
 
-	sig, err := wallets[0].Sign(tx.Envelope())
+	envelope := tx.Envelope()
+	sig, err := wallets[0].Sign(envelope)
 	if err != nil {
 		return RawTransaction{}, err
 	}
@@ -85,7 +84,7 @@ func newValidTx(t *testing.T) (RawTransaction, error) {
 	copy(tx.Sig[:], sig)
 
 	// Sanity check verify.
-	if !core.VerifySignature(wallets[0].PubkeyStr(), tx.Sig[:], tx.Envelope()) {
+	if !core.VerifySignature(wallets[0].PubkeyStr(), sig, envelope) {
 		t.Fatalf("Failed to verify signature.")
 	}
 
@@ -459,7 +458,7 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	}
 	wallets := getTestingWallets(t)
 	tx.FromPubkey = wallets[0].PubkeyBytes()
-	sig, err := wallets[0].Sign(tx.Data)
+	sig, err := wallets[0].Sign(tx.Envelope())
 	if err != nil {
 		t.Fatalf("Failed to sign transaction: %s", err)
 	}
@@ -510,6 +509,21 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	assert.Equal(GetIdForEpoch(raw.ParentHash, 0), block.Epoch)
 }
 
+func TestGetCurrentTips(t *testing.T) {
+	assert := assert.New(t)
+	blockdag, _, _ := newBlockdag()
+
+	// The genesis will be the first tip.
+	block, err := blockdag.GetCurrentTip()
+	assert.Equal(nil, err)
+	assert.Equal(blockdag.consensus.GenesisBlockHash, block.Hash)
+
+	// Mine a few blocks.
+	
+}
+
+
+
 func TestMiner(t *testing.T) {
 	dag, conf, _ := newBlockdag()
 
@@ -518,7 +532,10 @@ func TestMiner(t *testing.T) {
 	current_height := uint64(0)
 
 	// Get genesis block.
-	genesis, _ := dag.GetBlockByHash(conf.GenesisBlockHash)
+	genesis, err := dag.GetBlockByHash(conf.GenesisBlockHash)
+	if err != nil {
+		t.Fatalf("Failed to get genesis block: %s", err)
+	}
 	current_height = genesis.Height + 1
 
 	for i := 0; i < 10; i++ {
@@ -558,7 +575,7 @@ func TestMiner(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to solve POW: %s", err)
 		}
-		t.Logf("Solution: height=%d hash=%s nonce=%s\n", current_height, raw.Hash(), solution.String())
+		t.Logf("Solution: height=%d hash=%s nonce=%s\n", current_height, Bytes32ToString(raw.Hash()), solution.String())
 		raw.SetNonce(solution)
 
 		// Ingest the block.
@@ -566,8 +583,21 @@ func TestMiner(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to ingest block: %s", err)
 		}
+		// Get the full block.
+		block, err := dag.GetBlockByHash(raw.Hash())
 
-		current_tip = raw.Hash()
+		t.Logf("Solution: height=%d hash=%s nonce=%s acc_work=%s\n", current_height, Bytes32ToString(block.Hash), solution.String(), block.AccumulatedWork.String())
+
+		current_tip = block.Hash
 		current_height += 1
+	}
+}
+
+func TestWTFSignature(t *testing.T) {
+	for {
+		_, err := newValidTx(t)
+		if err != nil {
+			panic(err)
+		}
 	}
 }

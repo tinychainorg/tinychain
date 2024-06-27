@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"math/big"
+	"fmt"
 )
 
 type Wallet struct {
@@ -68,24 +69,50 @@ func WalletFromPrivateKey(privateKeyHex string) (*Wallet, error) {
 	return &Wallet{prvkey: prvkey}, nil
 }
 
+func padBytes(src []byte, length int) []byte {
+    if len(src) >= length {
+        return src
+    }
+    padding := make([]byte, length-len(src))
+    return append(padding, src...)
+}
+
 func (w *Wallet) Sign(msg []byte) ([]byte, error) {
 	hash := sha256.Sum256(msg)
 	r, s, err := ecdsa.Sign(rand.Reader, w.prvkey, hash[:])
 	if err != nil {
+		panic(err)
 		return nil, err
 	}
-	signature := append(r.Bytes(), s.Bytes()...)
+	// Ensure r and s are padded to 32 bytes
+	rBytes := padBytes(r.Bytes(), 32)
+	sBytes := padBytes(s.Bytes(), 32)
+
+	// Concatenate r and s to form the signature
+	signature := append(rBytes, sBytes...)
+	
 	return signature, nil
 }
 
 func VerifySignature(pubkeyStr string, sig, msg []byte) bool {
+	if len(sig) != 64 {
+		fmt.Printf("Invalid signature length: %s\n", len(sig)) // TODO
+		return false
+	}
+	if len(pubkeyStr) != 130 {
+		panic("Invalid public key") // TODO
+		return false
+	}
+
 	pubkeyBytes, err := hex.DecodeString(pubkeyStr)
 	if err != nil {
+		panic(err)
 		return false
 	}
 
 	x, y := elliptic.Unmarshal(elliptic.P256(), pubkeyBytes)
 	if x == nil {
+		panic("Invalid public key") // TODO
 		return false
 	}
 	pubkey := &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
@@ -93,6 +120,11 @@ func VerifySignature(pubkeyStr string, sig, msg []byte) bool {
 	hash := sha256.Sum256(msg)
 	r := new(big.Int).SetBytes(sig[:len(sig)/2])
 	s := new(big.Int).SetBytes(sig[len(sig)/2:])
+
+	// fmt.Println(r.Sign() <= 0 || s.Sign() <= 0)
+	fmt.Printf("%s\n", pubkeyStr)
+	fmt.Printf("r=%s s=%s\n", r.String(), s.String())
+
 	return ecdsa.Verify(pubkey, hash[:], r, s)
 }
 

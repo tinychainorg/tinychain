@@ -6,6 +6,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/liamzebedee/tinychain-go/core"
 	"encoding/hex"
+	"math/big"
 )
 
 
@@ -45,7 +46,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
 
-		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, height integer, epoch TEXT, size_bytes integer, foreign key (epoch) REFERENCES epochs (id))")
+		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, height integer, epoch TEXT, size_bytes integer, acc_work blob, foreign key (epoch) REFERENCES epochs (id))")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
@@ -141,10 +142,12 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 	}
 
 	fmt.Printf("Inserted genesis epoch difficulty=%s\n", dag.consensus.GenesisDifficulty.String())
+	accWork := big.NewInt(1)
+	accWorkBuf := BigIntToBytes32(*accWork)
 
 	// Insert the genesis block.
 	_, err = dag.db.Exec(
-		"insert into blocks (hash, parent_hash, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
 		dag.consensus.GenesisDifficulty.Bytes(),
@@ -155,6 +158,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 		genesisHeight,
 		epoch0.GetId(),
 		genesisBlock.SizeBytes(),
+		accWorkBuf[:],
 	)
 	if err != nil {
 		return err
@@ -187,11 +191,10 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 
 	// 4. Verify transactions are valid.
 	for i, block_tx := range raw.Transactions {
-		// TODO: Verify signature.
 		fmt.Printf("Verifying transaction %d\n", i)
 		isValid := core.VerifySignature(
 			hex.EncodeToString(block_tx.FromPubkey[:]),
-			block_tx.Sig[:], 
+			block_tx.Sig[:],
 			block_tx.Envelope(),
 		)
 		if !isValid {
@@ -237,7 +240,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 
 		epoch = &Epoch{
 			Number: height / dag.consensus.EpochLengthBlocks,
-			StartBlockHash: raw.ParentHash,
+			StartBlockHash: raw.Hash(),
 			StartTime: raw.Timestamp,
 			StartHeight: height,
 			Difficulty: newDifficulty,
@@ -245,9 +248,9 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		_, err := dag.db.Exec(
 			"insert into epochs (id, start_block_hash, start_time, start_height, difficulty) values (?, ?, ?, ?, ?)",
 			epoch.GetId(),
-			raw.ParentHash[:],
-			raw.Timestamp,
-			height,
+			epoch.StartBlockHash[:],
+			epoch.StartTime,
+			epoch.StartHeight,
 			newDifficulty.Bytes(),
 		)
 		if err != nil {
@@ -265,7 +268,8 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 6b. Verify POW solution.
-	if !VerifyPOW(raw.Hash(), epoch.Difficulty) {
+	blockHash := raw.Hash()
+	if !VerifyPOW(blockHash, epoch.Difficulty) {
 		return fmt.Errorf("POW solution is invalid.")
 	}
 
@@ -279,10 +283,15 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	if err != nil {
 		return err
 	}
+
+	acc_work := new(big.Int)
+	work := CalculateWork(Bytes32ToBigInt(blockHash))
+	acc_work.Add(&parentBlock.AccumulatedWork, work)
+	acc_work_buf := BigIntToBytes32(*acc_work)
 	
 	blockhash := raw.Hash()
 	_, err = tx.Exec(
-		"insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		blockhash[:],
 		raw.ParentHash[:], 
 		raw.Timestamp, 
@@ -292,6 +301,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		height,
 		epoch.GetId(),
 		raw.SizeBytes(),
+		acc_work_buf[:],
 	)
 	if err != nil {
 		tx.Rollback()
@@ -363,7 +373,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 	block := Block{}
 
 	// Query database.
-	rows, err := dag.db.Query("select hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes from blocks where hash = ? limit 1", hash[:])
+	rows, err := dag.db.Query("select hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1", hash[:])
 	if err != nil {
 		return nil, err
 	}
@@ -374,6 +384,8 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		parentHash := []byte{}
 		transactionsMerkleRoot := []byte{}
 		nonce := []byte{}
+		accWorkBuf := []byte{}
+		accWork := [32]byte{}
 
 		err := rows.Scan(
 			&hash, 
@@ -385,6 +397,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 			&block.Height, 
 			&block.Epoch, 
 			&block.SizeBytes,
+			&accWorkBuf,
 		)
 
 		if err != nil {
@@ -395,9 +408,17 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		copy(block.ParentHash[:], parentHash)
 		copy(block.TransactionsMerkleRoot[:], transactionsMerkleRoot)
 		copy(block.Nonce[:], nonce)
+		copy(accWork[:], accWorkBuf)
+		block.AccumulatedWork = Bytes32ToBigInt(accWork)
 
 		return &block, nil
 	} else {
 		return nil, err
 	}
+}
+
+func (dag *BlockDAG) GetCurrentTip() (Block, error) {
+	// The tip of the chain is defined as the chain with the longest proof-of-work.
+	// Simply put, given a DAG of blocks, where each block has an accumulated work, we want to find the path with the highest accumulated work.
+	return Block{}, nil
 }
