@@ -26,6 +26,8 @@ func (b *RawBlock) Envelope() []byte {
 	if err != nil { panic(err); }
 	err = binary.Write(buf, binary.BigEndian, b.Nonce)
 	if err != nil { panic(err); }
+	err = binary.Write(buf, binary.BigEndian, b.Graffiti)
+	if err != nil { panic(err); }
 
 	return buf.Bytes()
 }

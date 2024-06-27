@@ -46,7 +46,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
 
-		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, height integer, epoch TEXT, size_bytes integer, acc_work blob, foreign key (epoch) REFERENCES epochs (id))")
+		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, graffiti blob, height integer, epoch TEXT, size_bytes integer, acc_work blob, foreign key (epoch) REFERENCES epochs (id))")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
@@ -104,6 +104,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 		NumTransactions: 0,
 		TransactionsMerkleRoot: [32]byte{},
 		Nonce: [32]byte{},
+		Graffiti: [32]byte{0xca, 0xfe, 0xba, 0xbe, 0xde, 0xca, 0xfb, 0xad},
 		Transactions: []RawTransaction{},
 	}
 	genesisHeight := uint64(0)
@@ -152,7 +153,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 
 	// Insert the genesis block.
 	_, err = dag.db.Exec(
-		"insert into blocks (hash, parent_hash, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
 		dag.consensus.GenesisDifficulty.Bytes(),
@@ -160,6 +161,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 		genesisBlock.NumTransactions, 
 		genesisBlock.TransactionsMerkleRoot[:], 
 		genesisBlock.Nonce[:],
+		genesisBlock.Graffiti[:],
 		genesisHeight,
 		epoch0.GetId(),
 		genesisBlock.SizeBytes(),
@@ -296,13 +298,14 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	
 	blockhash := raw.Hash()
 	_, err = tx.Exec(
-		"insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		blockhash[:],
 		raw.ParentHash[:], 
 		raw.Timestamp, 
 		raw.NumTransactions, 
 		raw.TransactionsMerkleRoot[:], 
 		raw.Nonce[:],
+		raw.Graffiti[:],
 		height,
 		epoch.GetId(),
 		raw.SizeBytes(),
@@ -390,7 +393,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 	block := Block{}
 
 	// Query database.
-	rows, err := dag.db.Query("select hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1", hash[:])
+	rows, err := dag.db.Query("select hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1", hash[:])
 	if err != nil {
 		return nil, err
 	}
@@ -401,6 +404,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		parentHash := []byte{}
 		transactionsMerkleRoot := []byte{}
 		nonce := []byte{}
+		graffiti := []byte{}
 		accWorkBuf := []byte{}
 		accWork := [32]byte{}
 
@@ -411,6 +415,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 			&block.NumTransactions, 
 			&transactionsMerkleRoot, 
 			&nonce, 
+			&graffiti,
 			&block.Height, 
 			&block.Epoch, 
 			&block.SizeBytes,
@@ -425,6 +430,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		copy(block.ParentHash[:], parentHash)
 		copy(block.TransactionsMerkleRoot[:], transactionsMerkleRoot)
 		copy(block.Nonce[:], nonce)
+		copy(block.Graffiti[:], graffiti)
 		copy(accWork[:], accWorkBuf)
 		block.AccumulatedWork = Bytes32ToBigInt(accWork)
 

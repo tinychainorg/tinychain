@@ -35,6 +35,7 @@ type RawBlock struct {
 	NumTransactions uint64 `json:"num_transactions"`
 	TransactionsMerkleRoot [32]byte `json:"transactions_merkle_root"`
 	Nonce [32]byte `json:"nonce"`
+	Graffiti [32]byte `json:"graffiti"`
 	
 	// Block body.
 	Transactions []RawTransaction `json:"transactions"`
@@ -58,6 +59,7 @@ type Block struct {
 	NumTransactions uint64
 	TransactionsMerkleRoot [32]byte
 	Nonce [32]byte
+	Graffiti [32]byte
 	
 	// Block body.
 	Transactions []RawTransaction
@@ -155,4 +157,8 @@ func (e *Epoch) GetId() (string) {
 type PeerConfig struct {
 	port string
     bootstrapPeers []string
+}
+
+func NewPeerConfig(port string, bootstrapPeers []string) (PeerConfig) {
+	return PeerConfig{port: port, bootstrapPeers: bootstrapPeers}
 }

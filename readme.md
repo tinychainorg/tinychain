@@ -2,6 +2,14 @@
 
 A full blockchain in Go;
 
+## Install.
+
+Make sure you have Go 1.2.3+ installed.
+
+```sh
+make && cd build/ && ./tinychain node --port 8121 --db testnet.db
+```
+
 ## To Do.
 
 Work breakdown:
@@ -30,11 +38,11 @@ Work breakdown:
     - [x] gossip block, gossip tx, get blocks, sync tip
 - [x] implement peer discovery and bootstrapping
 - [ ] implement wallet and cli tool
-- [ ] implement miner process
+- [x] implement miner process
 - [ ] implement admin api
-- [ ] finally implement the CLI tool
-    - [ ] start miner
-    - [ ] stop miner
+- [x] finally implement the CLI tool
+    - [x] start miner
+    - [x] stop miner
     - [ ] check balance
     - [ ] check network online nodes
     - [ ] send coins

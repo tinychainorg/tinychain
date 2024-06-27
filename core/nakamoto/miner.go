@@ -168,7 +168,7 @@ func (node *Miner) MakeNewPuzzle() (POWPuzzle) {
 	return puzzle
 }
 
-func (node *Miner) Start(mineMaxBlocks uint) {
+func (node *Miner) Start(mineMaxBlocks int64) {
 	node.IsRunning = true
 
 	// The next tip channel.
@@ -180,7 +180,7 @@ func (node *Miner) Start(mineMaxBlocks uint) {
 
 	go MineWithStatus(hashrateChannel, solutionChannel, puzzleChannel)
 
-	var blocksMined uint = 0
+	var blocksMined int64 = 0
 
 	puzzleChannel <- node.MakeNewPuzzle()
 	for {
@@ -203,7 +203,7 @@ func (node *Miner) Start(mineMaxBlocks uint) {
 			}
 			
 			blocksMined += 1
-			if mineMaxBlocks <= blocksMined {
+			if mineMaxBlocks != -1 && mineMaxBlocks <= blocksMined {
 				fmt.Println("Mined max blocks; stopping miner")
 				node.IsRunning = false
 				return
