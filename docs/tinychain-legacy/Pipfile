@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pyparsing = "*"
+ecdsa = "*"
+pyyaml = "*"
+flask = "*"
+requests = "*"
+peewee = "*"
+sqlalchemy = "*"
+tabulate = "*"
+colored-traceback = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"
