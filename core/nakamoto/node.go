@@ -98,6 +98,7 @@ func (n *Node) Sync() {
 	// Contact all our peers.
 	// Get their current tips.
 	// Get the blocks for each of these tips.
+	// Verify the POW on the tip to check the tip is valid.
 	// Select the tip with the highest work according to ParentTotalWork.
 	// Download the blocks from the tip to the common ancestor from all our peers.
 	// Store them in a temporary storage.

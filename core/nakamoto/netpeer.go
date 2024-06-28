@@ -303,8 +303,17 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		}
 
 		// Ingest new peers.
-		// TODO.
+		havePeers := make(map[string]bool)
+		for _, peer := range p.peers {
+			havePeers[peer.url] = true
+		}
+		for _, peerUrl := range msg.Peers {
+			if _, ok := havePeers[peerUrl]; !ok {
+				go p.AddPeer(peerUrl)
+			}
+		}
 
+		// Reply with our peers.
 		peers := []string{}
 		for _, peer := range p.peers {
 			peers = append(peers, peer.url)
@@ -375,11 +384,27 @@ func (p *PeerCore) GossipPeers() {
 	}
 
 	for _, peer := range p.peers {
-		_, err := SendMessageToPeer(peer.url, gossipPeersMsg)
+		reply, err := SendMessageToPeer(peer.url, gossipPeersMsg)
 		if err != nil {
 			peerLogger.Printf("Failed to send block to peer: %v", err)
 		}
-		// TODO handle peers_reply.
+
+		// Handle reply.
+		var msg GossipPeersMessage
+		if err := json.Unmarshal(reply, &msg); err != nil {
+			peerLogger.Printf("Failed to unmarshal gossip peers reply: %v", err)
+		}
+
+		// Ingest new peers.
+		havePeers := make(map[string]bool)
+		for _, peer := range p.peers {
+			havePeers[peer.url] = true
+		}
+		for _, peerUrl := range msg.Peers {
+			if _, ok := havePeers[peerUrl]; !ok {
+				go p.AddPeer(peerUrl)
+			}
+		}
 	}
 }
 
@@ -404,53 +429,67 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
 	// Contact all peers and exchange heartbeats.
 	peerLogger.Println("Bootstrapping network from peers...")
 
+	doneChan := make(chan bool, len(peerInfos))
+
 	// Contact all peers and exchange heartbeats.
 	for i, peerInfo := range peerInfos {
 		peerLogger.Printf("Connecting to bootstrap peer #%d at %s\n", i, peerInfo)
 
-		// Check URL valid.
-		_, err := url.Parse(peerInfo)
-		if err != nil {
-			peerLogger.Println("Failed to parse peer address: ", err)
-			continue
-		}
+		go (func() {
+			p.AddPeer(peerInfo)
+			doneChan <- true
+		})()
+	}
 
-		peer := Peer{
-			url: peerInfo,
-			// addr: url.Hostname(),
-			// port: url.Port(),
-			lastSeen:      0,
-			clientVersion: "",
-		}
-
-		heartbeatMsg := HeartbeatMesage{
-			Type:                "heartbeat",
-			TipHash:             "",
-			TipHeight:           0,
-			ClientVersion:       CLIENT_VERSION,
-			WireProtocolVersion: WIRE_PROTOCOL_VERSION,
-			ClientAddress:       p.GetExternalAddr(),
-			Time:                time.Now(),
-		}
-
-		if peer.url == p.GetExternalAddr() || peer.url == p.GetLocalAddr() {
-			// Skip self.
-			peerLogger.Printf("Bootstrap found peerInfo corresponding to our peer. Skipping #%d.\n", i)
-			continue
-		}
-
-		// Send heartbeat message to peer.
-		_, err = SendMessageToPeer(peer.url, heartbeatMsg)
-		if err != nil {
-			peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
-			continue
-		}
-
-		peerLogger.Println("Peer is alive, adding to peer list")
-
-		// Add peer to list.
-		p.peers = append(p.peers, peer)
+	// Wait for all peers to finish.
+	for i := 0; i < len(peerInfos); i++ {
+		<-doneChan
 	}
 
 	peerLogger.Println("Bootstrapping complete.")
+}
+
+func (p *PeerCore) AddPeer(peerInfo string) {
+	// Check URL valid.
+	_, err := url.Parse(peerInfo)
+	if err != nil {
+		peerLogger.Println("Failed to parse peer address: ", err)
+		return
+	}
+
+	peer := Peer{
+		url: peerInfo,
+		// addr: url.Hostname(),
+		// port: url.Port(),
+		lastSeen:      0,
+		clientVersion: "",
+	}
+
+	heartbeatMsg := HeartbeatMesage{
+		Type:                "heartbeat",
+		TipHash:             "",
+		TipHeight:           0,
+		ClientVersion:       CLIENT_VERSION,
+		WireProtocolVersion: WIRE_PROTOCOL_VERSION,
+		ClientAddress:       p.GetExternalAddr(),
+		Time:                time.Now(),
+	}
+
+	if peer.url == p.GetExternalAddr() || peer.url == p.GetLocalAddr() {
+		// Skip self.
+		peerLogger.Printf("AddPeer found peerInfo corresponding to our peer. Skipping.\n")
+		return
+	}
+
+	// Send heartbeat message to peer.
+	_, err = SendMessageToPeer(peer.url, heartbeatMsg)
+	if err != nil {
+		peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
+		return
+	}
+
+	peerLogger.Println("Peer is alive, adding to peer list")
+
+	// Add peer to list.
+	p.peers = append(p.peers, peer)
 }
