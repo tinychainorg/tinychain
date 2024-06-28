@@ -1,15 +1,16 @@
 package nakamoto
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net/http"
-    "encoding/json"
-    "io/ioutil"
-    "time"
-    "log"
-    "os"
-    "bytes"
-    "sort"
+	"net/url"
+	"os"
+	"sort"
+	"time"
 )
 
 var peerLogger = log.New(os.Stdout, "peer: ", log.Lshortfile)
@@ -410,12 +411,12 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
     for i, peerInfo := range peerInfos {
         peerLogger.Printf("Connecting to bootstrap peer #%d at %s\n", i, peerInfo)
 
-        // Parse address and port from URI.
-        // url, err := url.Parse(peerInfo)
-        // if err != nil {
-        //     peerLogger.Println("Failed to parse peer address: ", err)
-        //     continue
-        // }
+        // Check URL valid.
+        _, err := url.Parse(peerInfo)
+        if err != nil {
+            peerLogger.Println("Failed to parse peer address: ", err)
+            continue
+        }
 
         peer := Peer{
             url: peerInfo,
@@ -442,7 +443,7 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
         }
 
         // Send heartbeat message to peer.
-        _, err := SendMessageToPeer(peer.url, heartbeatMsg)
+        _, err = SendMessageToPeer(peer.url, heartbeatMsg)
         if err != nil {
             peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
             continue

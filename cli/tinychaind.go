@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/urfave/cli/v2"
-	"github.com/liamzebedee/tinychain-go/cli/cmd"
 	"log"
 	"os"
+
+	"github.com/liamzebedee/tinychain-go/cli/cmd"
+	"github.com/urfave/cli/v2"
 )
 
 func main() {
@@ -27,6 +28,11 @@ func main() {
                         Name:    "db",
                         Usage:   "The path to the tinychain database",
                         Value: "tinychain.db",
+                    },
+                    &cli.StringFlag{
+                        Name:    "peers",
+                        Usage:   "A list of comma-separated peer URL's used to bootstrap connection to the network",
+                        Value: "",
                     },
                 },        
             },

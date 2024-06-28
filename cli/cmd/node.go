@@ -9,8 +9,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -60,8 +62,8 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 	copy(genesisBlockHash[:], genesisBlockHash_)
 
 	conf := nakamoto.ConsensusConfig{
-		EpochLengthBlocks: 5,
-		TargetEpochLengthMillis: 2000,
+		EpochLengthBlocks: 200,
+		TargetEpochLengthMillis: 1000 * 60 * 5, // 5 minutes
 		GenesisDifficulty: *genesis_difficulty,
 		GenesisBlockHash: genesisBlockHash,
 		MaxBlockSizeBytes: 2*1024*1024, // 2MB
@@ -78,6 +80,7 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 func RunNode(cmdCtx *cli.Context) (error) {
 	port := cmdCtx.String("port")
 	dbPath := cmdCtx.String("db")
+	bootstrapPeers := cmdCtx.String("peers")
 
 	// DAG.
 	dag, _, _ := newBlockdag(dbPath)
@@ -108,8 +111,23 @@ func RunNode(cmdCtx *cli.Context) (error) {
         os.Exit(1)
     }()
 
-	node.Start()
+	// Bootstrap the node.
+	if bootstrapPeers != "" {
+		peerAddresses := []string{}
+		// Split the comma-separated list of peer addresses.
+		peerlist := strings.Split(bootstrapPeers, ",")
+		for _, peerAddress := range peerlist {
+			// Validate URL.
+			_, err := url.ParseRequestURI(peerAddress)
+			if err != nil {
+				return fmt.Errorf("Invalid peer address: %s", peerAddress)
+			}
+			peerAddresses = append(peerAddresses, peerAddress)
+		}
 
-	
+		node.Peer.Bootstrap(peerAddresses)
+	}
+
+	node.Start()
 	return nil
 }
