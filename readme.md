@@ -14,6 +14,13 @@ A full blockchain in Go;
  * Miner: mine new blocks on the tip, measure hashrate.
  * CLI: start a node, connect to the network, mine blocks.
 
+Simplifications of the design:
+
+ * The difficulty target is represented as `[32]bytes`; it is uncompressed. There is no `nBits` or custom mantissa.
+ * Transaction signatures are in their uncompressed ECDSA form. They are `[65]bytes`, which includes the ECDSA signature type of `0x4`.
+ * Transactions specify `from` and `to` in terms of raw ECDSA public keys. There is no ECDSA signature recovery to guess the pubkey from a signature.
+ * The state machine is an account-based model, not a UXTO model. It implements just a transfer for coins.
+
 ![database view](./assets/db-view.png)
 
 ## Install.
@@ -56,6 +63,8 @@ Work breakdown:
     - [ ] simple wrapper for sockets - address, port, and hof's to wrap the latency delays dropped packets etc
     - [x] peers connect
     - [x] peers can send messages, peers can register message handlers
+    - [x] gossip peers routine
+    - [ ] peer discovery from bittorrent trackers
 - [x] implement simple peer
     - [x] can send and receive blocks via network
     - [x] gossip block, gossip tx, get blocks, sync tip
@@ -70,8 +79,11 @@ Work breakdown:
     - [ ] check network online nodes
     - [ ] send coins
     - [ ] receive coins
-- [ ] add nonce to tx
-- [ ] refactor miner code to be pretty
-- [ ] improve robustness of sql queries- need to verify we use right number of columns and ?'s
-- [ ] improve block/rawblock. missing fields, unset fields etc. tests for this.
-- [ ] double check big endian canonical encoding
+- [ ] refactoring
+    - [ ] add nonce to tx
+    - [ ] refactor miner code to be pretty
+    - [ ] improve robustness of sql queries- need to verify we use right number of columns and ?'s
+    - [ ] improve block/rawblock. missing fields, unset fields etc. tests for this.
+    - [ ] double check big endian canonical encoding
+    - [ ] add zlib compression for rawblock, block (just like google's sstable)
+- [ ] generate zk proofs of chain history

@@ -52,6 +52,7 @@ type RawTransaction struct {
 	Sig        [64]byte `json:"sig"`
 	FromPubkey [65]byte `json:"from_pubkey"`
 	Data       []byte   `json:"data"`
+	// TODO add chain ID to prevent replaying sigs on other chains/networks.
 }
 
 func (t *RawTransaction) Bytes() []byte {
@@ -183,6 +184,7 @@ type HeartbeatMesage struct {
 	ClientVersion       string `json:"clientVersion"`
 	WireProtocolVersion uint   `json:"wireProtocolVersion"`
 	ClientAddress       string `json:"clientAddress"`
+	// TODO add chain/network ID.
 	Time                time.Time
 }
 

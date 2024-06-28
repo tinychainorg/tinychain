@@ -10,6 +10,8 @@ type TransferOp struct {
 	OpName string   `json:"op_name"`
 	Amount uint64   `json:"amount"`
 	To     [65]byte `json:"to"`
+	From   [65]byte `json:"from"`
+	Sig    [65]byte `json:"sig"`
 }
 
 type StateLeaf struct {

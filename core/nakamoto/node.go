@@ -57,8 +57,6 @@ func (n *Node) setup() {
 		for _, hash := range msg.BlockHashes {
 			blockhash := HexStringToBytes32(hash)
 
-			// block, err := n.Dag.GetBlockByHash(blockhash)
-
 			// Get the raw block.
 			rawBlockData, err := n.Dag.GetRawBlockDataByHash(blockhash)
 			if err != nil {
