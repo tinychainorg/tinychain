@@ -1,16 +1,17 @@
-// 
+//
 // This is the core implementation of the block DAG data structure.
 // It mostly does these things:
 // - ingests new blocks, validates transactions
 // - manages reading/writing to the backing SQLite database.
-// 
+//
 package nakamoto
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"math/big"
 	"testing"
-	"database/sql"
+
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
 )
@@ -106,7 +107,11 @@ func getTestingWallets(t *testing.T) ([]core.Wallet) {
 	if err != nil {
 		t.Fatalf("Failed to create wallet: %s", err)
 	}
-	return []core.Wallet{*wallet1}
+	wallet2, err := core.CreateRandomWallet()
+	if err != nil {
+		t.Fatalf("Failed to create wallet: %s", err)
+	}
+	return []core.Wallet{*wallet1, *wallet2}
 }
 
 func TestOpenDB(t *testing.T) {

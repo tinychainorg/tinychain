@@ -36,6 +36,15 @@ Work breakdown:
 - [x] creating a merkle tree accumulation of transactions
 - [x] computing the cumulative work in a chain of blocks
 - [x] constructing a blockdag and then choosing a tip
+- [ ] improve txs
+    - [ ] replay protection for txs, tx nonce
+    - [ ] add version to RawBlock, RawTransaction for future prosperity
+- [ ] block sync algorithm between nodes
+- [ ] simple coin state machine
+    - [ ] coinbase
+    - [ ] state snapshots
+    - [ ] state diffs
+    - [ ] state checkpoints
 - [ ] build a simple mempool module
 - [ ] adding a simple state machine
     - [ ] ValidateBlock
