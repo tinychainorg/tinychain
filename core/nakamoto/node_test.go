@@ -1,10 +1,11 @@
 package nakamoto
 
 import (
-	"testing"
-	"github.com/liamzebedee/tinychain-go/core"
 	"encoding/json"
+	"testing"
 	"time"
+
+	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -145,8 +146,8 @@ func TestTwoNodeUnequalMining(t *testing.T) {
 
 	// In this test, one node mines more blocks than another.
 	// And we test the sync.
-	node1Speed := uint(3)
-	node2Speed := uint(1)
+	node1Speed := int64(3)
+	node2Speed := int64(1)
 
 	for i := 0; i < 30; i++ {
 		// Node 1 mines blocks.

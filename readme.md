@@ -3,7 +3,16 @@
 A full blockchain in Go;
 
  * Nakamoto consensus.
- * Single file SQLite database.
+   * Hashcash.
+   * Dynamic difficulty retargeting (epochs).
+   * Proof-of-work consensus - longest/heaviest chain rule.
+   * Merklized transaction tree.
+ * Ethereum-like coin state machine - basic ERC20 transfers.
+ * ECDSA (curve P256) wallets for signing transactions.
+ * Core data structures: RawBlock, RawTx, Block, Tx, Epoch, BlockDAG, current tip, Miner, NetPeer, Node
+ * Networking: HTTP peer interface, messages/methods include [bootstrap peers, gossip blocks, gossip txs].
+ * Miner: mine new blocks on the tip, measure hashrate.
+ * CLI: start a node, connect to the network, mine blocks.
 
 ![database view](./assets/db-view.png)
 
