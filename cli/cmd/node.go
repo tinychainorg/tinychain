@@ -1,14 +1,17 @@
 package cmd
 
 import (
-	"github.com/urfave/cli/v2"
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/liamzebedee/tinychain-go/core/nakamoto"
+	"github.com/urfave/cli/v2"
 
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"math/big"
-
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 
@@ -93,7 +96,20 @@ func RunNode(cmdCtx *cli.Context) (error) {
 	// Create the node.
 	node := nakamoto.NewNode(dag, miner, peer)
 
+	// Handle process signals.
+	c := make(chan os.Signal)
+    signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+    go func() {
+        <-c
+        
+		fmt.Println("Shutting down...")
+		node.Shutdown()
+
+        os.Exit(1)
+    }()
+
 	node.Start()
+
 	
 	return nil
 }

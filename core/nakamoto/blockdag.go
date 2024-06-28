@@ -2,11 +2,12 @@ package nakamoto
 
 import (
 	"database/sql"
-	"fmt"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/liamzebedee/tinychain-go/core"
 	"encoding/hex"
+	"fmt"
 	"math/big"
+
+	"github.com/liamzebedee/tinychain-go/core"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 
@@ -158,7 +159,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 
 	// Insert the genesis block.
 	_, err = dag.db.Exec(
-		"insert into blocks (hash, parent_hash, parent_total_work, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, parent_total_work, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
 		genesisBlock.ParentTotalWork[:],
@@ -311,10 +312,10 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// Insert block.
 	blockhash := raw.Hash()
 	_, err = tx.Exec(
-		"insert into blocks (hash, parent_hash, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		blockhash[:],
 		raw.ParentHash[:], 
-		raw.ParentTotalWork,
+		raw.ParentTotalWork[:],
 		raw.Timestamp, 
 		raw.NumTransactions, 
 		raw.TransactionsMerkleRoot[:], 

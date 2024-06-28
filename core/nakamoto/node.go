@@ -1,9 +1,9 @@
 package nakamoto
 
 import (
+	"fmt"
 	"log"
 	"os"
-	"fmt"
 )
 
 var logger = log.New(os.Stdout, "corenode: ", log.Lshortfile)
@@ -82,7 +82,7 @@ func (n *Node) setup() {
 		// Ingest the block.
 		err := n.Dag.IngestBlock(b)
 		if err != nil {
-			logger.Printf("Failed to ingest block from peer: %s\n", err)
+			logger.Printf("Failed to ingest block from miner: %s\n", err)
 		}
 
 		// Gossip the block.
@@ -114,4 +114,12 @@ func (n *Node) Start() {
 	go n.Miner.Start(-1)
 
 	<-done
+}
+
+func (n *Node) Shutdown() {
+	// Close the database.
+	err := n.Dag.db.Close()
+	if err != nil {
+		logger.Printf("Failed to close database: %s\n", err)
+	}
 }
