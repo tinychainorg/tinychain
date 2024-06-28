@@ -16,8 +16,8 @@ import (
 	"syscall"
 )
 
+type MockStateMachine struct{}
 
-type MockStateMachine struct {}
 func newMockStateMachine() *MockStateMachine {
 	return &MockStateMachine{}
 }
@@ -53,7 +53,7 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 	genesis_difficulty := new(big.Int)
 	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
 
-	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;) 
+	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
 	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
 	if err != nil {
 		panic(err)
@@ -62,11 +62,11 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 	copy(genesisBlockHash[:], genesisBlockHash_)
 
 	conf := nakamoto.ConsensusConfig{
-		EpochLengthBlocks: 200,
+		EpochLengthBlocks:       200,
 		TargetEpochLengthMillis: 1000 * 60 * 5, // 5 minutes
-		GenesisDifficulty: *genesis_difficulty,
-		GenesisBlockHash: genesisBlockHash,
-		MaxBlockSizeBytes: 2*1024*1024, // 2MB
+		GenesisDifficulty:       *genesis_difficulty,
+		GenesisBlockHash:        genesisBlockHash,
+		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
 	}
 
 	blockdag, err := nakamoto.NewBlockDAGFromDB(db, stateMachine, conf)
@@ -77,7 +77,7 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 	return blockdag, conf, db
 }
 
-func RunNode(cmdCtx *cli.Context) (error) {
+func RunNode(cmdCtx *cli.Context) error {
 	port := cmdCtx.String("port")
 	dbPath := cmdCtx.String("db")
 	bootstrapPeers := cmdCtx.String("peers")
@@ -101,15 +101,15 @@ func RunNode(cmdCtx *cli.Context) (error) {
 
 	// Handle process signals.
 	c := make(chan os.Signal)
-    signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-    go func() {
-        <-c
-        
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+
 		fmt.Println("Shutting down...")
 		node.Shutdown()
 
-        os.Exit(1)
-    }()
+		os.Exit(1)
+	}()
 
 	// Bootstrap the node.
 	if bootstrapPeers != "" {

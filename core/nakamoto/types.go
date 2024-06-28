@@ -1,10 +1,10 @@
 package nakamoto
 
 import (
+	"database/sql"
+	"encoding/hex"
 	"math/big"
 	"strconv"
-	"encoding/hex"
-	"database/sql"
 	"time"
 )
 
@@ -30,31 +30,31 @@ type ConsensusConfig struct {
 // It does not contain any block metadata such as height, epoch, or difficulty.
 type RawBlock struct {
 	// Block header.
-	ParentHash [32]byte `json:"parent_hash"`
-	ParentTotalWork [32]byte `json:"parent_total_work"`
-	Difficulty [32]byte `json:"difficulty"`
-	Timestamp uint64    `json:"timestamp"`
-	NumTransactions uint64 `json:"num_transactions"`
+	ParentHash             [32]byte `json:"parent_hash"`
+	ParentTotalWork        [32]byte `json:"parent_total_work"`
+	Difficulty             [32]byte `json:"difficulty"`
+	Timestamp              uint64   `json:"timestamp"`
+	NumTransactions        uint64   `json:"num_transactions"`
 	TransactionsMerkleRoot [32]byte `json:"transactions_merkle_root"`
-	Nonce [32]byte `json:"nonce"`
-	Graffiti [32]byte `json:"graffiti"`
-	
+	Nonce                  [32]byte `json:"nonce"`
+	Graffiti               [32]byte `json:"graffiti"`
+
 	// Block body.
 	Transactions []RawTransaction `json:"transactions"`
 }
 
-func (b *RawBlock) HashStr() (string) {
+func (b *RawBlock) HashStr() string {
 	sl := b.Hash()
 	return hex.EncodeToString(sl[:])
 }
 
 type RawTransaction struct {
-	Sig [64]byte 		`json:"sig"`
+	Sig        [64]byte `json:"sig"`
 	FromPubkey [65]byte `json:"from_pubkey"`
-	Data []byte 		`json:"data"`
+	Data       []byte   `json:"data"`
 }
 
-func (t *RawTransaction) Bytes() ([]byte) {
+func (t *RawTransaction) Bytes() []byte {
 	buf := make([]byte, 0)
 	buf = append(buf, t.Sig[:]...)
 	buf = append(buf, t.FromPubkey[:]...)
@@ -64,35 +64,35 @@ func (t *RawTransaction) Bytes() ([]byte) {
 
 type Block struct {
 	// Block header.
-	ParentHash [32]byte
-	Timestamp uint64
-	NumTransactions uint64
+	ParentHash             [32]byte
+	Timestamp              uint64
+	NumTransactions        uint64
 	TransactionsMerkleRoot [32]byte
-	Nonce [32]byte
-	Graffiti [32]byte
-	
+	Nonce                  [32]byte
+	Graffiti               [32]byte
+
 	// Block body.
 	Transactions []RawTransaction
 
 	// Metadata.
-	Height uint64
-	Epoch string
-	Work big.Int
-	SizeBytes uint64
-	Hash [32]byte
+	Height          uint64
+	Epoch           string
+	Work            big.Int
+	SizeBytes       uint64
+	Hash            [32]byte
 	AccumulatedWork big.Int
 }
 
-func (b *Block) HashStr() (string) {
+func (b *Block) HashStr() string {
 	sl := b.Hash[:]
 	return hex.EncodeToString(sl)
 }
 
 type Transaction struct {
-	Sig [64]byte
+	Sig        [64]byte
 	FromPubkey [65]byte
-	Data []byte
-	Hash [32]byte
+	Data       []byte
+	Hash       [32]byte
 }
 
 type BlockDAGInterface interface {
@@ -117,7 +117,7 @@ type BlockDAGInterface interface {
 
 // The block DAG is the core data structure of the Nakamoto consensus protocol.
 // It is a directed acyclic graph of blocks, where each block has a parent block.
-// As it is infeasible to store the entirety of the blockchain in-memory, 
+// As it is infeasible to store the entirety of the blockchain in-memory,
 // the block DAG is backed by a SQL database.
 type BlockDAG struct {
 	// The backing SQL database store, which stores:
@@ -158,61 +158,60 @@ type Epoch struct {
 	Difficulty big.Int
 }
 
-func GetIdForEpoch(startBlockHash [32]byte, startHeight uint64) (string) {
+func GetIdForEpoch(startBlockHash [32]byte, startHeight uint64) string {
 	return strconv.FormatUint(uint64(startHeight), 10) + "_" + hex.EncodeToString(startBlockHash[:])
 }
 
 // The epoch unique ID is the height ++ startblockhash.
-func (e *Epoch) GetId() (string) {
+func (e *Epoch) GetId() string {
 	return GetIdForEpoch(e.StartBlockHash, e.StartHeight)
 }
 
 type PeerConfig struct {
-	port string
-    bootstrapPeers []string
+	port           string
+	bootstrapPeers []string
 }
 
-func NewPeerConfig(port string, bootstrapPeers []string) (PeerConfig) {
+func NewPeerConfig(port string, bootstrapPeers []string) PeerConfig {
 	return PeerConfig{port: port, bootstrapPeers: bootstrapPeers}
 }
 
-
 type HeartbeatMesage struct {
-    Type string `json:"type"` // "heartbeat"
-    TipHash string `json:"tipHash"`
-    TipHeight int `json:"tipHeight"`
-    ClientVersion string `json:"clientVersion"`
-    WireProtocolVersion uint `json:"wireProtocolVersion"`
-    ClientAddress string `json:"clientAddress"`
-    Time time.Time
+	Type                string `json:"type"` // "heartbeat"
+	TipHash             string `json:"tipHash"`
+	TipHeight           int    `json:"tipHeight"`
+	ClientVersion       string `json:"clientVersion"`
+	WireProtocolVersion uint   `json:"wireProtocolVersion"`
+	ClientAddress       string `json:"clientAddress"`
+	Time                time.Time
 }
 
 type GetTipMessage struct {
-    Type string `json:"type"` // "get_tip"
-    Tip string `json:"myTip"`
+	Type string `json:"type"` // "get_tip"
+	Tip  string `json:"myTip"`
 }
 
 type NewBlockMessage struct {
-    Type string `json:"type"` // "new_block"
-    RawBlock RawBlock `json:"rawBlock"`
+	Type     string   `json:"type"` // "new_block"
+	RawBlock RawBlock `json:"rawBlock"`
 }
 
 type NewTransactionMessage struct {
-    Type string `json:"type"` // "new_transaction"
-    RawTransaction RawTransaction `json:"rawTransaction"`
+	Type           string         `json:"type"` // "new_transaction"
+	RawTransaction RawTransaction `json:"rawTransaction"`
 }
 
 type GetBlocksMessage struct {
-    Type string `json:"type"` // "get_blocks"
-    BlockHashes []string `json:"blockHashes"`
+	Type        string   `json:"type"` // "get_blocks"
+	BlockHashes []string `json:"blockHashes"`
 }
 
 type GetBlocksReply struct {
-    Type string `json:"type"` // "get_blocks_reply"
-    RawBlockDatas [][]byte `json:"rawBockDatas"`
+	Type          string   `json:"type"` // "get_blocks_reply"
+	RawBlockDatas [][]byte `json:"rawBockDatas"`
 }
 
 type GossipPeersMessage struct {
-    Type string `json:"type"` // "gossip_peers"
-    Peers []string `json:"myPeers"`
+	Type  string   `json:"type"` // "gossip_peers"
+	Peers []string `json:"myPeers"`
 }

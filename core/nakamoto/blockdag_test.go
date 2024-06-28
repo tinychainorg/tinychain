@@ -1,9 +1,7 @@
-//
 // This is the core implementation of the block DAG data structure.
 // It mostly does these things:
 // - ingests new blocks, validates transactions
 // - manages reading/writing to the backing SQLite database.
-//
 package nakamoto
 
 import (
@@ -16,14 +14,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type MockStateMachine struct {}
+type MockStateMachine struct{}
+
 func newMockStateMachine() *MockStateMachine {
 	return &MockStateMachine{}
 }
 func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 	return nil
 }
-
 
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
@@ -52,7 +50,7 @@ func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	genesis_difficulty := new(big.Int)
 	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
 
-	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;) 
+	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
 	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
 	if err != nil {
 		panic(err)
@@ -61,11 +59,11 @@ func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 	copy(genesisBlockHash[:], genesisBlockHash_)
 
 	conf := ConsensusConfig{
-		EpochLengthBlocks: 5,
+		EpochLengthBlocks:       5,
 		TargetEpochLengthMillis: 2000,
-		GenesisDifficulty: *genesis_difficulty,
-		GenesisBlockHash: genesisBlockHash,
-		MaxBlockSizeBytes: 2*1024*1024, // 2MB
+		GenesisDifficulty:       *genesis_difficulty,
+		GenesisBlockHash:        genesisBlockHash,
+		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
 	}
 
 	blockdag, err := NewBlockDAGFromDB(db, stateMachine, conf)
@@ -78,11 +76,11 @@ func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB) {
 
 func newValidTx(t *testing.T) (RawTransaction, error) {
 	wallets := getTestingWallets(t)
-	
+
 	tx := RawTransaction{
 		FromPubkey: [65]byte{},
-		Sig: [64]byte{},
-		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
+		Sig:        [64]byte{},
+		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
 	tx.FromPubkey = wallets[0].PubkeyBytes()
 
@@ -102,7 +100,7 @@ func newValidTx(t *testing.T) (RawTransaction, error) {
 	return tx, nil
 }
 
-func getTestingWallets(t *testing.T) ([]core.Wallet) {
+func getTestingWallets(t *testing.T) []core.Wallet {
 	wallet1, err := core.WalletFromPrivateKey("2053e3c0d239d12a554ef55895b89e5d044af7d09d8be9a8f6da22460f8260ca")
 	if err != nil {
 		t.Fatalf("Failed to create wallet: %s", err)
@@ -134,7 +132,7 @@ func TestImportBlocksIntoDAG(t *testing.T) {
 	// Generate 10 blocks and insert them into DAG.
 	blockdag := BlockDAG{}
 	assert := assert.New(t)
-	
+
 	// Build a chain of 6 blocks.
 	chain := make([]RawBlock, 0)
 	curr_block := RawBlock{}
@@ -158,10 +156,10 @@ func TestImportBlocksIntoDAG(t *testing.T) {
 		// Create a new block.
 		timestamp := uint64(0)
 		curr_block = RawBlock{
-			ParentHash: curr_block.Hash(),
-			Timestamp: timestamp,
+			ParentHash:      curr_block.Hash(),
+			Timestamp:       timestamp,
 			NumTransactions: 0,
-			Transactions: []RawTransaction{},
+			Transactions:    []RawTransaction{},
 		}
 
 		// Exit if the chain is long enough.
@@ -171,18 +169,17 @@ func TestImportBlocksIntoDAG(t *testing.T) {
 	}
 }
 
-
 func TestAddBlockUnknownParent(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _ := newBlockdag()
 
 	b := RawBlock{
-		ParentHash: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
-		Timestamp: 0,
-		NumTransactions: 0,
+		ParentHash:             [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
+		Timestamp:              0,
+		NumTransactions:        0,
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
-		Nonce: [32]byte{0xBB},
-		Transactions: []RawTransaction{},		
+		Nonce:                  [32]byte{0xBB},
+		Transactions:           []RawTransaction{},
 	}
 
 	err := blockdag.IngestBlock(b)
@@ -194,14 +191,14 @@ func TestAddBlockTxCount(t *testing.T) {
 	blockdag, consensus, _ := newBlockdag()
 
 	b := RawBlock{
-		ParentHash: consensus.GenesisBlockHash,
-		Timestamp: 0,
-		NumTransactions: 0,
+		ParentHash:             consensus.GenesisBlockHash,
+		Timestamp:              0,
+		NumTransactions:        0,
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
-		Nonce: [32]byte{0xBB},
+		Nonce:                  [32]byte{0xBB},
 		Transactions: []RawTransaction{
 			RawTransaction{
-				Sig: [64]byte{0xCA, 0xFE, 0xBA, 0xBE},
+				Sig:  [64]byte{0xCA, 0xFE, 0xBA, 0xBE},
 				Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 			},
 		},
@@ -217,16 +214,16 @@ func TestAddBlockTxsValid(t *testing.T) {
 
 	// Create a transaction.
 	tx := RawTransaction{
-		Sig: [64]byte{},
+		Sig:  [64]byte{},
 		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
 
 	b := RawBlock{
-		ParentHash: consensus.GenesisBlockHash,
-		Timestamp: 0,
-		NumTransactions: 1,
+		ParentHash:             consensus.GenesisBlockHash,
+		Timestamp:              0,
+		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
-		Nonce: [32]byte{0xBB},
+		Nonce:                  [32]byte{0xBB},
 		Transactions: []RawTransaction{
 			tx,
 		},
@@ -246,11 +243,11 @@ func TestAddBlockTxMerkleRootValid(t *testing.T) {
 	}
 
 	b := RawBlock{
-		ParentHash: consensus.GenesisBlockHash,
-		Timestamp: 0,
-		NumTransactions: 1,
+		ParentHash:             consensus.GenesisBlockHash,
+		Timestamp:              0,
+		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
-		Nonce: [32]byte{0xBB},
+		Nonce:                  [32]byte{0xBB},
 		Transactions: []RawTransaction{
 			tx,
 		},
@@ -268,8 +265,8 @@ func TestAddBlockSuccess(t *testing.T) {
 	wallets := getTestingWallets(t)
 	tx := RawTransaction{
 		FromPubkey: [65]byte{},
-		Sig: [64]byte{},
-		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
+		Sig:        [64]byte{},
+		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
 	tx.FromPubkey = wallets[0].PubkeyBytes()
 	// sig, err := wallets[0].Sign(tx.Envelope())
@@ -285,11 +282,11 @@ func TestAddBlockSuccess(t *testing.T) {
 	copy(tx.Sig[:], sigBytes)
 
 	b := RawBlock{
-		ParentHash: blockdag.consensus.GenesisBlockHash,
-		Timestamp: 1719379532750,
-		NumTransactions: 1,
+		ParentHash:             blockdag.consensus.GenesisBlockHash,
+		Timestamp:              1719379532750,
+		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
-		Nonce: [32]byte{},
+		Nonce:                  [32]byte{},
 		Transactions: []RawTransaction{
 			tx,
 		},
@@ -324,8 +321,8 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
 		FromPubkey: [65]byte{},
-		Sig: [64]byte{},
-		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
+		Sig:        [64]byte{},
+		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
 	wallets := getTestingWallets(t)
 	tx.FromPubkey = wallets[0].PubkeyBytes()
@@ -338,11 +335,11 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	copy(tx.Sig[:], sig)
 
 	b := RawBlock{
-		ParentHash: blockdag.consensus.GenesisBlockHash,
-		Timestamp: 1719379532750,
-		NumTransactions: 1,
+		ParentHash:             blockdag.consensus.GenesisBlockHash,
+		Timestamp:              1719379532750,
+		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
-		Nonce: [32]byte{},
+		Nonce:                  [32]byte{},
 		Transactions: []RawTransaction{
 			tx,
 		},
@@ -367,7 +364,6 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	}
 	assert.Equal(nil, err)
 }
-
 
 func TestBlockDAGInitialised(t *testing.T) {
 	assert := assert.New(t)
@@ -476,8 +472,8 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	// Create a tx with a valid signature.
 	tx := RawTransaction{
 		FromPubkey: [65]byte{},
-		Sig: [64]byte{},
-		Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
+		Sig:        [64]byte{},
+		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
 	}
 	wallets := getTestingWallets(t)
 	tx.FromPubkey = wallets[0].PubkeyBytes()
@@ -490,11 +486,11 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	copy(tx.Sig[:], sig)
 
 	raw := RawBlock{
-		ParentHash: blockdag.consensus.GenesisBlockHash,
-		Timestamp: 1719379532750,
-		NumTransactions: 1,
+		ParentHash:             blockdag.consensus.GenesisBlockHash,
+		Timestamp:              1719379532750,
+		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
-		Nonce: [32]byte{},
+		Nonce:                  [32]byte{},
 		Transactions: []RawTransaction{
 			tx,
 		},
@@ -549,11 +545,11 @@ func TestGetCurrentTips(t *testing.T) {
 
 	// Construct block template for mining.
 	raw := RawBlock{
-		ParentHash: current_tip.Hash,
-		Timestamp: Timestamp(),
-		NumTransactions: 1,
+		ParentHash:             current_tip.Hash,
+		Timestamp:              Timestamp(),
+		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
-		Nonce: [32]byte{},
+		Nonce:                  [32]byte{},
 		Transactions: []RawTransaction{
 			tx,
 		},
@@ -587,8 +583,6 @@ func TestGetCurrentTips(t *testing.T) {
 	assert.Equal(raw.Hash(), blockdag.Tip.Hash)
 }
 
-
-
 func TestMinerProcedural(t *testing.T) {
 	dag, conf, _ := newBlockdag()
 
@@ -611,11 +605,11 @@ func TestMinerProcedural(t *testing.T) {
 
 		// Construct block template for mining.
 		raw := RawBlock{
-			ParentHash: current_tip,
-			Timestamp: Timestamp(),
-			NumTransactions: 1,
+			ParentHash:             current_tip,
+			Timestamp:              Timestamp(),
+			NumTransactions:        1,
 			TransactionsMerkleRoot: [32]byte{},
-			Nonce: [32]byte{},
+			Nonce:                  [32]byte{},
 			Transactions: []RawTransaction{
 				tx,
 			},
@@ -630,7 +624,7 @@ func TestMinerProcedural(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get epoch for block hash: %s", err)
 		}
-		if current_height % dag.consensus.EpochLengthBlocks == 0 {
+		if current_height%dag.consensus.EpochLengthBlocks == 0 {
 			difficulty = RecomputeDifficulty(epoch.StartTime, raw.Timestamp, epoch.Difficulty, dag.consensus.TargetEpochLengthMillis, dag.consensus.EpochLengthBlocks, current_height)
 		} else {
 			difficulty = epoch.Difficulty

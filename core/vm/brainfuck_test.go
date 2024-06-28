@@ -8,7 +8,7 @@ import (
 
 func TestBrainfuckRun(t *testing.T) {
 	content, err := ioutil.ReadFile("brainfuck/solong.bf")
-	
+
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		return

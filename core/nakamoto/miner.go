@@ -1,24 +1,25 @@
 package nakamoto
 
 import (
-	"math/big"
-	"fmt"
-	"time"
 	"github.com/liamzebedee/tinychain-go/core"
-	"golang.org/x/text/message"
 	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+	"math/big"
+	"time"
 )
 
+var minerLog = NewLogger("blockdag")
+
 type Miner struct {
-	dag BlockDAG
-	minerWallet *core.Wallet
-	IsRunning bool
+	dag             BlockDAG
+	minerWallet     *core.Wallet
+	IsRunning       bool
 	OnBlockSolution func(block RawBlock)
 }
 
 func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
 	return &Miner{
-		dag: dag,
+		dag:         dag,
 		minerWallet: minerWallet,
 	}
 }
@@ -26,9 +27,9 @@ func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
 func MakeCoinbaseTx(wallet *core.Wallet) RawTransaction {
 	// Construct coinbase tx.
 	tx := RawTransaction{
-		Sig: [64]byte{},
+		Sig:        [64]byte{},
 		FromPubkey: [65]byte{},
-		Data: []byte("coinbase"),
+		Data:       []byte("coinbase"),
 	}
 	tx.FromPubkey = wallet.PubkeyBytes()
 	envelope := tx.Envelope()
@@ -41,10 +42,10 @@ func MakeCoinbaseTx(wallet *core.Wallet) RawTransaction {
 }
 
 type POWPuzzle struct {
-	block *RawBlock
+	block      *RawBlock
 	startNonce big.Int
-	target big.Int
-	solution big.Int
+	target     big.Int
+	solution   big.Int
 }
 
 func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle, puzzleChannel chan POWPuzzle) (big.Int, error) {
@@ -74,31 +75,31 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 
 	for {
 		var i uint64 = 0
-		fmt.Println("waiting for new puzzle")
-		puzzle := <- puzzleChannel
+		minerLog.Println("Waiting for new puzzle")
+		puzzle := <-puzzleChannel
 		block := puzzle.block
 		nonce := puzzle.startNonce
 		target := puzzle.target
-		fmt.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+		minerLog.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
 
 		for {
 			numHashes++
 			i++
-	
+
 			// Increment nonce.
 			nonce.Add(&nonce, big.NewInt(1))
 			block.SetNonce(nonce)
-	
+
 			// Hash.
 			h := block.Hash()
 			hash := new(big.Int).SetBytes(h[:])
-	
+
 			// Check solution: hash < target.
 			if hash.Cmp(&target) == -1 {
 				// fmt.Printf("Solved in %d iterations\n", i)
 				// fmt.Printf("Hash: %x\n", hash.String())
 				// fmt.Printf("Nonce: %s\n", nonce.String())
-				fmt.Println("Puzzle solved")
+				minerLog.Println("Puzzle solved")
 
 				puzzle.solution = nonce
 				solutionChannel <- puzzle
@@ -107,13 +108,12 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 
 			// Check if new puzzle has been received.
 			select {
-			case newPuzzle := <- puzzleChannel:
-				fmt.Println("Received new puzzle")
+			case newPuzzle := <-puzzleChannel:
 				puzzle = newPuzzle
 				block = puzzle.block
 				nonce = puzzle.startNonce
 				target = puzzle.target
-				fmt.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+				minerLog.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
 			default:
 				// Do nothing.
 			}
@@ -121,7 +121,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 	}
 }
 
-func (node *Miner) MakeNewPuzzle() (POWPuzzle) {
+func (node *Miner) MakeNewPuzzle() POWPuzzle {
 	current_tip, err := node.dag.GetCurrentTip()
 	if err != nil {
 		// fmt.Fatalf("Failed to get current tip: %s", err)
@@ -133,12 +133,12 @@ func (node *Miner) MakeNewPuzzle() (POWPuzzle) {
 
 	// Construct block template for mining.
 	raw := RawBlock{
-		ParentHash: current_tip.Hash,
-		ParentTotalWork: BigIntToBytes32(current_tip.AccumulatedWork),
-		Timestamp: Timestamp(),
-		NumTransactions: 1,
+		ParentHash:             current_tip.Hash,
+		ParentTotalWork:        BigIntToBytes32(current_tip.AccumulatedWork),
+		Timestamp:              Timestamp(),
+		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
-		Nonce: [32]byte{},
+		Nonce:                  [32]byte{},
 		Transactions: []RawTransaction{
 			tx,
 		},
@@ -155,16 +155,16 @@ func (node *Miner) MakeNewPuzzle() (POWPuzzle) {
 		// t.Fatalf("Failed to get epoch for block hash: %s", err)
 		panic(err)
 	}
-	if curr_height % node.dag.consensus.EpochLengthBlocks == 0 {
+	if curr_height%node.dag.consensus.EpochLengthBlocks == 0 {
 		difficulty = RecomputeDifficulty(epoch.StartTime, raw.Timestamp, epoch.Difficulty, node.dag.consensus.TargetEpochLengthMillis, node.dag.consensus.EpochLengthBlocks, curr_height)
 	} else {
 		difficulty = epoch.Difficulty
 	}
 
 	puzzle := POWPuzzle{
-		block: &raw,
+		block:      &raw,
 		startNonce: *big.NewInt(0),
-		target: difficulty,
+		target:     difficulty,
 	}
 	return puzzle
 }
@@ -189,29 +189,29 @@ func (node *Miner) Start(mineMaxBlocks int64) {
 		case hashrate := <-hashrateChannel:
 			// Print iterations using commas.
 			p := message.NewPrinter(language.English)
-			p.Printf("Hashrate: %.2f H/s\n", hashrate)
+			minerLog.Printf(p.Sprintf("Hashrate: %.2f H/s\n", hashrate))
 		case puzzle := <-solutionChannel:
-			fmt.Println("Received solution")
+			minerLog.Println("Received solution")
 
 			raw := puzzle.block
 			solution := puzzle.solution
 			raw.SetNonce(solution)
 
-			fmt.Printf("Solution: hash=%s nonce=%s\n", Bytes32ToString(raw.Hash()), solution.String())
+			minerLog.Printf("Solution: hash=%s nonce=%s\n", Bytes32ToString(raw.Hash()), solution.String())
 
 			if node.OnBlockSolution != nil {
 				node.OnBlockSolution(*raw)
 			}
-			
+
 			blocksMined += 1
 			if mineMaxBlocks != -1 && mineMaxBlocks <= blocksMined {
-				fmt.Println("Mined max blocks; stopping miner")
+				minerLog.Println("Mined max blocks; stopping miner")
 				node.IsRunning = false
 				return
 			}
 
-			fmt.Println("Making new puzzle")
-			fmt.Println("New puzzle ready")
+			minerLog.Println("Making new puzzle")
+			minerLog.Println("New puzzle ready")
 			puzzleChannel <- node.MakeNewPuzzle()
 		}
 	}

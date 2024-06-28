@@ -1,13 +1,13 @@
 package nakamoto
 
 import (
-	"testing"
-	"crypto/sha256"
-	"fmt"
-	"encoding/hex"
 	"bytes"
-	"math/big"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"math/big"
+	"testing"
 )
 
 func TestBuildBlock(t *testing.T) {
@@ -24,7 +24,7 @@ func TestGenesisBlockHash(t *testing.T) {
 	h := sha256.New()
 	h.Write(envelope)
 	fmt.Printf("%x\n", h.Sum(nil))
-	
+
 	expected, err := hex.DecodeString("b5fdab78d8947eacc864bfeecb4d2100780e5afe1cd8efafb124887913ac49fa")
 
 	if err != nil {
@@ -78,10 +78,10 @@ func TestBuildChainOfBlocks(t *testing.T) {
 		// Create a new block.
 		timestamp := uint64(0)
 		curr_block = RawBlock{
-			ParentHash: curr_block.Hash(),
-			Timestamp: timestamp,
+			ParentHash:      curr_block.Hash(),
+			Timestamp:       timestamp,
 			NumTransactions: 0,
-			Transactions: []RawTransaction{},
+			Transactions:    []RawTransaction{},
 		}
 
 		// Exit if the chain is long enough.
@@ -104,7 +104,6 @@ func TestBuildChainOfBlocks(t *testing.T) {
 // 		MaxBlockSizeBytes: 1000000,
 // 	}
 // 	difficulty := conf.GenesisDifficulty
-
 
 // 	// Now mine 2 epochs worth of blocks.
 // 	chain := make([]RawBlock, 0)
@@ -191,7 +190,7 @@ func TestCalculateWork(t *testing.T) {
 		// Setup next block.
 		block_template = RawBlock{
 			ParentHash: block_template.Hash(),
-			Timestamp: 0,
+			Timestamp:  0,
 		}
 
 		// Calculate the work.

@@ -1,12 +1,12 @@
 package core
 
 import (
-	"testing"
-	"github.com/stretchr/testify/assert"
-	"crypto/sha256"
 	"crypto/ecdsa"
-	"math/big"
+	"crypto/sha256"
 	"encoding/hex"
+	"github.com/stretchr/testify/assert"
+	"math/big"
+	"testing"
 )
 
 func TestCreateWallet(t *testing.T) {
@@ -108,4 +108,3 @@ func TestRecreateWallet(t *testing.T) {
 	assert.Equal(wallet.PubkeyStr(), "04e14529aa7c2a392dbe70f30f18cd0c76422d256fa413e151b87417d9232c41374985d8df6cedf084cf107c397ed658bd13dc2b31d4cbc3979c8684edb8b948bf")
 	assert.Equal(wallet.Address(), "667a27f39789afa3975b44db3af94afd67292cbd9a18901d31ea25c666320b0c")
 }
-

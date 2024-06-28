@@ -1,11 +1,11 @@
 package core
 
 import (
-	"testing"
 	"crypto/sha256"
-	"github.com/stretchr/testify/assert"
-	"fmt"
 	"encoding/hex"
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestMerkleTreeAccumulate(t *testing.T) {

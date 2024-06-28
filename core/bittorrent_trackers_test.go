@@ -1,20 +1,19 @@
 package core
 
 import (
-	"testing"
-	"net"
-	"fmt"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"log"
+	"net"
+	"testing"
 )
 
 func uint16ToBytes(n uint16) []byte {
-    b := make([]byte, 2)
-    binary.BigEndian.PutUint16(b, n)
-    return b
+	b := make([]byte, 2)
+	binary.BigEndian.PutUint16(b, n)
+	return b
 }
-
 
 func TestBTTracker(t *testing.T) {
 	infohash := [20]byte{0xca, 0xfe, 0xba, 0xbe}
@@ -33,14 +32,13 @@ func TestBTTracker(t *testing.T) {
 	custom_peer_id := [20]byte{}
 	copy(custom_peer_id[:], custom_blob)
 
-
 	// custom_peer_id = sha1.Sum(custom_peer_id[:])
 
 	peerID := string(custom_peer_id[:])
 	infoHash := string(infohash[:])
 
 	// RunTrackerDemo(
-	// 	// string(custom_peer_id[:]), 
+	// 	// string(custom_peer_id[:]),
 	// 	string(custom_peer_id_hex),
 	// 	string(infohash[:]),
 	// )
@@ -62,7 +60,6 @@ func TestBTTracker(t *testing.T) {
 	for i, peer := range resp.Peers {
 		// decode peer id
 		decoded_peerID := []byte(peer.ID)
-
 
 		fmt.Printf("#%d Peer IP: %s, Port: %d, ID: %s\n", i, peer.IP, peer.Port, hex.EncodeToString(decoded_peerID))
 	}

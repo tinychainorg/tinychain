@@ -1,8 +1,7 @@
-// 
 // In the olden days of bitcoin, satoshi wrote a hack to use IRC channels as a way to find peers.
 // And now, just as Satoshi did, we too shall make a hack
 // To use public BitTorrent trackers as a way to find peers.
-// 
+//
 // https://wiki.theory.org/BitTorrent_Tracker_Protocol
 // https://www.bittorrent.org/beps/bep_0015.html
 package core
@@ -11,12 +10,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/jackpal/bencode-go"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
-	"github.com/jackpal/bencode-go"
 )
 
 const trackerList = `https://tracker.tamersunion.org:443/announce
@@ -37,20 +36,19 @@ https://tracker-zhuqiy.dgj055.icu:443/announce`
 
 const (
 	trackerURL = "https://t1.hloli.org:443/announce"
-	port = 6881
+	port       = 6881
 )
 
 type TrackerResponse struct {
-    Interval int    `bencode:"interval"`
-    Peers    []TrackerPeers `bencode:"peers"`
+	Interval int            `bencode:"interval"`
+	Peers    []TrackerPeers `bencode:"peers"`
 }
 
 type TrackerPeers struct {
 	IP   string `bencode:"ip"`
 	Port int    `bencode:"port"`
-	ID  string `bencode:"peer id"`
+	ID   string `bencode:"peer id"`
 }
-
 
 func generatePeerID() string {
 	b := make([]byte, 20)
@@ -122,5 +120,3 @@ func getPeers(infoHash, peerID string) (*TrackerResponse, error) {
 
 	return &trackerResp, nil
 }
-
-

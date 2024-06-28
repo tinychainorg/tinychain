@@ -4,9 +4,9 @@ package nakamoto
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"math/big"
-	"crypto/sha256"
 )
 
 func (b *RawBlock) SetNonce(i big.Int) {
@@ -18,24 +18,40 @@ func (b *RawBlock) Bytes() []byte {
 	buf := new(bytes.Buffer)
 
 	err := binary.Write(buf, binary.BigEndian, b.ParentHash)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.ParentTotalWork)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.Timestamp)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.NumTransactions)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.TransactionsMerkleRoot)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.Nonce)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.Graffiti)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 
 	// Encode transactions.
 	for _, tx := range b.Transactions {
 		err = binary.Write(buf, binary.BigEndian, tx.Bytes())
-		if err != nil { panic(err); }
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return buf.Bytes()
@@ -46,19 +62,33 @@ func (b *RawBlock) Envelope() []byte {
 	buf := new(bytes.Buffer)
 
 	err := binary.Write(buf, binary.BigEndian, b.ParentHash)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.ParentTotalWork)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.Timestamp)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.NumTransactions)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.TransactionsMerkleRoot)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.Nonce)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, b.Graffiti)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 
 	return buf.Bytes()
 }
@@ -79,9 +109,13 @@ func (tx *RawTransaction) Envelope() []byte {
 	buf := new(bytes.Buffer)
 
 	err := binary.Write(buf, binary.BigEndian, tx.FromPubkey)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 	err = binary.Write(buf, binary.BigEndian, tx.Data)
-	if err != nil { panic(err); }
+	if err != nil {
+		panic(err)
+	}
 
 	return buf.Bytes()
 }
@@ -92,4 +126,3 @@ func (tx *RawTransaction) Hash() [32]byte {
 	h.Write(tx.Envelope())
 	return sha256.Sum256(h.Sum(nil))
 }
-

@@ -10,36 +10,36 @@ import (
 
 func main() {
 	app := &cli.App{
-        Name: "tinychain",
-        Usage: "a simple blockchain implementation",
-        EnableBashCompletion: true,
-        Commands: []*cli.Command{
-            {
-                Name:    "node",
-                Usage:   "runs the tinychain node",
-                Action: cmd.RunNode,
-                Flags: []cli.Flag{
-                    &cli.StringFlag{
-                        Name:    "port",
-                        Usage:   "The port to run the node on",
-                        Value: "8080",
-                    },
-                    &cli.StringFlag{
-                        Name:    "db",
-                        Usage:   "The path to the tinychain database",
-                        Value: "tinychain.db",
-                    },
-                    &cli.StringFlag{
-                        Name:    "peers",
-                        Usage:   "A list of comma-separated peer URL's used to bootstrap connection to the network",
-                        Value: "",
-                    },
-                },        
-            },
-        },
-    }
+		Name:                 "tinychain",
+		Usage:                "a simple blockchain implementation",
+		EnableBashCompletion: true,
+		Commands: []*cli.Command{
+			{
+				Name:   "node",
+				Usage:  "runs the tinychain node",
+				Action: cmd.RunNode,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "port",
+						Usage: "The port to run the node on",
+						Value: "8080",
+					},
+					&cli.StringFlag{
+						Name:  "db",
+						Usage: "The path to the tinychain database",
+						Value: "tinychain.db",
+					},
+					&cli.StringFlag{
+						Name:  "peers",
+						Usage: "A list of comma-separated peer URL's used to bootstrap connection to the network",
+						Value: "",
+					},
+				},
+			},
+		},
+	}
 
-    if err := app.Run(os.Args); err != nil {
-        log.Fatal(err)
-    }
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
 }

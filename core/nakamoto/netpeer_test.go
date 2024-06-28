@@ -1,28 +1,26 @@
 package nakamoto
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"net"
 	"testing"
 	"time"
-	"net"
-	"fmt"
-	"encoding/json"
-	"github.com/stretchr/testify/assert"
 )
-
-
 
 // healthCheck dials an HTTP server and checks if it is running by calling the /health endpoint
 func healthCheck(address string) error {
-    // Set a timeout for the connection attempt
-    timeout := 1 * time.Second
+	// Set a timeout for the connection attempt
+	timeout := 1 * time.Second
 
-    // Attempt to establish a TCP connection
-    conn, err := net.DialTimeout("tcp", address, timeout)
-    if err != nil {
-        return fmt.Errorf("failed to connect: %v", err)
-    }
-    defer conn.Close()
-    return nil
+	// Attempt to establish a TCP connection
+	conn, err := net.DialTimeout("tcp", address, timeout)
+	if err != nil {
+		return fmt.Errorf("failed to connect: %v", err)
+	}
+	defer conn.Close()
+	return nil
 }
 
 func waitForPeersOnline(peers []*PeerCore) {
@@ -79,15 +77,15 @@ func TestStartPeerHeartbeat(t *testing.T) {
 	// Override message handler.
 	heartbeatChan := make(chan HeartbeatMesage)
 	peer1.server.RegisterMesageHandler("heartbeat", func(message []byte) (interface{}, error) {
-        // Decode message into HeartbeatMessage.
-        var hb HeartbeatMesage
-        if err := json.Unmarshal(message, &hb); err != nil {
-            return nil, err
-        }
+		// Decode message into HeartbeatMessage.
+		var hb HeartbeatMesage
+		if err := json.Unmarshal(message, &hb); err != nil {
+			return nil, err
+		}
 
 		heartbeatChan <- hb
-        return nil, nil
-    })
+		return nil, nil
+	})
 
 	// Instruct peer 2 to begin bootstrapping.
 	go peer2.Bootstrap(peer2BootstrapInfo)

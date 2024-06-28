@@ -6,8 +6,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"math/big"
 	"fmt"
+	"math/big"
 )
 
 type Wallet struct {
@@ -20,7 +20,7 @@ func (w *Wallet) Pubkey() *ecdsa.PublicKey {
 
 func (w *Wallet) PubkeyBytes() [65]byte {
 	pubkey := w.Pubkey()
-	
+
 	// 	The length of the buffer returned by elliptic.Marshal depends on the elliptic curve used. For the NIST P-256 curve (also known as elliptic.P256()), the buffer will be 65 bytes long. This includes:
 
 	// 1 byte for the format prefix (0x04 for uncompressed)
@@ -70,11 +70,11 @@ func WalletFromPrivateKey(privateKeyHex string) (*Wallet, error) {
 }
 
 func padBytes(src []byte, length int) []byte {
-    if len(src) >= length {
-        return src
-    }
-    padding := make([]byte, length-len(src))
-    return append(padding, src...)
+	if len(src) >= length {
+		return src
+	}
+	padding := make([]byte, length-len(src))
+	return append(padding, src...)
 }
 
 func (w *Wallet) Sign(msg []byte) ([]byte, error) {
@@ -90,7 +90,7 @@ func (w *Wallet) Sign(msg []byte) ([]byte, error) {
 
 	// Concatenate r and s to form the signature
 	signature := append(rBytes, sBytes...)
-	
+
 	return signature, nil
 }
 
@@ -121,10 +121,5 @@ func VerifySignature(pubkeyStr string, sig, msg []byte) bool {
 	r := new(big.Int).SetBytes(sig[:len(sig)/2])
 	s := new(big.Int).SetBytes(sig[len(sig)/2:])
 
-	// fmt.Println(r.Sign() <= 0 || s.Sign() <= 0)
-	fmt.Printf("%s\n", pubkeyStr)
-	fmt.Printf("r=%s s=%s\n", r.String(), s.String())
-
 	return ecdsa.Verify(pubkey, hash[:], r, s)
 }
-

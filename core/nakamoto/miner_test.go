@@ -1,13 +1,12 @@
 package nakamoto
 
 import (
-	"testing"
-	"github.com/liamzebedee/tinychain-go/core"
-	"math/big"
 	"database/sql"
 	"encoding/hex"
+	"github.com/liamzebedee/tinychain-go/core"
+	"math/big"
+	"testing"
 )
-
 
 func newBlockdagForMiner() (BlockDAG, ConsensusConfig, *sql.DB) {
 	useMemoryDB := true
@@ -35,7 +34,7 @@ func newBlockdagForMiner() (BlockDAG, ConsensusConfig, *sql.DB) {
 	genesis_difficulty := new(big.Int)
 	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
 
-	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;) 
+	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
 	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
 	if err != nil {
 		panic(err)
@@ -44,11 +43,11 @@ func newBlockdagForMiner() (BlockDAG, ConsensusConfig, *sql.DB) {
 	copy(genesisBlockHash[:], genesisBlockHash_)
 
 	conf := ConsensusConfig{
-		EpochLengthBlocks: 5,
+		EpochLengthBlocks:       5,
 		TargetEpochLengthMillis: 12000,
-		GenesisDifficulty: *genesis_difficulty,
-		GenesisBlockHash: genesisBlockHash,
-		MaxBlockSizeBytes: 2*1024*1024, // 2MB
+		GenesisDifficulty:       *genesis_difficulty,
+		GenesisBlockHash:        genesisBlockHash,
+		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
 	}
 
 	blockdag, err := NewBlockDAGFromDB(db, stateMachine, conf)

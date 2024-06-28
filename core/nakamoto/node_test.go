@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newNodeFromConfig(t *testing.T, port string) (*Node) {
+func newNodeFromConfig(t *testing.T, port string) *Node {
 	// DAG.
 	dag, _, _ := newBlockdag()
 
@@ -62,14 +62,14 @@ func TestTwoNodesGossipBlocks(t *testing.T) {
 	// Node 1 solves a block, and gossips it to node 2.
 	newBlockChan := make(chan NewBlockMessage)
 	node2.Peer.server.RegisterMesageHandler("new_block", func(message []byte) (interface{}, error) {
-        var msg NewBlockMessage
-        if err := json.Unmarshal(message, &msg); err != nil {
-            return nil, err
-        }
+		var msg NewBlockMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			return nil, err
+		}
 
 		newBlockChan <- msg
-        return nil, nil
-    })
+		return nil, nil
+	})
 
 	// Start node 1 miner.
 	go node1.Miner.Start(1)
@@ -109,7 +109,7 @@ func TestTwoNodeEqualMining(t *testing.T) {
 	// For the purposes of making this test reproducible, due to how
 	// Go's coroutine scheduler isn't exactly fair, we will ping-pong between
 	// the two nodes to ensure that they both mine a block each.
-	for i := 0; i < 30 / 2; i++ {
+	for i := 0; i < 30/2; i++ {
 		// Node 1 mines a block.
 		node1.Miner.Start(1)
 		// Node 2 mines a block.
