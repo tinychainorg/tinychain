@@ -53,10 +53,10 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 
 		_, err = db.Exec("create table raw_blocks (hash blob primary key, data blob)")
 		if err != nil {
-			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
+			return nil, fmt.Errorf("error creating 'raw_blocks' table: %s", err)
 		}
 
-		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, data blob, index int)")
+		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, data blob, txindex int)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
@@ -104,7 +104,7 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 	genesisBlockHash := dag.consensus.GenesisBlockHash
 	genesisBlock := RawBlock{
 		ParentHash: [32]byte{},
-		ParentTotalWork: *big.NewInt(0),
+		ParentTotalWork: BigIntToBytes32(*big.NewInt(0)),
 		Difficulty: BigIntToBytes32(dag.consensus.GenesisDifficulty),
 		Timestamp: 0,
 		NumTransactions: 0,
@@ -158,9 +158,10 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 
 	// Insert the genesis block.
 	_, err = dag.db.Exec(
-		"insert into blocks (hash, parent_hash, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work, parent_total_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+		"insert into blocks (hash, parent_hash, parent_total_work, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
+		genesisBlock.ParentTotalWork[:],
 		dag.consensus.GenesisDifficulty.Bytes(),
 		genesisBlock.Timestamp, 
 		genesisBlock.NumTransactions, 
@@ -171,7 +172,6 @@ func (dag *BlockDAG) initialiseBlockDAG() (error) {
 		epoch0.GetId(),
 		genesisBlock.SizeBytes(),
 		PadBytes(accWorkBuf[:], 32),
-		genesisBlock.ParentTotalWork.Bytes(),
 	)
 	if err != nil {
 		return err
@@ -287,7 +287,8 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 6c. Verify parent total work is correct.
-	if parentBlock.AccumulatedWork.Cmp(&raw.ParentTotalWork) != 0 {
+	parentTotalWork := Bytes32ToBigInt(raw.ParentTotalWork)
+	if parentBlock.AccumulatedWork.Cmp(&parentTotalWork) != 0 {
 		return fmt.Errorf("Parent total work is incorrect.")
 	}
 
@@ -313,7 +314,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		"insert into blocks (hash, parent_hash, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 
 		blockhash[:],
 		raw.ParentHash[:], 
-		raw.ParentTotalWork.Bytes(),
+		raw.ParentTotalWork,
 		raw.Timestamp, 
 		raw.NumTransactions, 
 		raw.TransactionsMerkleRoot[:], 
@@ -344,7 +345,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	for i, block_tx := range raw.Transactions {
 		txhash := block_tx.Hash()
 		_, err = tx.Exec(
-			"insert into transactions (hash, block_hash, sig, from_pubkey, data, index) values (?, ?, ?, ?, ?, ?)", 
+			"insert into transactions (hash, block_hash, sig, from_pubkey, data, txindex) values (?, ?, ?, ?, ?, ?)", 
 			txhash[:],
 			blockhash[:], 
 			block_tx.Sig[:], 
@@ -484,7 +485,7 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 	txs := make([]Transaction, count)
 
 	// Load the transactions in.
-	rows, err = dag.db.Query("select hash, sig, from_pubkey, data, index from transactions where block_hash = ?", hash[:])
+	rows, err = dag.db.Query("select hash, sig, from_pubkey, data, txindex from transactions where block_hash = ?", hash[:])
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"encoding/hex"
 	"database/sql"
+	"time"
 )
 
 type ConsensusConfig struct {
@@ -30,7 +31,7 @@ type ConsensusConfig struct {
 type RawBlock struct {
 	// Block header.
 	ParentHash [32]byte `json:"parent_hash"`
-	ParentTotalWork big.Int `json:"parent_total_work"`
+	ParentTotalWork [32]byte `json:"parent_total_work"`
 	Difficulty [32]byte `json:"difficulty"`
 	Timestamp uint64    `json:"timestamp"`
 	NumTransactions uint64 `json:"num_transactions"`
