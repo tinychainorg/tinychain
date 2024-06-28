@@ -93,9 +93,17 @@ func TestStateMachineIdea(t *testing.T) {
 
 	balance2 := stateMachine.GetBalance(wallets[1].PubkeyBytes())
 	assert.Equal(t, uint64(100), balance2)
+}
 
+func TestNodeReorgStateMachine(t *testing.T) {
+	// The state machine is always updated after a new tip is found.
+	// We loop all the block txs and apply them.
+	// In order to make reorgs efficient to process, we save state snapshots.
+	// A state snapshot table row is simply (blockhash, txid, snapshot_id, account, balance)
+	// We load the block dag and traverse the heaviest chain forwards from genesis, accumulating state snapshots and applying them to recreate the state.
+	// If we need to revert the state, we can simply map the state snapshots for a blockhash and lookup the previous snapshot_id for each state leaf.
+	// This is a custom state diff. The state leaves may be stored differently on disk (ie. 0 balance accounts deleted).
 
-
-
-	// 
+	// It is possible to garbage collect all state snapshots for a blockhash if the block is not in the heaviest chain.
+	// It is possible to garbage collect all state snapshots except the highest snapshot_id for a unique account (leaf id). This makes it impossible to revert but saves space.
 }

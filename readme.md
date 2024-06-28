@@ -74,3 +74,4 @@ Work breakdown:
 - [ ] refactor miner code to be pretty
 - [ ] improve robustness of sql queries- need to verify we use right number of columns and ?'s
 - [ ] improve block/rawblock. missing fields, unset fields etc. tests for this.
+- [ ] double check big endian canonical encoding
