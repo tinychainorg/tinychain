@@ -6,11 +6,11 @@ A full blockchain in Go;
    * Hashcash.
    * Dynamic difficulty retargeting (epochs).
    * Proof-of-work consensus - longest/heaviest chain rule.
-   * Merklized transaction tree.
+   * Merklized transaction tree for light client availability.
  * Ethereum-like coin state machine - basic ERC20 transfers.
- * ECDSA (curve P256) wallets for signing transactions.
+ * ECDSA (curve P256) wallets for signing transactions. Signature malleability fixes.
  * Core data structures: RawBlock, RawTx, Block, Tx, Epoch, BlockDAG, current tip, Miner, NetPeer, Node
- * Networking: HTTP peer interface, messages/methods include [bootstrap peers, gossip blocks, gossip txs].
+ * Networking: HTTP peer interface, messages/methods include [bootstrap/gossip peers, gossip blocks, gossip txs].
  * Miner: mine new blocks on the tip, measure hashrate.
  * CLI: start a node, connect to the network, mine blocks.
 

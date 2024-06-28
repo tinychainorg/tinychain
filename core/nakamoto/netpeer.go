@@ -198,6 +198,8 @@ type PeerCore struct {
 	externalIp   string
 	externalPort string
 
+	GossipPeersIntervalSeconds int
+
 	OnNewBlock  func(block RawBlock)
 	OnGetBlocks func(msg GetBlocksMessage) ([][]byte, error)
 	OnGetTip    func(msg GetTipMessage) ([32]byte, error)
@@ -216,6 +218,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		peers:  []Peer{},
 		server: nil,
 		config: config,
+		GossipPeersIntervalSeconds: 30,
 	}
 
 	externalIp, _, err := DiscoverIP()
@@ -333,11 +336,22 @@ type NetworkMessage struct {
 }
 
 func (p *PeerCore) Start() {
-	go p.StatusLogger()
+	go p.statusLoggerRoutine()
+	go p.gossipPeersRoutine()
+
 	p.server.Start()
 }
 
-func (p *PeerCore) StatusLogger() {
+func (p *PeerCore) gossipPeersRoutine() {
+	for {
+		peerLogger.Printf("gossip-peers-routine start\n")
+		p.GossipPeers()
+		peerLogger.Printf("gossip-peers-routine complete\n")
+		time.Sleep(time.Duration(p.GossipPeersIntervalSeconds) * time.Second)
+	}
+}
+
+func (p *PeerCore) statusLoggerRoutine() {
 	for {
 		// Set timeout.
 		peerLogger.Printf("Connected to %d peers", len(p.peers))
