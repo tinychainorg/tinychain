@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var minerLog = NewLogger("blockdag")
+var minerLog = NewLogger("miner")
 
 type Miner struct {
 	dag             BlockDAG
@@ -94,12 +94,11 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 			h := block.Hash()
 			hash := new(big.Int).SetBytes(h[:])
 
+			minerLog.Printf("hash block=%s i=%d\n", Bytes32ToString(h), i)
+
 			// Check solution: hash < target.
 			if hash.Cmp(&target) == -1 {
-				// fmt.Printf("Solved in %d iterations\n", i)
-				// fmt.Printf("Hash: %x\n", hash.String())
-				// fmt.Printf("Nonce: %s\n", nonce.String())
-				minerLog.Println("Puzzle solved")
+				minerLog.Printf("Puzzle solved: iterations=%d\n", i)
 
 				puzzle.solution = nonce
 				solutionChannel <- puzzle

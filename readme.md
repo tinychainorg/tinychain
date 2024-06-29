@@ -21,6 +21,10 @@ Simplifications of the design:
  * Transactions specify `from` and `to` in terms of raw ECDSA public keys. There is no ECDSA signature recovery to guess the pubkey from a signature.
  * The state machine is an account-based model, not a UXTO model. It implements just a transfer for coins.
 
+Dependencies:
+
+ * [go-sqlite3](https://github.com/mattn/go-sqlite3?tab=readme-ov-file)
+
 ![database view](./assets/db-view.png)
 
 ## Install.

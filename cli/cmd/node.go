@@ -62,7 +62,7 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 	copy(genesisBlockHash[:], genesisBlockHash_)
 
 	conf := nakamoto.ConsensusConfig{
-		EpochLengthBlocks:       200,
+		EpochLengthBlocks:       10,
 		TargetEpochLengthMillis: 1000 * 60 * 5, // 5 minutes
 		GenesisDifficulty:       *genesis_difficulty,
 		GenesisBlockHash:        genesisBlockHash,
