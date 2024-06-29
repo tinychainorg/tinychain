@@ -6,23 +6,24 @@ import (
 	"math/big"
 	"strconv"
 	"time"
+	"encoding/binary"
 )
 
 type ConsensusConfig struct {
 	// The length of an epoch.
-	EpochLengthBlocks uint64
+	EpochLengthBlocks uint64 `json:"epoch_length_blocks"`
 
 	// The target block production rate in terms of 1 epoch.
-	TargetEpochLengthMillis uint64
+	TargetEpochLengthMillis uint64 `json:"target_epoch_length_millis"`
 
 	// Genesis difficulty target.
-	GenesisDifficulty big.Int
+	GenesisDifficulty big.Int `json:"genesis_difficulty"`
 
 	// The genesis block hash.
-	GenesisBlockHash [32]byte
+	GenesisBlockHash [32]byte `json:"genesis_block_hash"`
 
 	// Maximum block size.
-	MaxBlockSizeBytes uint64
+	MaxBlockSizeBytes uint64 `json:"max_block_size_bytes"`
 }
 
 // A raw block is the block as transmitted on the network.
@@ -41,6 +42,33 @@ type RawBlock struct {
 
 	// Block body.
 	Transactions []RawTransaction `json:"transactions"`
+}
+
+func (b *RawBlock) Header() (header [208]byte) {
+	// total header size = 32 + 32 + 32 + 8 + 8 + 32 + 32 + 32
+
+	// Parent hash.
+	copy(header[0:32], b.ParentHash[:])
+	// Parent total work.
+	copy(header[32:64], b.ParentTotalWork[:])
+	// Difficulty.
+	copy(header[64:96], b.Difficulty[:])
+	// Timestamp.
+	timestamp := make([]byte, 8)
+	binary.BigEndian.PutUint64(timestamp, b.Timestamp)
+	copy(header[96:104], timestamp)
+	// Num transactions.
+	numTransactions := make([]byte, 8)
+	binary.BigEndian.PutUint64(numTransactions, b.NumTransactions)
+	copy(header[104:112], numTransactions)
+	// Transactions merkle root.
+	copy(header[112:144], b.TransactionsMerkleRoot[:])
+	// Nonce.
+	copy(header[144:176], b.Nonce[:])
+	// Graffiti.
+	copy(header[176:208], b.Graffiti[:])
+
+	return header
 }
 
 func (b *RawBlock) HashStr() string {
@@ -175,6 +203,10 @@ type PeerConfig struct {
 
 func NewPeerConfig(port string, bootstrapPeers []string) PeerConfig {
 	return PeerConfig{port: port, bootstrapPeers: bootstrapPeers}
+}
+
+type NetworkMessage struct {
+	type_ string `json:"type"`
 }
 
 type HeartbeatMesage struct {

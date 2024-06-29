@@ -71,7 +71,7 @@ func TestStateMachineIdea(t *testing.T) {
 	// Assert balances.
 	// Ingest some transactions and calculate the state.
 	tx0 := CoinStateMachineInput{
-		RawTransaction: MakeTransferTx([65]byte{}, wallets[0].PubkeyBytes(), 100, &wallets[0]),
+		RawTransaction: MakeTransferTx([65]byte{}, wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 		IsCoinbase:     true,
 	}
 	stateMachine.Transition(tx0)
@@ -82,7 +82,7 @@ func TestStateMachineIdea(t *testing.T) {
 
 	// Now transfer coins to another account.
 	tx1 := CoinStateMachineInput{
-		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0]),
+		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0], 0),
 		IsCoinbase:     false,
 	}
 	stateMachine.Transition(tx1)
@@ -106,4 +106,8 @@ func TestNodeReorgStateMachine(t *testing.T) {
 
 	// It is possible to garbage collect all state snapshots for a blockhash if the block is not in the heaviest chain.
 	// It is possible to garbage collect all state snapshots except the highest snapshot_id for a unique account (leaf id). This makes it impossible to revert but saves space.
+
+	// Create a state machine.
+	// Insert some transactions.
+	
 }

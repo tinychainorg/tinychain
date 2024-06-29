@@ -61,7 +61,6 @@ def ProposerSelection(vset, priority):
 package tendermint
 
 import (
-	"fmt"
 	"testing"
 )
 

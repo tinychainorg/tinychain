@@ -7,6 +7,7 @@ package nakamoto
 import (
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -652,11 +653,32 @@ func TestMinerProcedural(t *testing.T) {
 	}
 }
 
-func TestWTFSignature(t *testing.T) {
+// TODO refactor wallet test.
+// This was when I realised signatures were 65 bytes.
+func TestECDSASignatures(t *testing.T) {
 	for {
 		_, err := newValidTx(t)
 		if err != nil {
 			panic(err)
 		}
 	}
+}
+
+func TestGetGenesisBlock(t *testing.T) {
+	assert := assert.New(t)
+	_, conf, _ := newBlockdag()
+
+	genesis := GetRawGenesisBlockFromConfig(conf)
+	assert.Equal(conf.GenesisBlockHash, genesis.Hash)
+
+	// Dump configuration to JSON.
+	// t.Logf("Genesis block: %v\n", genesis.Hash)
+
+	// Serialise config to JSON.
+	confJson, err := json.MarshalIndent(conf, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to serialise config: %s", err)
+	}
+
+	t.Logf("Config: %s\n", string(confJson))
 }
