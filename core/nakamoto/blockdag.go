@@ -116,6 +116,7 @@ func GetRawGenesisBlockFromConfig(consensus ConsensusConfig) RawBlock {
 	}
 }
 
+// Initalises the block DAG with the genesis block.
 func (dag *BlockDAG) initialiseBlockDAG() error {
 	genesisBlockHash := dag.consensus.GenesisBlockHash
 	genesisBlock := GetRawGenesisBlockFromConfig(dag.consensus)
@@ -152,7 +153,6 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 		epoch0.StartBlockHash[:],
 		epoch0.StartTime,
 		epoch0.StartHeight,
-		// BigIntToBytes32(epoch0.Difficulty),
 		epoch0.Difficulty.Bytes(),
 	)
 	if err != nil {

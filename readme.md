@@ -47,6 +47,7 @@ Work breakdown:
 - [x] creating a merkle tree accumulation of transactions
 - [x] computing the cumulative work in a chain of blocks
 - [x] constructing a blockdag and then choosing a tip
+- [ ] fix tests, institute CI as development practice
 - [ ] implement block sync
 - [ ] implement state machine, state snapshots
 - [ ] improve txs

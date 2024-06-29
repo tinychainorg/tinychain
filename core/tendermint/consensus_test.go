@@ -1,4 +1,4 @@
-// Tendermint consensus WIP.
+// Tendermint/CometBFT consensus WIP.
 // https://github.com/tendermint/tendermint/blob/main/spec/consensus/consensus.md#common-exit-conditions
 // https://docs.tendermint.com/v0.34/introduction/what-is-tendermint.html#
 
