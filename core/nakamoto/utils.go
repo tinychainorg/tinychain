@@ -107,6 +107,6 @@ func DiscoverIP() (string, int, error) {
 }
 
 func NewLogger(prefix string) *log.Logger {
-	// return log.New(color.Output, prefix, log.Lshortfile)
+	// 2024/06/30 00:56:06 [prefix] message
 	return log.New(os.Stdout, color.HiGreenString(fmt.Sprintf("[%s] ", prefix)), log.Ldate | log.Ltime | log.Lmsgprefix)
 }
