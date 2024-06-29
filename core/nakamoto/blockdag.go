@@ -112,7 +112,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 		NumTransactions:        0,
 		TransactionsMerkleRoot: [32]byte{},
 		Nonce:                  [32]byte{},
-		Graffiti:               [32]byte{0xca, 0xfe, 0xba, 0xbe, 0xde, 0xca, 0xfb, 0xad},
+		Graffiti:               [32]byte{0xca, 0xfe, 0xba, 0xbe, 0xde, 0xca, 0xfb, 0xad}, // 0x cafebabe decafbad
 		Transactions:           []RawTransaction{},
 	}
 	genesisHeight := uint64(0)
