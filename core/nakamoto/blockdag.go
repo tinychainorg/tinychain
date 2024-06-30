@@ -35,12 +35,12 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	}
 
 	// Log version.
-	fmt.Printf("Database version: %d\n", databaseVersion)
+	logger.Printf("Database version: %d\n", databaseVersion)
 
 	// Migration: v0.
 	if databaseVersion == 0 {
 		// Perform migrations.
-		fmt.Printf("Running migration: %d\n", databaseVersion)
+		logger.Printf("Running migration: %d\n", databaseVersion)
 
 		// Create tables.
 		_, err = db.Exec("create table epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
@@ -76,7 +76,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			return nil, fmt.Errorf("error updating database version: %s", err)
 		}
 
-		fmt.Printf("Database upgraded to: %d\n", dbVersion)
+		logger.Printf("Database upgraded to: %d\n", dbVersion)
 	}
 
 	return db, err
