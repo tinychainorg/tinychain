@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 
 	"github.com/jackpal/bencode-go"
 )
@@ -57,15 +56,15 @@ type TrackerPeers struct {
 // 	return hex.EncodeToString(b)
 // }
 
-func addPeerToSwarm(peerID string, infoHash string, port int) error {
+func addPeerToSwarm(peerID string, infoHash string) error {
 	fmt.Println("Adding peer to swarm")
-	fmt.Println("Peer ID:", peerID) //store ipv6
+	fmt.Println("Peer ID:", peerID)
 	fmt.Println("Infohash:", infoHash)
 
 	params := url.Values{}
 	params.Add("info_hash", infoHash)
 	params.Add("peer_id", peerID)
-	params.Add("port", strconv.Itoa(port)) //could hardcode port, not actually using
+	params.Add("port", "6881")
 	params.Add("uploaded", "0")
 	params.Add("downloaded", "0")
 	params.Add("left", "0")
@@ -78,7 +77,7 @@ func addPeerToSwarm(peerID string, infoHash string, port int) error {
 
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body) //ioutil deprecated, now just io
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

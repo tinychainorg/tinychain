@@ -44,7 +44,7 @@ func TestBTTracker(t *testing.T) {
 	// )
 
 	// Add peer to swarm
-	err := addPeerToSwarm(peerID, infoHash, 6881)
+	err := addPeerToSwarm(peerID, infoHash)
 	if err != nil {
 		log.Fatal("Error adding peer to swarm:", err)
 	}
