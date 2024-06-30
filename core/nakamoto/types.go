@@ -127,9 +127,9 @@ type Transaction struct {
 	Fee        uint64   `json:"fee"`
 	Nonce      uint64   `json:"nonce"`
 
-	Hash       [32]byte
-	Blockhash  [32]byte
-	TxIndex    uint64
+	Hash      [32]byte
+	Blockhash [32]byte
+	TxIndex   uint64
 }
 
 type BlockDAGInterface interface {

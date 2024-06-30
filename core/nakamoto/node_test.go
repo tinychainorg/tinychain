@@ -182,7 +182,7 @@ func TestTwoNodeUnequalMining(t *testing.T) {
 
 func TestStateMachineUpdatesForTip(t *testing.T) {
 	// When the node tip is updated, then we recompute the state given the new transaction sequence.
-	
+
 }
 
 // Here we test synchronisation. Will a node that mines misses gossipped blocks catch up with the network?

@@ -66,7 +66,7 @@ func TestStateMachineIdea(t *testing.T) {
 	tx0 := StateMachineInput{
 		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 		IsCoinbase:     true,
-		MinerPubkey: [65]byte{},
+		MinerPubkey:    [65]byte{},
 	}
 	effects, err := stateMachine.Transition(tx0)
 	if err != nil {
@@ -82,7 +82,7 @@ func TestStateMachineIdea(t *testing.T) {
 	tx1 := StateMachineInput{
 		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0], 0),
 		IsCoinbase:     false,
-		MinerPubkey: [65]byte{},
+		MinerPubkey:    [65]byte{},
 	}
 	effects, err = stateMachine.Transition(tx1)
 	if err != nil {
@@ -113,7 +113,6 @@ func TestNodeReorgStateMachine(t *testing.T) {
 	// Create a state machine.
 	// Insert some transactions.
 
-
 	/////////////// A state snapshot table row is simply (blockhash, txid, snapshot_id, account, balance)
 
 	// What happens when we reorg?
@@ -121,13 +120,13 @@ func TestNodeReorgStateMachine(t *testing.T) {
 	// We have a state machine that corresponds with a tip.
 	// We can rewinding the state machine by applying state modifications in reverse.
 	// Or we can just recompute the state machine from the ancestor.
-	// 
-	// when do we need to access state anyways? 
+	//
+	// when do we need to access state anyways?
 	// 1. when we're computing new state leaves / transition the machine
 	// 2. when we're calling the api
 	// we actually want to query the api as follows:
 	// block_with_confirmations(n_confirmations) : tip.height - n_confirmations
-	// GetBalanceAt(block, account) -> get state leaf 
+	// GetBalanceAt(block, account) -> get state leaf
 	// How do we express the state fully declaratively without being smart or efficient?
 	// Transitive rule: if a leaf has not been modified since block N, then it retains the same value.
 	// ie. if we are at block height 10, and the leaf was inserted (height=6, key=x, value=y), then we can simply sort by height desc and pick the latest value
@@ -148,43 +147,41 @@ func TestNodeReorgStateMachine(t *testing.T) {
 	// - save the chain of block hashes for longest chain regularly (so we only do like O(32) lookups in SQL)
 	// Let's say we have the longest chain of hashes. Call it "longestchainHashList"
 	// And let's say we have every state leaf annotated with the block in which it was created
-	// Then to get the latest value for a key, we can essentially ask - select * from state_leaves where leaf.blockhash 
-	// UGH how do we find the unique state leaf 
-	// 
+	// Then to get the latest value for a key, we can essentially ask - select * from state_leaves where leaf.blockhash
+	// UGH how do we find the unique state leaf
+	//
 	// Imagine one leaf with multiple values corresponding to multiple tips:
 	// - (key=1, value=50,  t=5)
 	// - (key=1, value=350, t=5)
 	// - (key=1, value=30,  t=5)
-	// 
+	//
 	// - (key=1, value=50,  t=5, acc_work=100)
 	// - (key=1, value=350, t=5, acc_work=80)
 	// - (key=1, value=30,  t=5, acc_work=200)
-	// 
+	//
 	// We obviously pick the key with the highest acc work right? Because this represents the longest chain.
 	// The PROBLEM is that this acc_work value is probably set at the time of insertion, which means it would not be up-to-date.
 	// Like for example, if someone then mines a divergent branch of the chain, produces a lot of work and updates (key=1), it might appear this key has more work than it really does?
 	// No that's impossible. Because that means their chain would become the longest. We have accumulated/cumulative work for a reason.
 	// No it is possible - since acc_work only refers to the work at that block in time.
-	// 
+	//
 	// state_leafs:
 	// - (key=1, value=50,  t=5, blockhash=)
 	// - (key=1, value=350, t=5, blockhash=)
 	// - (key=1, value=30,  t=5, blockhash=)
-	// 
-	// state_snapshot(block) -> 
-	// - 
-	// 
+	//
+	// state_snapshot(block) ->
+	// -
+	//
 	// state_snapshots:
 	// - (blockhash, ((key, value)))
-	// 
-
+	//
 
 	// GetLongestChainHashList (can we make SQL index this? Maybe.)
 }
 
-
 // Notes on State Storage.
-// 
+//
 // Assuming your block size is 1mB
 // Transaction size = 155 bytes
 // Max number of transactions per block = 1000*1000 / 155 bytes = 6541
@@ -195,29 +192,29 @@ func TestNodeReorgStateMachine(t *testing.T) {
 // 10 * 6 * 24 = 1440 blocks / day
 // 1440*0.47 = 676.8mB / day
 // Total storage cost of storing snapshots for every block = 676.8mB / day
-// 
+//
 // Checking this math:
 // - daily ethereum state growth
 //   https://etherscan.io/chartsync/chaindefault
 //   https://ycharts.com/indicators/ethereum_chain_full_sync_data_size
 //   https://www.paradigm.xyz/2024/03/how-to-raise-the-gas-limit-1
-//   
+//
 // - daily bitcoin state growth
 //   https://ycharts.com/indicators/bitcoin_blockchain_size
 //   https://www.blockchain.com/explorer/charts/n-transactions-per-block
 //   300mb/day
-// 
+//
 // Given that we store the full pubkey (65 bytes), and not a hash (32 bytes) or a compressed version (33 bytes), this makes sense.
 // Bitcoin achieves a 50% reduction in state size by using the pubkeyhash, and its growth rate is roughly half ours.
-// 
-// How does one prune the state then? 
+//
+// How does one prune the state then?
 // 1. Rollup state older than an "unlikely to revert" threshold (6 blocks max)
 // 2. ZK prove state, which is also a rollup.
 // 3. Bulletproofs
-// 
+//
 // What about we consider space-time tradeoffs?
 // How quickly can we process transactions
-// 
+//
 // (base) ➜  nakamoto git:(state-machine) ✗ go test -v -bench=. -run TestBenchmarkTxOpsPerDay
 // === RUN   TestBenchmarkTxOpsPerDay
 // Database version: 0
@@ -236,39 +233,39 @@ func TestNodeReorgStateMachine(t *testing.T) {
 // That's with signatures being created.
 // Without signatures:
 // --- PASS: TestBenchmarkTxOpsPerDay (0.01s) - 25x speedup
-// 
+//
 //     state_machine_test.go:279: Processed 9419000 transactions
 // --- PASS: TestBenchmarkTxOpsPerDay (9.38s)
-// 
+//
 //     state_machine_test.go:292: Processed 9419000 transactions
 // --- PASS: TestBenchmarkTxOpsPerDay (13.92s)
 // This is on an AWS Instance with 2 vCPU's, 512MB RAM, 1GB swap.
-// 
+//
 // So what does this infer?
 // Time:  At a block time of 10mins, block size of 1mb, and 6541 txs per block, it takes 9.38s to process a day's worth (6541*1440=9.4M) of state leaves (ignoring SQL reads).
 // Time:  9.38s   (3.2 GHz, 128 L1 cache, Mac M1)
 // Space: 676.8mB
-// 
+//
 // It seems like it's pretty efficient to reconstruct state, and pretty storage-heavy to store the entire history.
-// 
+//
 // https://gist.github.com/jboner/2841832
-// 
+//
 // Okay so, remaining speedups:
 // - paralellization (non-contentious state writes) - probably 10x
 // - disk reads - probably -2x
-// 
-// 
-// 
+//
+//
+//
 
 func newUnsignedTransferTx(from [65]byte, to [65]byte, amount uint64, wallet *core.Wallet, fee uint64) RawTransaction {
 	tx := RawTransaction{
-		Version: 1,
+		Version:    1,
 		Sig:        [64]byte{},
 		FromPubkey: from,
-		ToPubkey:     to,
-		Amount: amount,
-		Fee:    fee,
-		Nonce:  0,
+		ToPubkey:   to,
+		Amount:     amount,
+		Fee:        fee,
+		Nonce:      0,
 	}
 	return tx
 }
@@ -309,7 +306,7 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 		coinbaseTx := StateMachineInput{
 			RawTransaction: newUnsignedTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 			IsCoinbase:     true,
-			MinerPubkey: [65]byte{},
+			MinerPubkey:    [65]byte{},
 		}
 		effects, err := stateMachine.Transition(coinbaseTx)
 		if err != nil {
@@ -322,7 +319,7 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 		tx1 := StateMachineInput{
 			RawTransaction: newUnsignedTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0], 0),
 			IsCoinbase:     false,
-			MinerPubkey: [65]byte{},
+			MinerPubkey:    [65]byte{},
 		}
 		effects, err = stateMachine.Transition(tx1)
 		if err != nil {
@@ -374,26 +371,26 @@ func newBlockdagForStateMachine() (BlockDAG, ConsensusConfig, *sql.DB) {
 }
 
 func TestStateMachineReconstructState(t *testing.T) {
-	/*	
+	/*
 
-	Okay so this is how we do:
-	
-	latest_tip, err := dag.GetLatestTip()
-	longestChainHashList, err := dag.GetLongestChainHashList(latest_tip.Hash, latest_tip.Height)
-	
-	state = {}
-	stateMachine = StateMachine{}
-	
-	for i, blockhash := range longestChainHashList {
-	  // get txs
-	  txs = "select from, to, amount, fee, version from txs where blockhash = ? order by txindex", blockhash
-	  // map
-	  new_leaves = txs.map(tx => stateMachine.Transition(state, tx))
-	  // reduce
-	  new_leaves.map(leaves => stateMachine.Apply(leaves))
-	}
-	
-	After all of this, the state will be up to date for the current block.
+		Okay so this is how we do:
+
+		latest_tip, err := dag.GetLatestTip()
+		longestChainHashList, err := dag.GetLongestChainHashList(latest_tip.Hash, latest_tip.Height)
+
+		state = {}
+		stateMachine = StateMachine{}
+
+		for i, blockhash := range longestChainHashList {
+		  // get txs
+		  txs = "select from, to, amount, fee, version from txs where blockhash = ? order by txindex", blockhash
+		  // map
+		  new_leaves = txs.map(tx => stateMachine.Transition(state, tx))
+		  // reduce
+		  new_leaves.map(leaves => stateMachine.Apply(leaves))
+		}
+
+		After all of this, the state will be up to date for the current block.
 	*/
 
 	// assert := assert.New(t)
@@ -428,14 +425,14 @@ func TestStateMachineReconstructState(t *testing.T) {
 
 	for _, blockHash := range longestChainHashList {
 		txs := []RawTransaction{}
-		
+
 		// 1. Get all transactions for block.
 		// ignore: nonce, sig
 		rows, err := dag.db.Query(`select version, from_pubkey, to_pubkey, amount, fee from transactions where block_hash = ? order by txindex`, blockHash[:])
 		if err != nil {
 			t.Fatal(err)
 		}
-		
+
 		for rows.Next() {
 			version := 0
 			fromPubkeyBuf := []byte{}
@@ -454,13 +451,13 @@ func TestStateMachineReconstructState(t *testing.T) {
 			copy(toPubkey[:], toPubkeyBuf[:])
 
 			txs = append(txs, RawTransaction{
-				Version: byte(version),
+				Version:    byte(version),
 				FromPubkey: fromPubkey,
-				ToPubkey: toPubkey,
-				Amount: amount,
-				Fee: fee,
-				Nonce: 0,
-				Sig: [64]byte{},
+				ToPubkey:   toPubkey,
+				Amount:     amount,
+				Fee:        fee,
+				Nonce:      0,
+				Sig:        [64]byte{},
 			})
 		}
 

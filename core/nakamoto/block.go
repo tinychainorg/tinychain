@@ -104,4 +104,3 @@ func (b *RawBlock) SizeBytes() uint64 {
 	// Calculate the size of the block.
 	return uint64(len(b.Envelope()))
 }
-

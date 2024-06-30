@@ -1,4 +1,3 @@
-//
 // The state machine is the core of the business logic for the Nakamoto blockchain.
 // It performs the state transition function, which encapsulates:
 // 1. Minting coins into circulation via the coinbase transaction.
@@ -7,7 +6,6 @@
 // It is oblivious to:
 // - the consensus algorithm, transaction sequencing.
 // - signatures. The state machine does not care about validating signatures. At Bitcoin's core, it is a sequencing/DA layer.
-//
 package nakamoto
 
 import (
@@ -47,7 +45,7 @@ type StateMachine struct {
 
 func NewStateMachine(db *sql.DB) (*StateMachine, error) {
 	return &StateMachine{
-		db: db,
+		db:    db,
 		state: make(map[[65]byte]uint64),
 	}, nil
 }
@@ -64,7 +62,7 @@ func (c *StateMachine) Transition(input StateMachineInput) ([]*StateLeaf, error)
 	if input.RawTransaction.Version != 1 {
 		return nil, errors.New("unsupported transaction version")
 	}
-	
+
 	if input.IsCoinbase {
 		return c.transitionCoinbase(input)
 	}
@@ -105,7 +103,7 @@ func (c *StateMachine) Transition(input StateMachineInput) ([]*StateLeaf, error)
 
 	// Add the fee to the `miner` account balance.
 	minerBalance += fee
-	
+
 	// Create the new state leaves.
 	fromLeaf := &StateLeaf{
 		PubKey:  input.RawTransaction.FromPubkey,
@@ -139,7 +137,7 @@ func (c *StateMachine) transitionCoinbase(input StateMachineInput) ([]*StateLeaf
 
 	// Add the coins to the `to` account balance.
 	toBalance += amount
-	
+
 	// Create the new state leaves.
 	toLeaf := &StateLeaf{
 		PubKey:  input.RawTransaction.ToPubkey,
@@ -150,7 +148,6 @@ func (c *StateMachine) transitionCoinbase(input StateMachineInput) ([]*StateLeaf
 	}
 	return leaves, nil
 }
-
 
 func (c *StateMachine) GetBalance(account [65]byte) uint64 {
 	return c.state[account]

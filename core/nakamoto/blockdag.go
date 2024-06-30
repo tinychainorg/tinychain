@@ -646,8 +646,8 @@ func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip ui
 		)
 		SELECT hash, parent_hash
 		FROM block_path
-		ORDER BY depth DESC;`, 
-		startHash[:], 
+		ORDER BY depth DESC;`,
+		startHash[:],
 		depthFromTip,
 	)
 	if err != nil {
