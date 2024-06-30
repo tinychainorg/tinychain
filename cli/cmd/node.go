@@ -26,22 +26,10 @@ func (m *MockStateMachine) VerifyTx(tx nakamoto.RawTransaction) error {
 }
 
 func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *sql.DB) {
-	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
-	useMemoryDB := false
-	// var connectionString string
-	// if useMemoryDB {
-	// 	connectionString = "file:memdb1?mode=memory"
-	// } else {
-	// 	connectionString = "test.sqlite3"
-	// }
-
 	// TODO validate connection string.
 	db, err := nakamoto.OpenDB(dbPath)
 	if err != nil {
 		panic(err)
-	}
-	if useMemoryDB {
-		db.SetMaxOpenConns(1)
 	}
 	_, err = db.Exec("PRAGMA journal_mode = WAL;")
 	if err != nil {

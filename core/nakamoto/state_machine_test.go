@@ -189,9 +189,9 @@ func TestNodeReorgStateMachine(t *testing.T) {
 // State leaf size = 65 bytes (account) + 8 bytes (balance uint64) = 73 bytes
 // Maximum state change per block = 6541 txs * 73 bytes = 477493 bytes = 0.47mB
 // Block rate = 1 block / 10 mins
-// 10 * 6 * 24 = 1440 blocks / day
-// 1440*0.47 = 676.8mB / day
-// Total storage cost of storing snapshots for every block = 676.8mB / day
+// 1 * 6 * 24 = 144 blocks / day
+// 1440*0.47 = 67.68mB / day
+// Total storage cost of storing snapshots for every block = 67.68mB / day
 //
 // Checking this math:
 // - daily ethereum state growth
@@ -242,9 +242,8 @@ func TestNodeReorgStateMachine(t *testing.T) {
 // This is on an AWS Instance with 2 vCPU's, 512MB RAM, 1GB swap.
 //
 // So what does this infer?
-// Time:  At a block time of 10mins, block size of 1mb, and 6541 txs per block, it takes 9.38s to process a day's worth (6541*1440=9.4M) of state leaves (ignoring SQL reads).
-// Time:  9.38s   (3.2 GHz, 128 L1 cache, Mac M1)
-// Space: 676.8mB
+// Time:  At a block time of 10mins, block size of 1mb, and 6541 txs per block, it takes 9.38s to process a 10 days worth (6541*144=9.4M) of state leaves (ignoring SQL reads).
+// Time:  9.38s   (3.2 GHz, 10 12ys1 cache, Mac M1)// Space: 676.8mB
 //
 // It seems like it's pretty efficient to reconstruct state, and pretty storage-heavy to store the entire history.
 //
@@ -254,7 +253,10 @@ func TestNodeReorgStateMachine(t *testing.T) {
 // - paralellization (non-contentious state writes) - probably 10x
 // - disk reads - probably -2x
 //
-//
+// One of the core considerations:
+// There are 2 approaches to the state construction:
+// 1. Space tradeoff - store 60mb a day of state snapshots.
+// 2. Time tradeoff  - spend 0.96s to process a day of state transitions. 
 //
 
 func newUnsignedTransferTx(from [65]byte, to [65]byte, amount uint64, wallet *core.Wallet, fee uint64) RawTransaction {
@@ -287,7 +289,7 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 	// 2. Transfer them to another account
 	t.Logf("Beginning benchmark")
 	txsProcessed := 0
-	maxTotalTxsPerDay := 6541 * 1440
+	maxTotalTxsPerDay := 6541 * 144
 	// maxTotalTxsPerBlock := 6541
 	maxTxs := maxTotalTxsPerDay
 	t.Logf("Processing %d transactions (no parallelism)", maxTxs)

@@ -25,6 +25,10 @@ Dependencies:
 
  * [go-sqlite3](https://github.com/mattn/go-sqlite3?tab=readme-ov-file)
 
+Couple philosophies of this project:
+
+ - distilling a blockchain network down to its core primitives at all layers of the stack.
+
 ![database view](./assets/db-view.png)
 
 ## Install.
@@ -48,24 +52,36 @@ Work breakdown:
 - [x] computing the cumulative work in a chain of blocks
 - [x] constructing a blockdag and then choosing a tip
 - [x] fix tests, institute CI as development practice
+- [x] implement state machine, state snapshots
 - [ ] implement block sync
-- [ ] implement state machine, state snapshots
 - [ ] improve txs
     - [ ] replay protection for txs, tx nonce
-    - [ ] add version to RawBlock, RawTransaction for future prosperity
+    - [x] add version to RawBlock, RawTransaction for future prosperity
+- [ ] implement tokenomics module
+    - [ ] pure function given the current block, return the coinbase reward.
+- [ ] implement mempool
+    - [ ] peer api to submit txs
+    - [ ] gossip transactions to peers
+    - [ ] mempool data structure
+    - [ ] mempool.addtransaction - validate tx not already mined, calculate feerate, kick other transactions
+    - [ ] peer api to query mempool
+    - [ ] peer api to query feerate
+    - [ ] connect mempool to miner. restart miner on new mempool transactions. restart miner on new tip (I think this already happens?)
+    - [ ] after new tip, mempool should clear out transactions that have already been mined.
+    - [ ] handle reorg so we can reinsert values into mempool.
+    - [ ] peer api to query tx confirmations (for exchange and wallets etc.)
 - [ ] block sync algorithm between nodes
-- [ ] simple coin state machine
-    - [ ] coinbase
-    - [ ] state snapshots
-    - [ ] state diffs
-    - [ ] state checkpoints
+- [x] simple coin state machine
+    - [x] coinbase
+    - [x] state diffs
+    - [x] adding a method to recompute the state machine and using cached state 
+    - [ ] state snapshots/checkpoints
 - [ ] build a simple mempool module
-- [ ] adding a simple state machine
-    - [ ] ValidateBlock
+- [x] adding a simple state machine
+    - [x] ValidateBlock
         - first transaction is the coinbase
         - maintain a uxto set - unspent transaction outputs
         - validate txs - validate signature, transfer the coins
-- [ ] adding a method to recompute the state machine and using cached state 
 - [x] implementing networking
     - [ ] simple wrapper for sockets - address, port, and hof's to wrap the latency delays dropped packets etc
     - [x] peers connect
@@ -87,7 +103,8 @@ Work breakdown:
     - [ ] send coins
     - [ ] receive coins
 - [ ] refactoring
-    - [ ] add nonce to tx
+    - [x] add nonce to tx
+    - [ ] rename difficulty -> difficulty_target
     - [ ] refactor miner code to be pretty
     - [ ] improve robustness of sql queries- need to verify we use right number of columns and ?'s
     - [ ] improve block/rawblock. missing fields, unset fields etc. tests for this.

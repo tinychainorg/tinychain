@@ -40,7 +40,8 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	// Migration: v0.
 	if databaseVersion == 0 {
 		// Perform migrations.
-		logger.Printf("Running migration: %d\n", databaseVersion)
+		dbVersion := 1
+		logger.Printf("Running migration: %d\n", dbVersion)
 
 		// Create tables.
 		_, err = db.Exec("create table epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
@@ -70,7 +71,6 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 
 		// Update version.
-		dbVersion := 1
 		_, err = db.Exec("insert into tinychain_version (version) values (?)", dbVersion)
 		if err != nil {
 			return nil, fmt.Errorf("error updating database version: %s", err)
@@ -392,13 +392,18 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// Update the tip.
 	// TODO this is bad for performance.
 	// TODO also this is not atomic.
+	prev_tip := dag.Tip
 	curr_tip, err := dag.GetLatestTip()
 	if err != nil {
 		return err
 	}
-	if curr_tip.Hash != dag.Tip.Hash {
+
+	if prev_tip.Hash != curr_tip.Hash {
 		logger.Printf("New tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
 		dag.Tip = curr_tip
+		if dag.OnNewTip != nil {
+			dag.OnNewTip(curr_tip, prev_tip)
+		}
 	}
 
 	return nil
@@ -631,6 +636,10 @@ func (dag *BlockDAG) GetLatestTip() (Block, error) {
 func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip uint64) ([][32]byte, error) {
 	list := make([][32]byte, 0, depthFromTip)
 
+	// Hey, I bet you didn't know SQL could do this, right?
+	// Neither did I. It's called a recursive common table expression.
+	// It's a way to traverse a tree structure in SQL.
+	// Pretty cool, huh?
 	rows, err := dag.db.Query(`
 		WITH RECURSIVE block_path AS (
 			SELECT hash, parent_hash, 1 AS depth

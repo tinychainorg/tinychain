@@ -90,6 +90,13 @@ func (n *Node) setup() {
 		tip := n.Dag.Tip.Hash
 		return tip, nil
 	}
+
+	// Recompute the state after a new tip.
+	n.Dag.OnNewTip = func(new_tip Block, prev_tip Block) {
+		// Find the common ancestor of the two tips.
+		// Revert the state to this ancestor.
+		// Recompute the state from the ancestor to the new tip.
+	}
 }
 
 func (n *Node) Sync() {

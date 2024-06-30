@@ -182,36 +182,39 @@ func TestTwoNodeUnequalMining(t *testing.T) {
 
 func TestStateMachineUpdatesForTip(t *testing.T) {
 	// When the node tip is updated, then we recompute the state given the new transaction sequence.
+}
+
+func TestNodeSyncMissingBlocksUnknownParent(t *testing.T) {
 
 }
 
 // Here we test synchronisation. Will a node that mines misses gossipped blocks catch up with the network?
-// func TestNodeSyncMissingBlocks(t *testing.T) {
-// 	assert := assert.New(t)
-// 	node1 := newNodeFromConfig(t, "8080")
-// 	node2 := newNodeFromConfig(t, "8081")
+func TestNodeSyncMissingBlocks(t *testing.T) {
+	assert := assert.New(t)
+	node1 := newNodeFromConfig(t)
+	node2 := newNodeFromConfig(t)
 
-// 	// Start the node.
-// 	go node1.Peer.Start()
-// 	go node2.Peer.Start()
+	// Start the node.
+	go node1.Peer.Start()
+	go node2.Peer.Start()
 
-// 	// Wait for peers to come online.
-// 	waitForPeersOnline([]*PeerCore{node1.Peer, node2.Peer})
+	// Wait for peers to come online.
+	waitForPeersOnline([]*PeerCore{node1.Peer, node2.Peer})
 
-// 	// Bootstrap.
-// 	node1.Peer.Bootstrap([]string{
-// 		node2.Peer.GetLocalAddr(),
-// 	})
-// 	node2.Peer.Bootstrap([]string{
-// 		node1.Peer.GetLocalAddr(),
-// 	})
+	// Bootstrap.
+	node1.Peer.Bootstrap([]string{
+		node2.Peer.GetLocalAddr(),
+	})
+	node2.Peer.Bootstrap([]string{
+		node1.Peer.GetLocalAddr(),
+	})
 
-// 	node1.Miner.Start(10)
+	node1.Miner.Start(10)
 
-// 	// Then we check the tips.
-// 	tip1 := node1.Dag.Tip
-// 	tip2 := node2.Dag.Tip
+	// Then we check the tips.
+	tip1 := node1.Dag.Tip
+	tip2 := node2.Dag.Tip
 
-// 	// Check that the tips are the same.
-// 	assert.Equal(tip1, tip2)
-// }
+	// Check that the tips are the same.
+	assert.Equal(tip1, tip2)
+}

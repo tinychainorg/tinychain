@@ -45,7 +45,7 @@ type RawBlock struct {
 }
 
 func (b *RawBlock) Header() (header [208]byte) {
-	// total header size = 32 + 32 + 32 + 8 + 8 + 32 + 32 + 32
+	// total header size = 1 + 32 + 32 + 32 + 8 + 8 + 32 + 32 + 32
 
 	// Parent hash.
 	copy(header[0:32], b.ParentHash[:])
@@ -171,6 +171,9 @@ type BlockDAG struct {
 
 	// Latest tip.
 	Tip Block
+
+	// OnNewTip handler.
+	OnNewTip func(tip Block, prevTip Block)
 }
 
 type StateMachineInterface interface {
@@ -251,7 +254,17 @@ type GetBlocksMessage struct {
 
 type GetBlocksReply struct {
 	Type          string   `json:"type"` // "get_blocks_reply"
-	RawBlockDatas [][]byte `json:"rawBockDatas"`
+	RawBlockDatas [][]byte `json:"rawBlockDatas"`
+}
+
+type GetBlockHeadersMessage struct {
+	Type        string   `json:"type"` // "get_block_headers"
+	BlockHashes []string `json:"blockHashes"`
+}
+
+type GetBlocksHeadersReply struct {
+	Type          string   `json:"type"` // "get_block_headers_reply"
+	RawBlockDatas [][]byte `json:"rawBlockHeaders"`
 }
 
 type GossipPeersMessage struct {

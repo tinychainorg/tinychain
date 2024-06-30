@@ -57,7 +57,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 	lastHashrateMeasurement := Timestamp()
 	numHashes := 0
 
-	// Measure hashrate.
+	// Routine: Measure hashrate.
 	go (func() {
 		for {
 			// Wait 3s.
@@ -96,12 +96,12 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 
 			// Hash.
 			h := block.Hash()
-			hash := new(big.Int).SetBytes(h[:])
+			guess := new(big.Int).SetBytes(h[:])
 
 			// minerLog.Printf("hash block=%s i=%d\n", Bytes32ToString(h), i)
 
 			// Check solution: hash < target.
-			if hash.Cmp(&target) == -1 {
+			if guess.Cmp(&target) == -1 {
 				minerLog.Printf("Puzzle solved: iterations=%d\n", i)
 
 				puzzle.solution = nonce

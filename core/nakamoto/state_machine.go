@@ -1,3 +1,4 @@
+//
 // The state machine is the core of the business logic for the Nakamoto blockchain.
 // It performs the state transition function, which encapsulates:
 // 1. Minting coins into circulation via the coinbase transaction.
@@ -6,6 +7,7 @@
 // It is oblivious to:
 // - the consensus algorithm, transaction sequencing.
 // - signatures. The state machine does not care about validating signatures. At Bitcoin's core, it is a sequencing/DA layer.
+//
 package nakamoto
 
 import (
@@ -65,8 +67,12 @@ func (c *StateMachine) Transition(input StateMachineInput) ([]*StateLeaf, error)
 
 	if input.IsCoinbase {
 		return c.transitionCoinbase(input)
+	} else {
+		return c.transitionTransfer(input)
 	}
+}
 
+func (c *StateMachine) transitionTransfer(input StateMachineInput) ([]*StateLeaf, error) {
 	fromBalance := c.GetBalance(input.RawTransaction.FromPubkey)
 	toBalance := c.GetBalance(input.RawTransaction.ToPubkey)
 	minerBalance := c.GetBalance(input.MinerPubkey)
