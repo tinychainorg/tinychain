@@ -8,7 +8,7 @@
 # It consists of a validator set, where each validator is a node with a public key and some voting power.
 # Transmuted into a blockchain, Tendermint is a proof-of-stake consensus protocol.
 # Voting power corresponds to staked token balance.
-# 
+#
 # [1]: https://github.com/tendermint/tendermint/blob/v0.34.x/spec/consensus/consensus.md
 class TendermintConsensusEngine:
     def __init__(self, node):
@@ -24,13 +24,13 @@ class TendermintConsensusEngine:
 def voting_power(i):
     return 0
 
-# Select the proposer for the next epoch, from a dynamic validator set and 
+# Select the proposer for the next epoch, from a dynamic validator set and
 # the history of past proposers (priority).
 # [1]: https://github.com/tendermint/tendermint/blob/v0.34.x/spec/consensus/proposer-selection.md
 def ProposerSelection(vset, priority):
     A = priority
     A2 = priority.copy()
-    
+
     # P - total voting power of set
     P = sum(voting_power(i) for i in vset)
 
@@ -53,7 +53,7 @@ def ProposerSelection(vset, priority):
     for validator in vset:
         i = validator
         A2[i] += voting_power(i)
-    
+
     prop = max(A)
     A2[prop] -= P
 */

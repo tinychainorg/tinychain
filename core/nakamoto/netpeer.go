@@ -52,11 +52,11 @@ type Peer struct {
 
 func NewPeerCore(config PeerConfig) *PeerCore {
 	p := &PeerCore{
-		peers:  []Peer{},
-		server: nil,
-		config: config,
+		peers:                      []Peer{},
+		server:                     nil,
+		config:                     config,
 		GossipPeersIntervalSeconds: 30,
-		peerLogger: *NewLogger("peer", fmt.Sprintf(":%s", config.port)),
+		peerLogger:                 *NewLogger("peer", fmt.Sprintf(":%s", config.port)),
 	}
 
 	externalIp, _, err := DiscoverIP()

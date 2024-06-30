@@ -119,7 +119,7 @@ func TestWalletSigningDeterminism(t *testing.T) {
 	}
 
 	for i := 0; i < 100_000; i++ {
-		if i % 10_000 == 0 {
+		if i%10_000 == 0 {
 			t.Logf("Iteration %d", i)
 		}
 		msg := []byte("Gday, world!")

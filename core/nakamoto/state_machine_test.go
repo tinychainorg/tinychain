@@ -109,5 +109,5 @@ func TestNodeReorgStateMachine(t *testing.T) {
 
 	// Create a state machine.
 	// Insert some transactions.
-	
+
 }

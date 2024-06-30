@@ -115,7 +115,7 @@ func GetRawGenesisBlockFromConfig(consensus ConsensusConfig) RawBlock {
 		Graffiti:               [32]byte{0xca, 0xfe, 0xba, 0xbe, 0xde, 0xca, 0xfb, 0xad, 0xde, 0xad, 0xbe, 0xef}, // 0x cafebabe decafbad deadbeef
 		Transactions:           []RawTransaction{},
 	}
-	
+
 	// Mine the block.
 	solution, err := SolvePOW(block, *new(big.Int), consensus.GenesisDifficulty, 100)
 	if err != nil {
@@ -489,7 +489,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		accWork := [32]byte{}
 		copy(accWork[:], accWorkBuf)
 		block.AccumulatedWork = Bytes32ToBigInt(accWork)
-		
+
 		parentTotalWork := [32]byte{}
 		copy(parentTotalWork[:], parentTotalWorkBuf)
 		block.ParentTotalWork = Bytes32ToBigInt(parentTotalWork)

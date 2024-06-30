@@ -110,16 +110,16 @@ func DiscoverIP() (string, int, error) {
 
 func NewLogger(prefix string, prefix2 string) *log.Logger {
 	// Logging formats:
-	// 
+	//
 	// prefix="prefix" prefix2=""
 	// 2024/06/30 00:56:06 [prefix] message
-	// 
+	//
 	// prefix="prefix" prefix2="prefix2"
 	// 2024/06/30 00:56:06 [prefix] (prefix2) message
-	// 
+	//
 	prefixFull := color.HiGreenString(fmt.Sprintf("[%s] ", prefix))
 	if prefix2 != "" {
 		prefixFull += color.HiYellowString(fmt.Sprintf("(%s) ", prefix2))
 	}
-	return log.New(os.Stdout, prefixFull, log.Ldate | log.Ltime | log.Lmsgprefix)
+	return log.New(os.Stdout, prefixFull, log.Ldate|log.Ltime|log.Lmsgprefix)
 }

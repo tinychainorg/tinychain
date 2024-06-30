@@ -15,15 +15,15 @@ import (
 type PeerServer struct {
 	config          PeerConfig
 	messageHandlers map[string]PeerMessageHandler
-	log log.Logger
-	server *http.Server
+	log             log.Logger
+	server          *http.Server
 }
 
 func NewPeerServer(config PeerConfig) *PeerServer {
 	s := PeerServer{
 		config:          config,
 		messageHandlers: make(map[string]PeerMessageHandler),
-		log: *NewLogger("peer-server", fmt.Sprintf(":%s", config.port)),
+		log:             *NewLogger("peer-server", fmt.Sprintf(":%s", config.port)),
 	}
 
 	// Get the port from the environment variable
@@ -53,7 +53,7 @@ func (s *PeerServer) RegisterMesageHandler(messageKey string, handler PeerMessag
 	s.messageHandlers[messageKey] = handler
 }
 
-func (s *PeerServer) Start() (error) {
+func (s *PeerServer) Start() error {
 	// Log all handlers on one line separated by commas.
 	s.log.Printf("Handling message types: %v\n", func() []string {
 		handlers := make([]string, 0, len(s.messageHandlers))
@@ -69,7 +69,7 @@ func (s *PeerServer) Start() (error) {
 		s.log.Println("Error starting server:", err)
 		return err
 	}
-	
+
 	return nil
 }
 

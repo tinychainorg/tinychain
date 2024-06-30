@@ -27,14 +27,14 @@ func TestGenesisBlockHash(t *testing.T) {
 		TargetEpochLengthMillis: 2000,
 		GenesisDifficulty:       *genesis_difficulty,
 		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
-		GenesisParentBlockHash:  HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
-		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
+		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
 	}
 
 	// Get the genesis block.
 	genesisBlock := GetRawGenesisBlockFromConfig(conf)
 
-	// Now hash it.	
+	// Now hash it.
 	h := sha256.New()
 	h.Write(genesisBlock.Envelope())
 	actual := sha256.Sum256(h.Sum(nil))
@@ -45,7 +45,7 @@ func TestGenesisBlockHash(t *testing.T) {
 	}
 
 	assert.Equal(
-		hex.EncodeToString(expected), 
+		hex.EncodeToString(expected),
 		fmt.Sprintf("%x", actual),
 		"Genesis block hash is incorrect",
 	)

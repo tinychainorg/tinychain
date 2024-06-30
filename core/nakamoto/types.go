@@ -219,7 +219,7 @@ type HeartbeatMesage struct {
 	WireProtocolVersion uint   `json:"wireProtocolVersion"`
 	ClientAddress       string `json:"clientAddress"`
 	// TODO add chain/network ID.
-	Time                time.Time
+	Time time.Time
 }
 
 type GetTipMessage struct {

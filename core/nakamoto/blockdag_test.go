@@ -55,8 +55,8 @@ func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB, RawBlock) {
 		TargetEpochLengthMillis: 2000,
 		GenesisDifficulty:       *genesis_difficulty,
 		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
-		GenesisParentBlockHash:  HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
-		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
+		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
 	}
 
 	genesisBlock := GetRawGenesisBlockFromConfig(conf)
@@ -287,7 +287,7 @@ func TestAddBlockSuccess(t *testing.T) {
 
 	b := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
-		ParentTotalWork: 	  	BigIntToBytes32(*CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))),
+		ParentTotalWork:        BigIntToBytes32(*CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))),
 		Timestamp:              1719379532750,
 		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
@@ -340,7 +340,7 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 
 	b := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
-		ParentTotalWork: 	  	BigIntToBytes32(*CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))),
+		ParentTotalWork:        BigIntToBytes32(*CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))),
 		Timestamp:              1719379532750,
 		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
@@ -372,7 +372,7 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 
 func TestGetRawGenesisBlockFromConfig(t *testing.T) {
 	assert := assert.New(t)
-	
+
 	genesis_difficulty := new(big.Int)
 	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
 
@@ -381,8 +381,8 @@ func TestGetRawGenesisBlockFromConfig(t *testing.T) {
 		TargetEpochLengthMillis: 2000,
 		GenesisDifficulty:       *genesis_difficulty,
 		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
-		GenesisParentBlockHash:  HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
-		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
+		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
 	}
 
 	// Get the genesis block.
@@ -398,7 +398,6 @@ func TestGetRawGenesisBlockFromConfig(t *testing.T) {
 	assert.Equal([32]byte{}, genesisBlock.TransactionsMerkleRoot)
 	assert.Equal(big.NewInt(79).String(), genesisNonce.String())
 }
-
 
 func TestGetBlockByHashGenesis(t *testing.T) {
 	assert := assert.New(t)
@@ -426,7 +425,6 @@ func TestGetBlockByHashGenesis(t *testing.T) {
 	t.Logf("Block: acc_work=%s\n", block.AccumulatedWork.String())
 	assert.Equal(big.NewInt(17).String(), block.AccumulatedWork.String())
 }
-
 
 func TestBlockDAGInitialised(t *testing.T) {
 	assert := assert.New(t)
@@ -481,14 +479,14 @@ func TestBlockDAGInitialised(t *testing.T) {
 		accWork := [32]byte{}
 		copy(accWork[:], accWorkBuf)
 		block.AccumulatedWork = Bytes32ToBigInt(accWork)
-		
+
 		parentTotalWork := [32]byte{}
 		copy(parentTotalWork[:], parentTotalWorkBuf)
 		block.ParentTotalWork = Bytes32ToBigInt(parentTotalWork)
 	}
 
 	rows.Close()
-	
+
 	// Compute the acc work.
 	rawGenesisBlock := GetRawGenesisBlockFromConfig(conf)
 	accWork := CalculateWork(Bytes32ToBigInt(rawGenesisBlock.Hash()))
@@ -570,7 +568,7 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 
 	raw := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
-		ParentTotalWork: 	  	BigIntToBytes32(*CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))),
+		ParentTotalWork:        BigIntToBytes32(*CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))),
 		Timestamp:              1719379532750,
 		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
@@ -630,7 +628,7 @@ func TestGetCurrentTips(t *testing.T) {
 	// Construct block template for mining.
 	raw := RawBlock{
 		ParentHash:             current_tip.Hash,
-		ParentTotalWork: 	  	BigIntToBytes32(*CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))),
+		ParentTotalWork:        BigIntToBytes32(*CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))),
 		Timestamp:              Timestamp(),
 		NumTransactions:        1,
 		TransactionsMerkleRoot: [32]byte{},
