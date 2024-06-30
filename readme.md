@@ -93,4 +93,10 @@ Work breakdown:
     - [ ] improve block/rawblock. missing fields, unset fields etc. tests for this.
     - [ ] double check big endian canonical encoding
     - [ ] add zlib compression for rawblock, block (just like google's sstable)
+- [ ] observability tooling
+    - [ ] index the pubkeys of miners of the network (coinbase txs)
+    - [ ] index the hashrate of individual nodes
+    - [ ] dashboard covering all nodes in network, uptime, % blocks contributed
+    - [ ] reorgs
+- [ ] implement a simple tinychain exchange using django. accepts DAI/USD/WBTC and swaps to TINY coin. 
 - [ ] generate zk proofs of chain history

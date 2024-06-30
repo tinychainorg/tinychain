@@ -68,7 +68,6 @@ func (c *CoinStateMachine) Transition(input CoinStateMachineInput) (error, []Sta
 	// Check the `from` account for balance.
 	// Deduct the coins from the `from` account balance.
 	// Add the coins to the `to` account balance.
-
 	leaves := []StateLeaf{}
 	return nil, leaves
 }
