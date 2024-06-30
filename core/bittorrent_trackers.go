@@ -10,12 +10,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/jackpal/bencode-go"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/jackpal/bencode-go"
 )
 
 const trackerList = `https://tracker.tamersunion.org:443/announce
@@ -50,7 +51,7 @@ type TrackerPeers struct {
 	ID   string `bencode:"peer id"`
 }
 
-func generatePeerID() string {
+func generatePeerID() string { //unused
 	b := make([]byte, 20)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -61,25 +62,26 @@ func generatePeerID() string {
 
 func addPeerToSwarm(peerID string, infoHash string, port int) error {
 	fmt.Println("Adding peer to swarm")
-	fmt.Println("Peer ID:", peerID)
+	fmt.Println("Peer ID:", peerID) //store ipv6
 	fmt.Println("Infohash:", infoHash)
 
 	params := url.Values{}
 	params.Add("info_hash", infoHash)
 	params.Add("peer_id", peerID)
-	params.Add("port", strconv.Itoa(port))
+	params.Add("port", strconv.Itoa(port)) //could hardcode port, not actually using
 	params.Add("uploaded", "0")
 	params.Add("downloaded", "0")
 	params.Add("left", "0")
 	params.Add("event", "started")
 
-	resp, err := http.Get(trackerURL + "?" + params.Encode())
+	resp, err := http.Get(trackerURL + "?" + params.Encode()) //do we only want to announce to one tracker
 	if err != nil {
 		return err
 	}
+
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body) //ioutil deprecated, now just io
 	if err != nil {
 		return err
 	}
