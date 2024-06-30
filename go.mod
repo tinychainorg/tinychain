@@ -1,6 +1,6 @@
 module github.com/liamzebedee/tinychain-go
 
-go 1.20
+go 1.22
 
 // go 1.22.1
 
