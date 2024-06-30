@@ -208,7 +208,7 @@ func NewPeerConfig(address string, port string, bootstrapPeers []string) PeerCon
 }
 
 type NetworkMessage struct {
-	type_ string `json:"type"`
+	Type string `json:"type"`
 }
 
 type HeartbeatMesage struct {

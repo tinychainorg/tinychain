@@ -215,7 +215,7 @@ func (p *PeerCore) GossipBlock(block RawBlock) {
 	for _, peer := range p.peers {
 		// TODO gossip the block header but not the full block.
 		// Let the peer decide on whether they need to download block.
-		_, err := SendMessageToPeer(peer.url, newBlockMsg, p.peerLogger)
+		_, err := SendMessageToPeer(peer.url, newBlockMsg, &p.peerLogger)
 		if err != nil {
 			p.peerLogger.Printf("Failed to send block to peer: %v", err)
 		}
@@ -236,7 +236,7 @@ func (p *PeerCore) GossipPeers() {
 	}
 
 	for _, peer := range p.peers {
-		reply, err := SendMessageToPeer(peer.url, gossipPeersMsg, p.peerLogger)
+		reply, err := SendMessageToPeer(peer.url, gossipPeersMsg, &p.peerLogger)
 		if err != nil {
 			p.peerLogger.Printf("Failed to send block to peer: %v", err)
 		}
@@ -334,7 +334,7 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 	}
 
 	// Send heartbeat message to peer.
-	_, err = SendMessageToPeer(peer.url, heartbeatMsg, p.peerLogger)
+	_, err = SendMessageToPeer(peer.url, heartbeatMsg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
 		return

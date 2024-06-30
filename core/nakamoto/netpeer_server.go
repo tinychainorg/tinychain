@@ -133,7 +133,7 @@ func (s *PeerServer) inboxHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func SendMessageToPeer(peerUrl string, message any, log log.Logger) ([]byte, error) {
+func SendMessageToPeer(peerUrl string, message any, log *log.Logger) ([]byte, error) {
 	// Dial on HTTP.
 	url := fmt.Sprintf("%s/peerapi/inbox", peerUrl)
 	log.Printf("Sending message to peer at %s\n", url)

@@ -173,7 +173,6 @@ func (node *Miner) Start(mineMaxBlocks int64) {
 	if node.IsRunning {
 		// TODO: is this best?
 		panic("Miner already running")
-		return
 	}
 
 	node.IsRunning = true

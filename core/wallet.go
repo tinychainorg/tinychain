@@ -83,7 +83,6 @@ func (w *Wallet) Sign(msg []byte) ([]byte, error) {
 	hash := sha256.Sum256(msg)
 	r, s, err := ecdsa.Sign(rand.Reader, w.prvkey, hash[:])
 	if err != nil {
-		panic(err)
 		return nil, err
 	}
 	// Ensure r and s are padded to 32 bytes
@@ -103,19 +102,19 @@ func VerifySignature(pubkeyStr string, sig, msg []byte) bool {
 	}
 	if len(pubkeyStr) != 130 {
 		panic("Invalid public key") // TODO
-		return false
+		// return false
 	}
 
 	pubkeyBytes, err := hex.DecodeString(pubkeyStr)
 	if err != nil {
 		panic(err)
-		return false
+		// return false
 	}
 
 	x, y := elliptic.Unmarshal(elliptic.P256(), pubkeyBytes)
 	if x == nil {
 		panic("Invalid public key") // TODO
-		return false
+		// return false
 	}
 	pubkey := &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}
 
