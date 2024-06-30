@@ -2,11 +2,11 @@ package nakamoto
 
 import (
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"math/big"
 	"strconv"
 	"time"
-	"encoding/binary"
 )
 
 type ConsensusConfig struct {
@@ -19,8 +19,8 @@ type ConsensusConfig struct {
 	// Genesis difficulty target.
 	GenesisDifficulty big.Int `json:"genesis_difficulty"`
 
-	// The genesis block hash.
-	GenesisBlockHash [32]byte `json:"genesis_block_hash"`
+	// The genesis parent block hash.
+	GenesisParentBlockHash [32]byte `json:"genesis_block_hash"`
 
 	// Maximum block size.
 	MaxBlockSizeBytes uint64 `json:"max_block_size_bytes"`
@@ -94,6 +94,7 @@ func (t *RawTransaction) Bytes() []byte {
 type Block struct {
 	// Block header.
 	ParentHash             [32]byte
+	ParentTotalWork        big.Int
 	Timestamp              uint64
 	NumTransactions        uint64
 	TransactionsMerkleRoot [32]byte
@@ -197,12 +198,13 @@ func (e *Epoch) GetId() string {
 }
 
 type PeerConfig struct {
+	address        string
 	port           string
 	bootstrapPeers []string
 }
 
-func NewPeerConfig(port string, bootstrapPeers []string) PeerConfig {
-	return PeerConfig{port: port, bootstrapPeers: bootstrapPeers}
+func NewPeerConfig(address string, port string, bootstrapPeers []string) PeerConfig {
+	return PeerConfig{address: address, port: port, bootstrapPeers: bootstrapPeers}
 }
 
 type NetworkMessage struct {

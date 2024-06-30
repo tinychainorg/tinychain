@@ -26,8 +26,10 @@ func (w *Wallet) PubkeyBytes() [65]byte {
 	// 1 byte for the format prefix (0x04 for uncompressed)
 	// 32 bytes for the X coordinate
 	// 32 bytes for the Y coordinate
-
 	buf := elliptic.Marshal(pubkey.Curve, pubkey.X, pubkey.Y)
+	if len(buf) != 65 {
+		panic("Invalid pubkey length while marshalling to bytes")
+	}
 	var pubkeyBytes [65]byte
 	copy(pubkeyBytes[:], buf)
 	return pubkeyBytes

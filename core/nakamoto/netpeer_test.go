@@ -3,19 +3,28 @@ package nakamoto
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"net"
+	"net/url"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // healthCheck dials an HTTP server and checks if it is running by calling the /health endpoint
-func healthCheck(address string) error {
+func healthCheck(peerUrl string) error {
 	// Set a timeout for the connection attempt
 	timeout := 1 * time.Second
 
+	// Parse URL and get address and port.
+	url_, err := url.Parse(peerUrl)
+	if err != nil {
+		return err
+	}
+
 	// Attempt to establish a TCP connection
-	conn, err := net.DialTimeout("tcp", address, timeout)
+	conn, err := net.DialTimeout("tcp", url_.Host, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %v", err)
 	}
@@ -23,27 +32,42 @@ func healthCheck(address string) error {
 	return nil
 }
 
+func getRandomPort() (string) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		panic(err)
+	}
+	defer listener.Close()
+
+	return strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+}
+
+
 func waitForPeersOnline(peers []*PeerCore) {
-	ready := make(chan bool)
+	ready := make(chan bool, 1)
 
 	go func() {
-		goodflags := make([]bool, len(peers))
 		for {
-			for i, peer := range peers {
+			numOnline := 0
+
+			fmt.Printf("waiting for %d peers to come online\n", len(peers) - numOnline)
+			for _, peer := range peers {
+				fmt.Printf("  pinging peer %s\n", peer.GetLocalAddr())
 				// Dial each peer using TCP to check connection.
-				if err := healthCheck(peer.GetLocalAddr()); err != nil {
-					goodflags[i] = true
+				err := healthCheck(peer.GetLocalAddr());
+				if err == nil {
+					numOnline += 1
+				} else {
+					fmt.Printf("  peer %s is not online: %s\n", peer.GetLocalAddr(), err.Error())
 				}
 			}
 
-			// Reduce good.
-			for _, good := range goodflags {
-				if !good {
-					break
-				}
-			}
+			time.Sleep(500 * time.Millisecond)
 
-			ready <- true
+			if numOnline == len(peers) {
+				ready <- true
+				return
+			}
 		}
 	}()
 
@@ -51,18 +75,42 @@ func waitForPeersOnline(peers []*PeerCore) {
 }
 
 func TestStartPeer(t *testing.T) {
-	peer1 := NewPeerCore(PeerConfig{port: "8080"})
-	peer1.Start()
-	// Setup two peers and test one peer sending message to another.
+	ch := make(chan bool)
+	peer1 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort() })
+	go peer1.Start()
+
+	// Setup timeout.
+	go func () {
+		time.Sleep(1500 * time.Millisecond)
+		ch <- true
+	}()
+
+	<-ch
 }
 
 func TestStartPeerHeartbeat(t *testing.T) {
 	assert := assert.New(t)
 
-	peer1 := NewPeerCore(PeerConfig{port: "8080"})
-	go peer1.Start()
+	peer1 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort() })
+	peer2 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort() })
+	
+	// Override message handler.
+	heartbeatChan := make(chan HeartbeatMesage, 1)
+	peer1.server.RegisterMesageHandler("heartbeat", func(message []byte) (interface{}, error) {
+		t.Logf("Received heartbeat message: %s", message)
 
-	peer2 := NewPeerCore(PeerConfig{port: "8081"})
+		// Decode message into HeartbeatMessage.
+		var hb HeartbeatMesage
+		if err := json.Unmarshal(message, &hb); err != nil {
+			t.Fatalf(err.Error())
+			return nil, err
+		}
+
+		heartbeatChan <- hb
+		return nil, nil
+	})
+
+	go peer1.Start()
 	go peer2.Start()
 
 	// Wait until both servers are up.
@@ -74,27 +122,17 @@ func TestStartPeerHeartbeat(t *testing.T) {
 		peer1.GetLocalAddr(),
 	}
 
-	// Override message handler.
-	heartbeatChan := make(chan HeartbeatMesage)
-	peer1.server.RegisterMesageHandler("heartbeat", func(message []byte) (interface{}, error) {
-		// Decode message into HeartbeatMessage.
-		var hb HeartbeatMesage
-		if err := json.Unmarshal(message, &hb); err != nil {
-			return nil, err
-		}
-
-		heartbeatChan <- hb
-		return nil, nil
-	})
-
 	// Instruct peer 2 to begin bootstrapping.
-	go peer2.Bootstrap(peer2BootstrapInfo)
+	t.Logf("Bootstrapping peer 2...")
+	peer2.Bootstrap(peer2BootstrapInfo)
+
+	t.Logf("Waiting for peer to receive heartbeat...")
 
 	// Wait for heartbeat.
 	select {
 	case hb := <-heartbeatChan:
 		assert.Equal("heartbeat", hb.Type)
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Error("Timed out waiting for heartbeat.")
 	}
 
@@ -106,10 +144,10 @@ func TestStartPeerHeartbeat(t *testing.T) {
 
 func TestPeerGossip(t *testing.T) {
 	// assert := assert.New(t)
-	peer1 := NewPeerCore(PeerConfig{port: "8080"})
+	peer1 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort() })
 	go peer1.Start()
 
-	peer2 := NewPeerCore(PeerConfig{port: "8081"})
+	peer2 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort() })
 	go peer2.Start()
 
 	// Gossip a block from peer 1 to peer 2.

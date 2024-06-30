@@ -1,14 +1,15 @@
 package nakamoto
 
 import (
+	"math/big"
+	"time"
+
 	"github.com/liamzebedee/tinychain-go/core"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
-	"math/big"
-	"time"
 )
 
-var minerLog = NewLogger("miner")
+var minerLog = NewLogger("miner", "")
 
 type Miner struct {
 	dag             BlockDAG
@@ -94,7 +95,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 			h := block.Hash()
 			hash := new(big.Int).SetBytes(h[:])
 
-			minerLog.Printf("hash block=%s i=%d\n", Bytes32ToString(h), i)
+			// minerLog.Printf("hash block=%s i=%d\n", Bytes32ToString(h), i)
 
 			// Check solution: hash < target.
 			if hash.Cmp(&target) == -1 {
@@ -169,6 +170,12 @@ func (node *Miner) MakeNewPuzzle() POWPuzzle {
 }
 
 func (node *Miner) Start(mineMaxBlocks int64) {
+	if node.IsRunning {
+		// TODO: is this best? 
+		panic("Miner already running")
+		return
+	}
+
 	node.IsRunning = true
 
 	// The next tip channel.

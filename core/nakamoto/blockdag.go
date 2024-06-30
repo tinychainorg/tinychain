@@ -10,7 +10,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var logger = NewLogger("blockdag")
+var logger = NewLogger("blockdag", "")
 
 func OpenDB(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", dbPath)
@@ -103,23 +103,42 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachine, consensus Consensu
 }
 
 func GetRawGenesisBlockFromConfig(consensus ConsensusConfig) RawBlock {
-	return RawBlock{
-		ParentHash:             [32]byte{},
-		ParentTotalWork:        BigIntToBytes32(*big.NewInt(0)),
+	block := RawBlock{
+		// Special case: The genesis block has a parent we don't know the preimage for.
+		ParentHash:             consensus.GenesisParentBlockHash,
+		ParentTotalWork:        [32]byte{},
 		Difficulty:             BigIntToBytes32(consensus.GenesisDifficulty),
 		Timestamp:              0,
 		NumTransactions:        0,
 		TransactionsMerkleRoot: [32]byte{},
 		Nonce:                  [32]byte{},
-		Graffiti:               [32]byte{0xca, 0xfe, 0xba, 0xbe, 0xde, 0xca, 0xfb, 0xad}, // 0x cafebabe decafbad
+		Graffiti:               [32]byte{0xca, 0xfe, 0xba, 0xbe, 0xde, 0xca, 0xfb, 0xad, 0xde, 0xad, 0xbe, 0xef}, // 0x cafebabe decafbad deadbeef
 		Transactions:           []RawTransaction{},
 	}
+	
+	// Mine the block.
+	solution, err := SolvePOW(block, *new(big.Int), consensus.GenesisDifficulty, 100)
+	if err != nil {
+		panic(err)
+	}
+	block.SetNonce(solution)
+
+	// Sanity-check: verify the block.
+	if !VerifyPOW(block.Hash(), consensus.GenesisDifficulty) {
+		panic("Genesis block POW solution is invalid.")
+	}
+
+	// Calculate work.
+	work := CalculateWork(Bytes32ToBigInt(block.Hash()))
+
+	logger.Printf("Genesis block hash=%s work=%s\n", block.HashStr(), work.String())
+	return block
 }
 
 // Initalises the block DAG with the genesis block.
 func (dag *BlockDAG) initialiseBlockDAG() error {
-	genesisBlockHash := dag.consensus.GenesisBlockHash
 	genesisBlock := GetRawGenesisBlockFromConfig(dag.consensus)
+	genesisBlockHash := genesisBlock.Hash()
 	genesisHeight := uint64(0)
 
 	// Check if we have already initialised the database.
@@ -159,8 +178,9 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 		return err
 	}
 
+	work := CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))
 	logger.Printf("Inserted genesis epoch difficulty=%s\n", dag.consensus.GenesisDifficulty.String())
-	accWorkBuf := BigIntToBytes32(*big.NewInt(1)) // parent_total_work + 1
+	accWorkBuf := BigIntToBytes32(*work)
 
 	// Insert the genesis block.
 	_, err = dag.db.Exec(
@@ -183,7 +203,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 		return err
 	}
 
-	logger.Printf("Inserted genesis block hash=%s\n", hex.EncodeToString(genesisBlockHash[:]))
+	logger.Printf("Inserted genesis block hash=%s work=%s\n", hex.EncodeToString(genesisBlockHash[:]), work.String())
 
 	return nil
 }
@@ -293,6 +313,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// 6c. Verify parent total work is correct.
 	parentTotalWork := Bytes32ToBigInt(raw.ParentTotalWork)
 	if parentBlock.AccumulatedWork.Cmp(&parentTotalWork) != 0 {
+		logger.Printf("Comparing parent total work. expected=%s actual=%s\n", parentBlock.AccumulatedWork.String(), parentTotalWork.String())
 		return fmt.Errorf("Parent total work is incorrect.")
 	}
 
@@ -425,7 +446,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 	block := Block{}
 
 	// Query database.
-	rows, err := dag.db.Query("select hash, parent_hash, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1", hash[:])
+	rows, err := dag.db.Query("select hash, parent_hash, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1", hash[:])
 	if err != nil {
 		return nil, err
 	}
@@ -438,11 +459,12 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		nonce := []byte{}
 		graffiti := []byte{}
 		accWorkBuf := []byte{}
-		accWork := [32]byte{}
+		parentTotalWorkBuf := []byte{}
 
 		err := rows.Scan(
 			&hash,
 			&parentHash,
+			&parentTotalWorkBuf,
 			&block.Timestamp,
 			&block.NumTransactions,
 			&transactionsMerkleRoot,
@@ -463,8 +485,14 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		copy(block.TransactionsMerkleRoot[:], transactionsMerkleRoot)
 		copy(block.Nonce[:], nonce)
 		copy(block.Graffiti[:], graffiti)
+
+		accWork := [32]byte{}
 		copy(accWork[:], accWorkBuf)
 		block.AccumulatedWork = Bytes32ToBigInt(accWork)
+		
+		parentTotalWork := [32]byte{}
+		copy(parentTotalWork[:], parentTotalWorkBuf)
+		block.ParentTotalWork = Bytes32ToBigInt(parentTotalWork)
 
 		return &block, nil
 	} else {

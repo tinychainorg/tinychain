@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-var peerLogger = NewLogger("peer")
 var CLIENT_VERSION = "tinychain v0.0.0 / aggressive alpha"
 var WIRE_PROTOCOL_VERSION = uint(1)
 
@@ -39,6 +38,8 @@ type PeerCore struct {
 	OnNewBlock  func(block RawBlock)
 	OnGetBlocks func(msg GetBlocksMessage) ([][]byte, error)
 	OnGetTip    func(msg GetTipMessage) ([32]byte, error)
+
+	peerLogger log.Logger
 }
 
 type Peer struct {
@@ -55,6 +56,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		server: nil,
 		config: config,
 		GossipPeersIntervalSeconds: 30,
+		peerLogger: *NewLogger("peer", fmt.Sprintf(":%s", config.port)),
 	}
 
 	externalIp, _, err := DiscoverIP()
@@ -64,7 +66,6 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 	p.externalIp = externalIp
 	// p.externalPort = fmt.Sprintf("%d", externalPort)
 	p.externalPort = config.port
-
 	p.server = NewPeerServer(p.config)
 
 	// Message handlers.
@@ -171,14 +172,17 @@ func (p *PeerCore) Start() {
 	go p.statusLoggerRoutine()
 	go p.gossipPeersRoutine()
 
-	p.server.Start()
+	err := p.server.Start()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to start peer server: %v", err))
+	}
 }
 
 func (p *PeerCore) gossipPeersRoutine() {
 	for {
-		peerLogger.Printf("gossip-peers-routine start\n")
+		p.peerLogger.Printf("gossip-peers-routine start\n")
 		p.GossipPeers()
-		peerLogger.Printf("gossip-peers-routine complete\n")
+		p.peerLogger.Printf("gossip-peers-routine complete\n")
 		time.Sleep(time.Duration(p.GossipPeersIntervalSeconds) * time.Second)
 	}
 }
@@ -186,14 +190,14 @@ func (p *PeerCore) gossipPeersRoutine() {
 func (p *PeerCore) statusLoggerRoutine() {
 	for {
 		// Set timeout.
-		peerLogger.Printf("Connected to %d peers", len(p.peers))
+		p.peerLogger.Printf("Connected to %d peers", len(p.peers))
 		time.Sleep(30 * time.Second)
 	}
 }
 
 func (p *PeerCore) GetLocalAddr() string {
 	// TODO for now.
-	return fmt.Sprintf("http://%s:%s", "[::]", p.config.port)
+	return fmt.Sprintf("http://%s:%s", p.config.address, p.config.port)
 }
 
 func (p *PeerCore) GetExternalAddr() string {
@@ -201,7 +205,7 @@ func (p *PeerCore) GetExternalAddr() string {
 }
 
 func (p *PeerCore) GossipBlock(block RawBlock) {
-	peerLogger.Printf("Gossiping block %s to %d peers\n", block.HashStr(), len(p.peers))
+	p.peerLogger.Printf("Gossiping block %s to %d peers\n", block.HashStr(), len(p.peers))
 
 	// Send block to all peers.
 	newBlockMsg := NewBlockMessage{
@@ -211,15 +215,15 @@ func (p *PeerCore) GossipBlock(block RawBlock) {
 	for _, peer := range p.peers {
 		// TODO gossip the block header but not the full block.
 		// Let the peer decide on whether they need to download block.
-		_, err := SendMessageToPeer(peer.url, newBlockMsg)
+		_, err := SendMessageToPeer(peer.url, newBlockMsg, p.peerLogger)
 		if err != nil {
-			peerLogger.Printf("Failed to send block to peer: %v", err)
+			p.peerLogger.Printf("Failed to send block to peer: %v", err)
 		}
 	}
 }
 
 func (p *PeerCore) GossipPeers() {
-	peerLogger.Printf("Gossiping peers list to %d peers\n", len(p.peers))
+	p.peerLogger.Printf("Gossiping peers list to %d peers\n", len(p.peers))
 
 	// Send list to all peers.
 	peers := []string{}
@@ -232,15 +236,15 @@ func (p *PeerCore) GossipPeers() {
 	}
 
 	for _, peer := range p.peers {
-		reply, err := SendMessageToPeer(peer.url, gossipPeersMsg)
+		reply, err := SendMessageToPeer(peer.url, gossipPeersMsg, p.peerLogger)
 		if err != nil {
-			peerLogger.Printf("Failed to send block to peer: %v", err)
+			p.peerLogger.Printf("Failed to send block to peer: %v", err)
 		}
 
 		// Handle reply.
 		var msg GossipPeersMessage
 		if err := json.Unmarshal(reply, &msg); err != nil {
-			peerLogger.Printf("Failed to unmarshal gossip peers reply: %v", err)
+			p.peerLogger.Printf("Failed to unmarshal gossip peers reply: %v", err)
 		}
 
 		// Ingest new peers.
@@ -275,13 +279,13 @@ func (p *PeerCore) GossipPeers() {
 // Bootstraps the connection to the network.
 func (p *PeerCore) Bootstrap(peerInfos []string) {
 	// Contact all peers and exchange heartbeats.
-	peerLogger.Println("Bootstrapping network from peers...")
+	p.peerLogger.Println("Bootstrapping network from peers...")
 
 	doneChan := make(chan bool, len(peerInfos))
 
 	// Contact all peers and exchange heartbeats.
 	for i, peerInfo := range peerInfos {
-		peerLogger.Printf("Connecting to bootstrap peer #%d at %s\n", i, peerInfo)
+		p.peerLogger.Printf("Connecting to bootstrap peer #%d at %s\n", i, peerInfo)
 
 		go (func() {
 			p.AddPeer(peerInfo)
@@ -294,14 +298,14 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
 		<-doneChan
 	}
 
-	peerLogger.Println("Bootstrapping complete.")
+	p.peerLogger.Println("Bootstrapping complete.")
 }
 
 func (p *PeerCore) AddPeer(peerInfo string) {
 	// Check URL valid.
 	_, err := url.Parse(peerInfo)
 	if err != nil {
-		peerLogger.Println("Failed to parse peer address: ", err)
+		p.peerLogger.Println("Failed to parse peer address: ", err)
 		return
 	}
 
@@ -325,18 +329,18 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 
 	if peer.url == p.GetExternalAddr() || peer.url == p.GetLocalAddr() {
 		// Skip self.
-		peerLogger.Printf("AddPeer found peerInfo corresponding to our peer. Skipping.\n")
+		p.peerLogger.Printf("AddPeer found peerInfo corresponding to our peer. Skipping.\n")
 		return
 	}
 
 	// Send heartbeat message to peer.
-	_, err = SendMessageToPeer(peer.url, heartbeatMsg)
+	_, err = SendMessageToPeer(peer.url, heartbeatMsg, p.peerLogger)
 	if err != nil {
-		peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
+		p.peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
 		return
 	}
 
-	peerLogger.Println("Peer is alive, adding to peer list")
+	p.peerLogger.Println("Peer is alive, adding to peer list")
 
 	// Add peer to list.
 	p.peers = append(p.peers, peer)

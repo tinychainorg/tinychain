@@ -4,9 +4,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateWallet(t *testing.T) {
@@ -107,4 +108,24 @@ func TestRecreateWallet(t *testing.T) {
 
 	assert.Equal(wallet.PubkeyStr(), "04e14529aa7c2a392dbe70f30f18cd0c76422d256fa413e151b87417d9232c41374985d8df6cedf084cf107c397ed658bd13dc2b31d4cbc3979c8684edb8b948bf")
 	assert.Equal(wallet.Address(), "667a27f39789afa3975b44db3af94afd67292cbd9a18901d31ea25c666320b0c")
+}
+
+func TestWalletSigningDeterminism(t *testing.T) {
+	// TODO refactor wallet test.
+	// This was when I realised signatures were 65 bytes.
+	wallet, err := WalletFromPrivateKey("2053e3c0d239d12a554ef55895b89e5d044af7d09d8be9a8f6da22460f8260ca")
+	if err != nil {
+		t.Fatalf("Failed to create wallet: %s", err)
+	}
+
+	for i := 0; i < 100_000; i++ {
+		if i % 10_000 == 0 {
+			t.Logf("Iteration %d", i)
+		}
+		msg := []byte("Gday, world!")
+		_, err := wallet.Sign(msg)
+		if err != nil {
+			t.Fatalf("Failed to sign message: %s", err)
+		}
+	}
 }

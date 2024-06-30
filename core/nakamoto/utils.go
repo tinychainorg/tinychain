@@ -3,13 +3,14 @@ package nakamoto
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/pion/stun"
 	"log"
 	"math/big"
 	"net"
 	"os"
 	"time"
+
+	"github.com/fatih/color"
+	"github.com/pion/stun"
 )
 
 func Timestamp() uint64 {
@@ -59,6 +60,7 @@ func DiscoverIP() (string, int, error) {
 	conn, err := net.ListenPacket("udp", localAddr)
 	if err != nil {
 		log.Fatalf("Failed to listen on UDP port: %v", err)
+		return "", 0, err
 	}
 	defer conn.Close()
 	// localAddr2 := conn.LocalAddr().(*net.UDPAddr)
@@ -68,13 +70,13 @@ func DiscoverIP() (string, int, error) {
 	// Parse a STUN URI
 	u, err := stun.ParseURI("stun:stun.l.google.com:19302")
 	if err != nil {
-		panic(err)
+		return "", 0, err
 	}
 
 	// Creating a "connection" to STUN server.
 	c, err := stun.DialURI(u, &stun.DialConfig{})
 	if err != nil {
-		panic(err)
+		return "", 0, err
 	}
 	// Building binding request with random transaction id.
 	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
@@ -85,28 +87,39 @@ func DiscoverIP() (string, int, error) {
 	if err := c.Do(message, func(res stun.Event) {
 		cbChan <- res
 	}); err != nil {
-		panic(err)
+		return "", 0, err
 	}
 
 	// Waiting for response message.
 	res := <-cbChan
 	if res.Error != nil {
-		panic(res.Error)
+		return "", 0, res.Error
 	}
 	// Decoding XOR-MAPPED-ADDRESS attribute from message.
 	var xorAddr stun.XORMappedAddress
 	if err := xorAddr.GetFrom(res.Message); err != nil {
-		panic(err)
+		return "", 0, res.Error
 	}
 
 	// Print the external IP and port
-	peerLogger.Printf("External IP: %s\n", xorAddr.IP)
-	peerLogger.Printf("External Port: %d\n", xorAddr.Port)
+	// peerLogger.Printf("External IP: %s\n", xorAddr.IP)
+	// peerLogger.Printf("External Port: %d\n", xorAddr.Port)
 
 	return xorAddr.IP.String(), xorAddr.Port, nil
 }
 
-func NewLogger(prefix string) *log.Logger {
+func NewLogger(prefix string, prefix2 string) *log.Logger {
+	// Logging formats:
+	// 
+	// prefix="prefix" prefix2=""
 	// 2024/06/30 00:56:06 [prefix] message
-	return log.New(os.Stdout, color.HiGreenString(fmt.Sprintf("[%s] ", prefix)), log.Ldate | log.Ltime | log.Lmsgprefix)
+	// 
+	// prefix="prefix" prefix2="prefix2"
+	// 2024/06/30 00:56:06 [prefix] (prefix2) message
+	// 
+	prefixFull := color.HiGreenString(fmt.Sprintf("[%s] ", prefix))
+	if prefix2 != "" {
+		prefixFull += color.HiYellowString(fmt.Sprintf("(%s) ", prefix2))
+	}
+	return log.New(os.Stdout, prefixFull, log.Ldate | log.Ltime | log.Lmsgprefix)
 }

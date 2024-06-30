@@ -1,13 +1,13 @@
 package nakamoto
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBuildBlock(t *testing.T) {
@@ -17,23 +17,38 @@ func TestBuildBlock(t *testing.T) {
 }
 
 func TestGenesisBlockHash(t *testing.T) {
-	genesis_block := RawBlock{}
-	// get envelope
-	envelope := genesis_block.Envelope()
-	// now hash it
+	assert := assert.New(t)
+
+	genesis_difficulty := new(big.Int)
+	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+
+	conf := ConsensusConfig{
+		EpochLengthBlocks:       5,
+		TargetEpochLengthMillis: 2000,
+		GenesisDifficulty:       *genesis_difficulty,
+		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
+		GenesisParentBlockHash:  HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
+		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+	}
+
+	// Get the genesis block.
+	genesisBlock := GetRawGenesisBlockFromConfig(conf)
+
+	// Now hash it.	
 	h := sha256.New()
-	h.Write(envelope)
-	fmt.Printf("%x\n", h.Sum(nil))
+	h.Write(genesisBlock.Envelope())
+	actual := sha256.Sum256(h.Sum(nil))
 
-	expected, err := hex.DecodeString("b5fdab78d8947eacc864bfeecb4d2100780e5afe1cd8efafb124887913ac49fa")
-
+	expected, err := hex.DecodeString("0ed59333a743482efdf0aabb0c62add06e5a3dd21068f458af12832720ff370e")
 	if err != nil {
 		t.Fatalf("Failed to decode expected hash")
 	}
 
-	if !bytes.Equal(h.Sum(nil), expected) {
-		t.Fatalf("Genesis block hash is incorrect")
-	}
+	assert.Equal(
+		hex.EncodeToString(expected), 
+		fmt.Sprintf("%x", actual),
+		"Genesis block hash is incorrect",
+	)
 }
 
 func TestProofOfWorkSolver(t *testing.T) {
@@ -100,7 +115,7 @@ func TestBuildChainOfBlocks(t *testing.T) {
 // 		EpochLengthBlocks: 5,
 // 		TargetEpochLengthMillis: 2000,
 // 		GenesisDifficulty: *genesis_difficulty,
-// 		GenesisBlockHash: [32]byte{},
+// 		GenesisParentBlockHash: [32]byte{},
 // 		MaxBlockSizeBytes: 1000000,
 // 	}
 // 	difficulty := conf.GenesisDifficulty

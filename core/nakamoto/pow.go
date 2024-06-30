@@ -5,7 +5,7 @@ import (
 	"math/big"
 )
 
-var powLogger = NewLogger("pow")
+var powLogger = NewLogger("pow", "")
 
 func VerifyPOW(blockhash [32]byte, target big.Int) bool {
 	powLogger.Printf("VerifyPOW target: %s\n", target.String())

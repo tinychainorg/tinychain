@@ -2,57 +2,60 @@ package nakamoto
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"sort"
 	"time"
 )
 
-var peerServerLogger = NewLogger("peer-server")
-
 type PeerServer struct {
 	config          PeerConfig
 	messageHandlers map[string]PeerMessageHandler
+	log log.Logger
+	server *http.Server
 }
 
 func NewPeerServer(config PeerConfig) *PeerServer {
-	return &PeerServer{
+	s := PeerServer{
 		config:          config,
 		messageHandlers: make(map[string]PeerMessageHandler),
+		log: *NewLogger("peer-server", fmt.Sprintf(":%s", config.port)),
 	}
-}
 
-type PeerMessageHandler = func(message []byte) (interface{}, error)
-
-func (s *PeerServer) RegisterMesageHandler(messageKey string, handler PeerMessageHandler) {
-	s.messageHandlers[messageKey] = handler
-}
-
-func (s *PeerServer) Start() {
 	// Get the port from the environment variable
+	addr := s.config.address
 	port := s.config.port
-	if port == "" {
-		port = "8080"
-	}
 
+	// Setup HTTP server mux.
 	mux := http.NewServeMux()
 	mux.Handle("/peerapi/inbox", http.HandlerFunc(s.inboxHandler))
 
 	// Configure server with no transfer limits and gracious timeouts
-	server := &http.Server{
-		Addr:         "[::]:" + port,
+	s.server = &http.Server{
+		Addr:         addr + ":" + port,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	peerServerLogger.Printf("Peer server listening on http://0.0.0.0:%s\n", port)
+	return &s
+}
 
+type PeerMessageHandler = func(message []byte) (interface{}, error)
+
+func (s *PeerServer) RegisterMesageHandler(messageKey string, handler PeerMessageHandler) {
+	s.log.Printf("Registering message handler for '%s'\n", messageKey)
+	s.messageHandlers[messageKey] = handler
+}
+
+func (s *PeerServer) Start() (error) {
 	// Log all handlers on one line separated by commas.
-	peerServerLogger.Printf("Registered message handlers: %v\n", func() []string {
+	s.log.Printf("Handling message types: %v\n", func() []string {
 		handlers := make([]string, 0, len(s.messageHandlers))
 		for k := range s.messageHandlers {
 			handlers = append(handlers, k)
@@ -61,9 +64,18 @@ func (s *PeerServer) Start() {
 		return handlers
 	}())
 
-	if err := server.ListenAndServe(); err != nil {
-		peerServerLogger.Println("Error starting server:", err)
+	if err := s.server.ListenAndServe(); err != nil {
+		s.log.Printf("Peer server listening on http://%s\n", s.server.Addr)
+		s.log.Println("Error starting server:", err)
+		return err
 	}
+	
+	return nil
+}
+
+func (s *PeerServer) Stop() {
+	s.log.Println("Stopping peer server")
+	s.server.Shutdown(context.Background())
 }
 
 // Handler for /peerapi/inbox
@@ -92,7 +104,7 @@ func (s *PeerServer) inboxHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Log the message type.
 	messageType := payload["type"].(string)
-	peerServerLogger.Printf("Received '%s' message\n", messageType)
+	s.log.Printf("Received '%s' message\n", messageType)
 
 	// Check we have a message handler.
 	if _, ok := s.messageHandlers[messageType]; !ok {
@@ -121,10 +133,10 @@ func (s *PeerServer) inboxHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func SendMessageToPeer(peerUrl string, message any) ([]byte, error) {
+func SendMessageToPeer(peerUrl string, message any, log log.Logger) ([]byte, error) {
 	// Dial on HTTP.
 	url := fmt.Sprintf("%s/peerapi/inbox", peerUrl)
-	peerLogger.Printf("Sending message to peer at %s\n", url)
+	log.Printf("Sending message to peer at %s\n", url)
 
 	// JSON encode message.
 	messageJson, err := json.Marshal(message)
@@ -133,7 +145,7 @@ func SendMessageToPeer(peerUrl string, message any) ([]byte, error) {
 	}
 
 	// Print json.
-	peerLogger.Printf("Sending message: %s\n", messageJson)
+	log.Printf("Sending message: %s\n", messageJson)
 
 	// Create a new HTTP request.
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(messageJson))

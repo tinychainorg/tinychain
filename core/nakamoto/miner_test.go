@@ -3,9 +3,10 @@ package nakamoto
 import (
 	"database/sql"
 	"encoding/hex"
-	"github.com/liamzebedee/tinychain-go/core"
 	"math/big"
 	"testing"
+
+	"github.com/liamzebedee/tinychain-go/core"
 )
 
 func newBlockdagForMiner() (BlockDAG, ConsensusConfig, *sql.DB) {
@@ -44,9 +45,9 @@ func newBlockdagForMiner() (BlockDAG, ConsensusConfig, *sql.DB) {
 
 	conf := ConsensusConfig{
 		EpochLengthBlocks:       5,
-		TargetEpochLengthMillis: 12000,
+		TargetEpochLengthMillis: 1000,
 		GenesisDifficulty:       *genesis_difficulty,
-		GenesisBlockHash:        genesisBlockHash,
+		GenesisParentBlockHash:  genesisBlockHash,
 		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
 	}
 
@@ -66,5 +67,5 @@ func TestMiner(t *testing.T) {
 	}
 
 	miner := NewMiner(dag, minerWallet)
-	miner.Start(100)
+	miner.Start(10)
 }

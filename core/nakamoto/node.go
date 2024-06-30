@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-var nodeLog = NewLogger("node")
+var nodeLog = NewLogger("node", "")
 
 type Node struct {
 	Dag   BlockDAG
@@ -108,7 +108,7 @@ func (n *Node) Start() {
 	done := make(chan bool)
 
 	go n.Peer.Start()
-	go n.Miner.Start(-1)
+	// go n.Miner.Start(-1)
 
 	<-done
 }
