@@ -81,7 +81,7 @@ type RawTransaction struct {
 	Sig        [64]byte `json:"sig"`
 	FromPubkey [65]byte `json:"from"`
 	ToPubkey   [65]byte `json:"to"`
-	Amount     uint64   `json:"amount`
+	Amount     uint64   `json:"amount"`
 	Fee        uint64   `json:"fee"`
 	Nonce      uint64   `json:"nonce"`
 }

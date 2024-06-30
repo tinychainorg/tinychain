@@ -60,11 +60,13 @@ func (tx *RawTransaction) Hash() [32]byte {
 
 func MakeTransferTx(from [65]byte, to [65]byte, amount uint64, wallet *core.Wallet, fee uint64) RawTransaction {
 	tx := RawTransaction{
-		FromPubkey: from,
+		Version: 1,
 		Sig:        [64]byte{},
-		Amount: amount,
+		FromPubkey: from,
 		ToPubkey:     to,
+		Amount: amount,
 		Fee:    fee,
+		Nonce:  0,
 	}
 	// Sign tx.
 	sig, err := wallet.Sign(tx.Envelope())

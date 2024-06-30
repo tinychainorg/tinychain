@@ -71,10 +71,14 @@ func TestStateMachineIdea(t *testing.T) {
 	// Assert balances.
 	// Ingest some transactions and calculate the state.
 	tx0 := CoinStateMachineInput{
-		RawTransaction: MakeTransferTx([65]byte{}, wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
+		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 		IsCoinbase:     true,
 	}
-	stateMachine.Transition(tx0)
+	effects, err := stateMachine.Transition(tx0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateMachine.Apply(effects)
 
 	// Assert balance.
 	balance0 := stateMachine.GetBalance(wallets[0].PubkeyBytes())
@@ -85,14 +89,18 @@ func TestStateMachineIdea(t *testing.T) {
 		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0], 0),
 		IsCoinbase:     false,
 	}
-	stateMachine.Transition(tx1)
+	effects, err = stateMachine.Transition(tx1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateMachine.Apply(effects)
 
 	// Assert balance.
 	balance1 := stateMachine.GetBalance(wallets[0].PubkeyBytes())
-	assert.Equal(t, uint64(0), balance1)
+	assert.Equal(t, uint64(50), balance1)
 
 	balance2 := stateMachine.GetBalance(wallets[1].PubkeyBytes())
-	assert.Equal(t, uint64(100), balance2)
+	assert.Equal(t, uint64(50), balance2)
 }
 
 func TestNodeReorgStateMachine(t *testing.T) {
