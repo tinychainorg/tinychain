@@ -233,6 +233,10 @@ func TestNodeReorgStateMachine(t *testing.T) {
 //     state_machine_test.go:279: Processed 9419000 transactions
 // --- PASS: TestBenchmarkTxOpsPerDay (9.38s)
 // 
+//     state_machine_test.go:292: Processed 9419000 transactions
+// --- PASS: TestBenchmarkTxOpsPerDay (13.92s)
+// This is on an AWS Instance with 2 vCPU's, 512MB RAM, 1GB swap.
+// 
 // So what does this infer?
 // Time:  At a block time of 10mins, block size of 1mb, and 6541 txs per block, it takes 9.38s to process a day's worth (6541*1440=9.4M) of state leaves (ignoring SQL reads).
 // Time:  9.38s   (3.2 GHz, 128 L1 cache, Mac M1)
@@ -244,6 +248,8 @@ func TestNodeReorgStateMachine(t *testing.T) {
 // 
 // Okay so, remaining speedups:
 // - paralellization (non-contentious state writes) - probably 10x
+// - disk reads - probably -2x
+// 
 // 
 // 
 
@@ -316,6 +322,5 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 		stateMachine.Apply(effects)
 		txsProcessed += 1
 	}
-
-	
 }
+

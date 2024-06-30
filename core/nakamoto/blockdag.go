@@ -622,3 +622,50 @@ func (dag *BlockDAG) GetCurrentTip() (Block, error) {
 
 	return *block, nil
 }
+
+func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip int64) ([][32]byte, error) {
+	list := make([][32]byte, 0, depthFromTip)
+
+	rows, err := dag.db.Query(`
+		WITH RECURSIVE block_path AS (
+			SELECT hash, parent_hash, 1 AS depth
+			FROM blocks
+			WHERE hash = ?
+
+			UNION ALL
+
+			SELECT b.hash, b.parent_hash, bp.depth + 1
+			FROM blocks b
+			INNER JOIN block_path bp ON b.hash = bp.parent_hash
+			WHERE bp.depth < ?
+		)
+		SELECT hash, parent_hash
+		FROM block_path
+		ORDER BY depth DESC;`, 
+		startHash[:], 
+		depthFromTip,
+	)
+	if err != nil {
+		return list, err
+	}
+
+	for rows.Next() {
+		hashBuf := []byte{}
+		parentHashBuf := []byte{}
+
+		hash := [32]byte{}
+		parentHash := [32]byte{}
+
+		err := rows.Scan(&hashBuf, &parentHashBuf)
+		if err != nil {
+			return list, err
+		}
+
+		copy(hash[:], hashBuf)
+		copy(parentHash[:], parentHashBuf)
+
+		list = append(list, hash)
+	}
+
+	return list, nil
+}

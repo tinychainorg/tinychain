@@ -748,3 +748,101 @@ func TestMinerProcedural(t *testing.T) {
 		current_tip = block.Hash
 	}
 }
+
+
+func newBlockdagLongEpoch() (BlockDAG, ConsensusConfig, *sql.DB) {
+	db, err := OpenDB(":memory:")
+	if err != nil {
+		panic(err)
+	}
+	db.SetMaxOpenConns(1) // :memory: only
+	_, err = db.Exec("PRAGMA journal_mode = WAL;")
+	if err != nil {
+		panic(err)
+	}
+
+	stateMachine := newMockStateMachine()
+
+	genesis_difficulty := new(big.Int)
+	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+
+	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
+	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
+	if err != nil {
+		panic(err)
+	}
+	genesisBlockHash := [32]byte{}
+	copy(genesisBlockHash[:], genesisBlockHash_)
+
+	conf := ConsensusConfig{
+		EpochLengthBlocks:       20000,
+		TargetEpochLengthMillis: 1000,
+		GenesisDifficulty:       *genesis_difficulty,
+		GenesisParentBlockHash:  genesisBlockHash,
+		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+	}
+
+	blockdag, err := NewBlockDAGFromDB(db, stateMachine, conf)
+	if err != nil {
+		panic(err)
+	}
+
+	return blockdag, conf, db
+}
+
+// 2s to mine 10,000 blocks.
+func TestGetLongestChainHashList(t *testing.T) {
+	// assert := assert.New(t)
+	dag, _, _ := newBlockdagLongEpoch()
+
+	// Insert 10,000 blocks.
+	var N_BLOCKS int64 = 300
+	minerWallet, err := core.CreateRandomWallet()
+	if err != nil {
+		t.Fatalf("Failed to create miner wallet: %s", err)
+	}
+
+	expectedHashList := [][32]byte{}
+	minedIndex := 0
+	miner := NewMiner(dag, minerWallet)
+	miner.OnBlockSolution = func(block RawBlock) {
+		err := dag.IngestBlock(block)
+		if err != nil {
+			t.Fatalf("Failed to ingest block: %s", err)
+		}
+		minedIndex += 1
+		expectedHashList = append(expectedHashList, block.Hash())
+	}
+	miner.Start(N_BLOCKS)
+
+	// Get the tip.
+	tip, err := dag.GetCurrentTip()
+	if err != nil {
+		t.Fatalf("Failed to get tip: %s", err)
+	}
+
+	// Assert tip is at height 10,000.
+	assert.Equal(t, uint64(N_BLOCKS), tip.Height)
+
+	// Now get the longest chain hash list.
+	var depthFromTip int64 = 100 // get the most recent 1000 of the 10,000
+	hashlist, err := dag.GetLongestChainHashList(tip.Hash, depthFromTip)
+	if err != nil {
+		t.Fatalf("Failed to get longest chain hash list: %s", err)
+	}
+
+	t.Logf("Longest chain - expected - hash list: len=%d\n", len(expectedHashList))
+	t.Logf("Longest chain - actual - hash list: len=%d\n", len(hashlist))
+
+	// Print both hashlists, line by line, with each hash
+	// printed in hex format.
+	for i, hash := range expectedHashList[int64(len(expectedHashList))-depthFromTip:] {
+		t.Logf("block #%d: expected=%s actual=%s\n", i, Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
+	}
+
+	// assert the two hashlists are the same one-by-one
+	for i, hash := range expectedHashList[int64(len(expectedHashList))-depthFromTip:] {
+		assert.Equal(t, Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
+	}
+
+}
