@@ -58,7 +58,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			return nil, fmt.Errorf("error creating 'raw_blocks' table: %s", err)
 		}
 
-		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, to_pubkey blob, amount integer, fee integer, nonce integer, txindex integer)")
+		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, to_pubkey blob, amount integer, fee integer, nonce integer, txindex integer, version integer)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
@@ -82,7 +82,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	return db, err
 }
 
-func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachine, consensus ConsensusConfig) (BlockDAG, error) {
+func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus ConsensusConfig) (BlockDAG, error) {
 	dag := BlockDAG{
 		db:           db,
 		stateMachine: stateMachine,
@@ -94,7 +94,7 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachine, consensus Consensu
 		panic(err)
 	}
 
-	dag.Tip, err = dag.GetCurrentTip()
+	dag.Tip, err = dag.GetLatestTip()
 	if err != nil {
 		panic(err)
 	}
@@ -370,7 +370,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	for i, block_tx := range raw.Transactions {
 		txhash := block_tx.Hash()
 		_, err = tx.Exec(
-			"insert into transactions (hash, block_hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, txindex) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"insert into transactions (hash, block_hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, txindex, version) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			txhash[:],
 			blockhash[:],
 			block_tx.Sig[:],
@@ -380,6 +380,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 			block_tx.Fee,
 			block_tx.Nonce,
 			i,
+			block_tx.Version,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -391,7 +392,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// Update the tip.
 	// TODO this is bad for performance.
 	// TODO also this is not atomic.
-	curr_tip, err := dag.GetCurrentTip()
+	curr_tip, err := dag.GetLatestTip()
 	if err != nil {
 		return err
 	}
@@ -535,8 +536,9 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 		fee := uint64(0)
 		nonce := uint64(0)
 		var index uint64 = 0
+		version := 0
 
-		err := rows.Scan(&hash, &sig, &fromPubkey, &toPubkey, &amount, &fee, &nonce, &index)
+		err := rows.Scan(&hash, &sig, &fromPubkey, &toPubkey, &amount, &fee, &nonce, &index, &version)
 		if err != nil {
 			return nil, err
 		}
@@ -549,6 +551,7 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 		tx.Fee = fee
 		tx.Nonce = nonce
 		tx.TxIndex = index
+		tx.Version = byte(version)
 
 		txs[index] = tx
 	}
@@ -591,7 +594,8 @@ func (dag *BlockDAG) HasBlock(hash [32]byte) bool {
 	return count > 0
 }
 
-func (dag *BlockDAG) GetCurrentTip() (Block, error) {
+// Gets the latest block in the longest chain.
+func (dag *BlockDAG) GetLatestTip() (Block, error) {
 	// The tip of the chain is defined as the chain with the longest proof-of-work.
 	// Simply put, given a DAG of blocks, where each block has an accumulated work, we want to find the path with the highest accumulated work.
 
@@ -623,7 +627,8 @@ func (dag *BlockDAG) GetCurrentTip() (Block, error) {
 	return *block, nil
 }
 
-func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip int64) ([][32]byte, error) {
+// Gets the list of hashes for the longest chain, traversing backwards from startHash and accumulating depthFromTip items.
+func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip uint64) ([][32]byte, error) {
 	list := make([][32]byte, 0, depthFromTip)
 
 	rows, err := dag.db.Query(`

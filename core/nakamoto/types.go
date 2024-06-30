@@ -146,7 +146,7 @@ type BlockDAGInterface interface {
 	GetEpochForBlockHash(blockhash [32]byte) (*Epoch, error)
 
 	// Get the tip of the chain, given a minimum number of confirmations.
-	GetCurrentTip() (Block, error)
+	GetLatestTip() (Block, error)
 
 	// Get the raw bytes of a block.
 	GetRawBlockDataByHash(hash [32]byte) ([]byte, error)
@@ -164,7 +164,7 @@ type BlockDAG struct {
 	db *sql.DB
 
 	// The state machine.
-	stateMachine StateMachine
+	stateMachine StateMachineInterface
 
 	// Consensus settings.
 	consensus ConsensusConfig
@@ -173,7 +173,7 @@ type BlockDAG struct {
 	Tip Block
 }
 
-type StateMachine interface {
+type StateMachineInterface interface {
 	VerifyTx(tx RawTransaction) error
 }
 

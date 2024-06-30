@@ -2,6 +2,8 @@ package nakamoto
 
 import (
 	"database/sql"
+	"encoding/hex"
+	"math/big"
 	"testing"
 
 	"github.com/liamzebedee/tinychain-go/core"
@@ -50,7 +52,7 @@ func TestStateMachineIdea(t *testing.T) {
 
 	db := newStateDB()
 	wallets := getTestingWallets(t)
-	stateMachine, err := NewCoinStateMachine(db)
+	stateMachine, err := NewStateMachine(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,9 +63,10 @@ func TestStateMachineIdea(t *testing.T) {
 
 	// Assert balances.
 	// Ingest some transactions and calculate the state.
-	tx0 := CoinStateMachineInput{
+	tx0 := StateMachineInput{
 		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 		IsCoinbase:     true,
+		MinerPubkey: [65]byte{},
 	}
 	effects, err := stateMachine.Transition(tx0)
 	if err != nil {
@@ -76,9 +79,10 @@ func TestStateMachineIdea(t *testing.T) {
 	assert.Equal(t, uint64(100), balance0)
 
 	// Now transfer coins to another account.
-	tx1 := CoinStateMachineInput{
+	tx1 := StateMachineInput{
 		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0], 0),
 		IsCoinbase:     false,
+		MinerPubkey: [65]byte{},
 	}
 	effects, err = stateMachine.Transition(tx1)
 	if err != nil {
@@ -173,6 +177,9 @@ func TestNodeReorgStateMachine(t *testing.T) {
 	// state_snapshots:
 	// - (blockhash, ((key, value)))
 	// 
+
+
+	// GetLongestChainHashList (can we make SQL index this? Maybe.)
 }
 
 
@@ -269,7 +276,7 @@ func newUnsignedTransferTx(from [65]byte, to [65]byte, amount uint64, wallet *co
 func TestBenchmarkTxOpsPerDay(t *testing.T) {
 	db := newStateDB()
 	wallets := getTestingWallets(t)
-	stateMachine, err := NewCoinStateMachine(db)
+	stateMachine, err := NewStateMachine(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,9 +306,10 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 		}
 
 		// 1. Coinbase mint.
-		coinbaseTx := CoinStateMachineInput{
+		coinbaseTx := StateMachineInput{
 			RawTransaction: newUnsignedTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 			IsCoinbase:     true,
+			MinerPubkey: [65]byte{},
 		}
 		effects, err := stateMachine.Transition(coinbaseTx)
 		if err != nil {
@@ -311,9 +319,10 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 		txsProcessed += 1
 
 		// 2. Simple transfer.
-		tx1 := CoinStateMachineInput{
+		tx1 := StateMachineInput{
 			RawTransaction: newUnsignedTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0], 0),
 			IsCoinbase:     false,
+			MinerPubkey: [65]byte{},
 		}
 		effects, err = stateMachine.Transition(tx1)
 		if err != nil {
@@ -324,3 +333,177 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 	}
 }
 
+func newBlockdagForStateMachine() (BlockDAG, ConsensusConfig, *sql.DB) {
+	db, err := OpenDB(":memory:")
+	if err != nil {
+		panic(err)
+	}
+	db.SetMaxOpenConns(1) // :memory: only
+	_, err = db.Exec("PRAGMA journal_mode = WAL;")
+	if err != nil {
+		panic(err)
+	}
+
+	stateMachine := newMockStateMachine()
+
+	genesis_difficulty := new(big.Int)
+	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+
+	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
+	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
+	if err != nil {
+		panic(err)
+	}
+	genesisBlockHash := [32]byte{}
+	copy(genesisBlockHash[:], genesisBlockHash_)
+
+	conf := ConsensusConfig{
+		EpochLengthBlocks:       5,
+		TargetEpochLengthMillis: 1000,
+		GenesisDifficulty:       *genesis_difficulty,
+		GenesisParentBlockHash:  genesisBlockHash,
+		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+	}
+
+	blockdag, err := NewBlockDAGFromDB(db, stateMachine, conf)
+	if err != nil {
+		panic(err)
+	}
+
+	return blockdag, conf, db
+}
+
+func TestStateMachineReconstructState(t *testing.T) {
+	/*	
+
+	Okay so this is how we do:
+	
+	latest_tip, err := dag.GetLatestTip()
+	longestChainHashList, err := dag.GetLongestChainHashList(latest_tip.Hash, latest_tip.Height)
+	
+	state = {}
+	stateMachine = StateMachine{}
+	
+	for i, blockhash := range longestChainHashList {
+	  // get txs
+	  txs = "select from, to, amount, fee, version from txs where blockhash = ? order by txindex", blockhash
+	  // map
+	  new_leaves = txs.map(tx => stateMachine.Transition(state, tx))
+	  // reduce
+	  new_leaves.map(leaves => stateMachine.Apply(leaves))
+	}
+	
+	After all of this, the state will be up to date for the current block.
+	*/
+
+	// assert := assert.New(t)
+	dag, _, _ := newBlockdagForStateMachine()
+	wallets := getTestingWallets(t)
+	stateMachine, err := NewStateMachine(dag.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	miner := NewMiner(dag, &wallets[0])
+
+	// Mine 100 blocks.
+	miner.OnBlockSolution = func(block RawBlock) {
+		err := dag.IngestBlock(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	miner.Start(100)
+
+	// Get the latest tip.
+	latestTip, err := dag.GetLatestTip()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get the longest chain hash list.
+	longestChainHashList, err := dag.GetLongestChainHashList(latestTip.Hash, latestTip.Height)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, blockHash := range longestChainHashList {
+		txs := []RawTransaction{}
+		
+		// 1. Get all transactions for block.
+		// ignore: nonce, sig
+		rows, err := dag.db.Query(`select version, from_pubkey, to_pubkey, amount, fee from transactions where block_hash = ? order by txindex`, blockHash[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		
+		for rows.Next() {
+			version := 0
+			fromPubkeyBuf := []byte{}
+			toPubkeyBuf := []byte{}
+			var amount uint64
+			var fee uint64
+
+			err = rows.Scan(&version, &fromPubkeyBuf, &toPubkeyBuf, &amount, &fee)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var fromPubkey [65]byte
+			var toPubkey [65]byte
+			copy(fromPubkey[:], fromPubkeyBuf[:])
+			copy(toPubkey[:], toPubkeyBuf[:])
+
+			txs = append(txs, RawTransaction{
+				Version: byte(version),
+				FromPubkey: fromPubkey,
+				ToPubkey: toPubkey,
+				Amount: amount,
+				Fee: fee,
+				Nonce: 0,
+				Sig: [64]byte{},
+			})
+		}
+
+		t.Logf("Processing block %x with %d transactions", blockHash, len(txs))
+
+		// 2. Map transactions to state leaves through state machine transition function.
+		var stateMachineInput StateMachineInput
+		var minerPubkey [65]byte
+		isCoinbase := false
+
+		for i, tx := range txs {
+			// Special case: coinbase tx is always the first tx in the block.
+			if i == 0 {
+				minerPubkey = tx.FromPubkey
+				isCoinbase = true
+			}
+
+			// Construct the state machine input.
+			stateMachineInput = StateMachineInput{
+				RawTransaction: tx,
+				IsCoinbase:     isCoinbase,
+				MinerPubkey:    minerPubkey,
+			}
+
+			// Transition the state machine.
+			effects, err := stateMachine.Transition(stateMachineInput)
+			if err != nil {
+				t.Logf("Error transitioning state machine: block=%x txindex=%d error=\"%s\"", blockHash, i, err)
+			}
+
+			// Apply the effects.
+			stateMachine.Apply(effects)
+
+			if i == 0 {
+				isCoinbase = false
+			}
+		}
+	}
+
+	// 3. The state is now reconstructed.
+	// Loop through the state machine and print the balances.
+	for _, wallet := range wallets {
+		balance := stateMachine.GetBalance(wallet.PubkeyBytes())
+		t.Logf("Account %x has balance %d", wallet.PubkeyBytes(), balance)
+	}
+}

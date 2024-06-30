@@ -612,12 +612,12 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	assert.Equal(GetIdForEpoch(raw.ParentHash, 0), block.Epoch)
 }
 
-func TestGetCurrentTips(t *testing.T) {
+func TestGetLatestTip(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
 	// The genesis will be the first tip.
-	current_tip, err := blockdag.GetCurrentTip()
+	current_tip, err := blockdag.GetLatestTip()
 	assert.Equal(nil, err)
 	assert.Equal(genesisBlock.Hash(), current_tip.Hash)
 
@@ -660,7 +660,7 @@ func TestGetCurrentTips(t *testing.T) {
 	}
 
 	// Check if the block is the latest tip.
-	current_tip, err = blockdag.GetCurrentTip()
+	current_tip, err = blockdag.GetLatestTip()
 	assert.Equal(nil, err)
 	assert.Equal(raw.Hash(), current_tip.Hash)
 
@@ -792,7 +792,7 @@ func newBlockdagLongEpoch() (BlockDAG, ConsensusConfig, *sql.DB) {
 
 // 2s to mine 10,000 blocks.
 func TestGetLongestChainHashList(t *testing.T) {
-	// assert := assert.New(t)
+	assert := assert.New(t)
 	dag, _, _ := newBlockdagLongEpoch()
 
 	// Insert 10,000 blocks.
@@ -803,29 +803,27 @@ func TestGetLongestChainHashList(t *testing.T) {
 	}
 
 	expectedHashList := [][32]byte{}
-	minedIndex := 0
 	miner := NewMiner(dag, minerWallet)
 	miner.OnBlockSolution = func(block RawBlock) {
 		err := dag.IngestBlock(block)
 		if err != nil {
 			t.Fatalf("Failed to ingest block: %s", err)
 		}
-		minedIndex += 1
 		expectedHashList = append(expectedHashList, block.Hash())
 	}
 	miner.Start(N_BLOCKS)
 
 	// Get the tip.
-	tip, err := dag.GetCurrentTip()
+	tip, err := dag.GetLatestTip()
 	if err != nil {
 		t.Fatalf("Failed to get tip: %s", err)
 	}
 
 	// Assert tip is at height 10,000.
-	assert.Equal(t, uint64(N_BLOCKS), tip.Height)
+	assert.Equal(uint64(N_BLOCKS), tip.Height)
 
 	// Now get the longest chain hash list.
-	var depthFromTip int64 = 100 // get the most recent 1000 of the 10,000
+	var depthFromTip uint64 = 100 // get the most recent 1000 of the 10,000
 	hashlist, err := dag.GetLongestChainHashList(tip.Hash, depthFromTip)
 	if err != nil {
 		t.Fatalf("Failed to get longest chain hash list: %s", err)
@@ -836,13 +834,13 @@ func TestGetLongestChainHashList(t *testing.T) {
 
 	// Print both hashlists, line by line, with each hash
 	// printed in hex format.
-	for i, hash := range expectedHashList[int64(len(expectedHashList))-depthFromTip:] {
+	for i, hash := range expectedHashList[uint64(len(expectedHashList))-depthFromTip:] {
 		t.Logf("block #%d: expected=%s actual=%s\n", i, Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
 	}
 
 	// assert the two hashlists are the same one-by-one
-	for i, hash := range expectedHashList[int64(len(expectedHashList))-depthFromTip:] {
-		assert.Equal(t, Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
+	for i, hash := range expectedHashList[uint64(len(expectedHashList))-depthFromTip:] {
+		assert.Equal(Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
 	}
 
 }
