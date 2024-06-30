@@ -37,14 +37,14 @@ func NewCoinStateMachine(db *sql.DB) (*CoinStateMachine, error) {
 	}, nil
 }
 
-func (c *CoinStateMachine) Apply(leafs []StateLeaf) {
+func (c *CoinStateMachine) Apply(leafs []*StateLeaf) {
 	for _, leaf := range leafs {
 		c.state[leaf.PubKey] = leaf.Balance
 	}
 }
 
 // Transitions the state machine to the next state.
-func (c *CoinStateMachine) Transition(input CoinStateMachineInput) ([]StateLeaf, error) {
+func (c *CoinStateMachine) Transition(input CoinStateMachineInput) ([]*StateLeaf, error) {
 	// Check transaction version.
 	if input.RawTransaction.Version != 1 {
 		return nil, errors.New("unsupported transaction version")
@@ -60,7 +60,7 @@ func (c *CoinStateMachine) Transition(input CoinStateMachineInput) ([]StateLeaf,
 
 	// NO OP transfer.
 	if amount == 0 {
-		return []StateLeaf{}, nil
+		return []*StateLeaf{}, nil
 	}
 
 	// Check if the `from` account has enough balance.
@@ -82,28 +82,28 @@ func (c *CoinStateMachine) Transition(input CoinStateMachineInput) ([]StateLeaf,
 	toBalance += amount
 	
 	// Create the new state leaves.
-	fromLeaf := StateLeaf{
+	fromLeaf := &StateLeaf{
 		PubKey:  input.RawTransaction.FromPubkey,
 		Balance: fromBalance,
 	}
-	toLeaf := StateLeaf{
+	toLeaf := &StateLeaf{
 		PubKey:  input.RawTransaction.ToPubkey,
 		Balance: toBalance,
 	}
-	leaves := []StateLeaf{
+	leaves := []*StateLeaf{
 		fromLeaf,
 		toLeaf,
 	}
 	return leaves, nil
 }
 
-func (c *CoinStateMachine) transitionCoinbase(input CoinStateMachineInput) ([]StateLeaf, error) {
+func (c *CoinStateMachine) transitionCoinbase(input CoinStateMachineInput) ([]*StateLeaf, error) {
 	toBalance := c.GetBalance(input.RawTransaction.ToPubkey)
 	amount := input.RawTransaction.Amount
 
 	// NO OP transfer.
 	if amount == 0 {
-		return []StateLeaf{}, nil
+		return []*StateLeaf{}, nil
 	}
 
 	// Check if the `to` balance will overflow.
@@ -116,11 +116,11 @@ func (c *CoinStateMachine) transitionCoinbase(input CoinStateMachineInput) ([]St
 	toBalance += amount
 	
 	// Create the new state leaves.
-	toLeaf := StateLeaf{
+	toLeaf := &StateLeaf{
 		PubKey:  input.RawTransaction.ToPubkey,
 		Balance: toBalance,
 	}
-	leaves := []StateLeaf{
+	leaves := []*StateLeaf{
 		toLeaf,
 	}
 	return leaves, nil

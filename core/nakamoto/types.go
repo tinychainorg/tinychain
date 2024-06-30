@@ -86,6 +86,11 @@ type RawTransaction struct {
 	Nonce      uint64   `json:"nonce"`
 }
 
+func (tx *RawTransaction) SizeBytes() uint64 {
+	// Size of the transaction is the size of the envelope.
+	return 1 + 65 + 65 + 8 + 8 + 8
+}
+
 type Block struct {
 	// Block header.
 	ParentHash             [32]byte
