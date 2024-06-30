@@ -7,11 +7,8 @@
 package core
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -51,14 +48,14 @@ type TrackerPeers struct {
 	ID   string `bencode:"peer id"`
 }
 
-func generatePeerID() string { //unused
-	b := make([]byte, 20)
-	_, err := rand.Read(b)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return hex.EncodeToString(b)
-}
+// func generatePeerID() string { // TODO: unused, might use to keep IPv6 + Port
+// 	b := make([]byte, 20)
+// 	_, err := rand.Read(b)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	return hex.EncodeToString(b)
+// }
 
 func addPeerToSwarm(peerID string, infoHash string, port int) error {
 	fmt.Println("Adding peer to swarm")
