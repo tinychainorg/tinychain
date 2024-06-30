@@ -105,24 +105,3 @@ func (b *RawBlock) SizeBytes() uint64 {
 	return uint64(len(b.Envelope()))
 }
 
-func (tx *RawTransaction) Envelope() []byte {
-	buf := new(bytes.Buffer)
-
-	err := binary.Write(buf, binary.BigEndian, tx.FromPubkey)
-	if err != nil {
-		panic(err)
-	}
-	err = binary.Write(buf, binary.BigEndian, tx.Data)
-	if err != nil {
-		panic(err)
-	}
-
-	return buf.Bytes()
-}
-
-func (tx *RawTransaction) Hash() [32]byte {
-	// Hash the envelope.
-	h := sha256.New()
-	h.Write(tx.Envelope())
-	return sha256.Sum256(h.Sum(nil))
-}

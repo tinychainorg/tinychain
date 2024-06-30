@@ -5,10 +5,14 @@
 package nakamoto
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
+
+	"github.com/mattn/go-sqlite3"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
@@ -24,22 +28,11 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 }
 
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB, RawBlock) {
-	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
-	useMemoryDB := true
-	var connectionString string
-	if useMemoryDB {
-		connectionString = "file:memdb1?mode=memory"
-	} else {
-		connectionString = "test.sqlite3"
-	}
-
-	db, err := OpenDB(connectionString)
+	db, err := OpenDB(":memory:")
 	if err != nil {
 		panic(err)
 	}
-	if useMemoryDB {
-		db.SetMaxOpenConns(1)
-	}
+	db.SetMaxOpenConns(1) // :memory: only
 	_, err = db.Exec("PRAGMA journal_mode = WAL;")
 	if err != nil {
 		panic(err)
@@ -73,11 +66,14 @@ func newValidTx(t *testing.T) (RawTransaction, error) {
 	wallets := getTestingWallets(t)
 
 	tx := RawTransaction{
-		FromPubkey: [65]byte{},
+		Version:    1,
 		Sig:        [64]byte{},
-		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
+		FromPubkey: wallets[0].PubkeyBytes(),
+		ToPubkey:   [65]byte{},
+		Amount:     0,
+		Fee:        0,
+		Nonce:      0,
 	}
-	tx.FromPubkey = wallets[0].PubkeyBytes()
 
 	envelope := tx.Envelope()
 	sig, err := wallets[0].Sign(envelope)
@@ -107,6 +103,68 @@ func getTestingWallets(t *testing.T) []core.Wallet {
 	return []core.Wallet{*wallet1, *wallet2}
 }
 
+// Copies an in-memory SQLite database to a file.
+// Thank you: https://rbn.im/backing-up-a-SQLite-database-with-Go/backing-up-a-SQLite-database-with-Go.html
+func backupDBToFile(destDb, srcDb *sql.DB) error {
+    destConn, err := destDb.Conn(context.Background())
+    if err != nil {
+        return err
+    }
+
+    srcConn, err := srcDb.Conn(context.Background())
+    if err != nil {
+        return err
+    }
+
+    return destConn.Raw(func (destConn interface{}) error {
+        return srcConn.Raw(func (srcConn interface{}) error {
+            destSQLiteConn, ok := destConn.(*sqlite3.SQLiteConn)
+            if !ok {
+                return fmt.Errorf("can't convert destination connection to SQLiteConn")
+            }
+
+            srcSQLiteConn, ok := srcConn.(*sqlite3.SQLiteConn)
+            if !ok {
+                return fmt.Errorf("can't convert source connection to SQLiteConn")
+            }
+
+            b, err := destSQLiteConn.Backup("main", srcSQLiteConn, "main")
+            if err != nil {
+                return fmt.Errorf("error initializing SQLite backup: %w", err)
+            }
+
+            done, err := b.Step(-1)
+            if !done {
+                return fmt.Errorf("step of -1, but not done")
+            }
+            if err != nil {
+                return fmt.Errorf("error in stepping backup: %w", err)
+            }
+
+            err = b.Finish()
+            if err != nil {
+                return fmt.Errorf("error finishing backup: %w", err)
+            }
+
+            return err
+        })
+    })
+}
+
+// Usage: saveDbForInspection(blockdag.db, "testing.db")
+func saveDbForInspection(db *sql.DB) error {	
+	// Backup DB to file.
+	backupDb, err := OpenDB("testing.db")
+	if err != nil {
+		return fmt.Errorf("Failed to open backup database: %s", err)
+	}
+	err = backupDBToFile(backupDb, db)
+	if err != nil {
+		return fmt.Errorf("Failed to backup database: %s", err)
+	}
+	return nil
+}
+
 func TestOpenDB(t *testing.T) {
 	// test not null
 	_, err := OpenDB(":memory:")
@@ -123,48 +181,6 @@ func TestLatestTipIsSet(t *testing.T) {
 	// FIXME
 	assert.Equal(genesisBlock.Hash(), dag.Tip.Hash)
 }
-
-// TODO fix use genesis block
-// func TestImportBlocksIntoDAG(t *testing.T) {
-// 	// Generate 10 blocks and insert them into DAG.
-// 	blockdag := BlockDAG{}
-// 	assert := assert.New(t)
-
-// 	// Build a chain of 6 blocks.
-// 	chain := make([]RawBlock, 0)
-// 	curr_block := RawBlock{}
-
-// 	// Fixed target for test.
-// 	target := new(big.Int)
-// 	target.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-
-// 	for {
-// 		solution, err := SolvePOW(curr_block, *new(big.Int), *target, 100000000000)
-// 		if err != nil {
-// 			assert.Nil(t, err)
-// 		}
-
-// 		// Seal the block.
-// 		curr_block.SetNonce(solution)
-
-// 		// Append the block to the chain.
-// 		blockdag.IngestBlock(curr_block)
-
-// 		// Create a new block.
-// 		timestamp := uint64(0)
-// 		curr_block = RawBlock{
-// 			ParentHash:      curr_block.Hash(),
-// 			Timestamp:       timestamp,
-// 			NumTransactions: 0,
-// 			Transactions:    []RawTransaction{},
-// 		}
-
-// 		// Exit if the chain is long enough.
-// 		if len(chain) >= 6 {
-// 			break
-// 		}
-// 	}
-// }
 
 func TestAddBlockUnknownParent(t *testing.T) {
 	assert := assert.New(t)
@@ -187,6 +203,11 @@ func TestAddBlockTxCount(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
+	tx, err := newValidTx(t)
+	if err != nil {
+		panic(err)
+	}
+
 	b := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
 		Timestamp:              0,
@@ -194,14 +215,11 @@ func TestAddBlockTxCount(t *testing.T) {
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
 		Nonce:                  [32]byte{0xBB},
 		Transactions: []RawTransaction{
-			RawTransaction{
-				Sig:  [64]byte{0xCA, 0xFE, 0xBA, 0xBE},
-				Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
-			},
+			tx,
 		},
 	}
 
-	err := blockdag.IngestBlock(b)
+	err = blockdag.IngestBlock(b)
 	assert.Equal("Num transactions does not match length of transactions list.", err.Error())
 }
 
@@ -263,27 +281,28 @@ func TestAddBlockSuccess(t *testing.T) {
 	// Create a tx with a valid signature.
 	wallets := getTestingWallets(t)
 	tx := RawTransaction{
-		FromPubkey: [65]byte{},
+		Version:    1,
 		Sig:        [64]byte{},
-		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
+		FromPubkey: wallets[0].PubkeyBytes(),
+		ToPubkey:   [65]byte{},
+		Amount:     0,
+		Fee:        0,
+		Nonce:      0,
 	}
 	tx.FromPubkey = wallets[0].PubkeyBytes()
+
 	// sig, err := wallets[0].Sign(tx.Envelope())
 	// if err != nil {
 	// 	t.Fatalf("Failed to sign transaction: %s", err)
 	// }
 	// t.Logf("Signature: %s\n", hex.EncodeToString(sig))
-	sigHex := "2b803490a6f14f9937f9ec49f6cc2de7bbb2e77ee54ea1b89d740352846e215601c1417f85c92553ed0972b259ac4009b8e3330c4cec9aded29e5fb2db9d89f2"
+
+	sigHex := "084401618c78b2e778cba17eb04892331f1f69f860c24f039e1da6b959830ab567efc3fb2403af2c63c65a17648348211ce2fb5251f038d5151dff67152d1f6a"
 	sigBytes, err := hex.DecodeString(sigHex)
 	if err != nil {
 		t.Fatalf("Failed to decode signature: %s", err)
 	}
 	copy(tx.Sig[:], sigBytes)
-
-	// parentTip, err := blockdag.GetCurrentTip()
-	// if err != nil {
-	// 	t.Fatalf("Failed to get current tip: %s", err)
-	// }
 
 	b := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
@@ -323,20 +342,13 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	blockdag, _, _, genesisBlock := newBlockdag()
 
 	// Create a tx with a valid signature.
-	tx := RawTransaction{
-		FromPubkey: [65]byte{},
-		Sig:        [64]byte{},
-		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
-	}
-	wallets := getTestingWallets(t)
-	tx.FromPubkey = wallets[0].PubkeyBytes()
-	sig, err := wallets[0].Sign(tx.Envelope())
+	tx, err := newValidTx(t)
 	if err != nil {
-		t.Fatalf("Failed to sign transaction: %s", err)
+		panic(err)
 	}
+
 	// Log the signature.
-	t.Logf("Signature: %s\n", hex.EncodeToString(sig))
-	copy(tx.Sig[:], sig)
+	t.Logf("Signature: %s\n", hex.EncodeToString(tx.Sig[:]))
 
 	b := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
@@ -551,20 +563,10 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	blockdag, _, _, genesisBlock := newBlockdag()
 
 	// Create a tx with a valid signature.
-	tx := RawTransaction{
-		FromPubkey: [65]byte{},
-		Sig:        [64]byte{},
-		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
-	}
-	wallets := getTestingWallets(t)
-	tx.FromPubkey = wallets[0].PubkeyBytes()
-	sig, err := wallets[0].Sign(tx.Envelope())
+	tx, err := newValidTx(t)
 	if err != nil {
 		t.Fatalf("Failed to sign transaction: %s", err)
 	}
-	// Log the signature.
-	t.Logf("Signature: %s\n", hex.EncodeToString(sig))
-	copy(tx.Sig[:], sig)
 
 	raw := RawBlock{
 		ParentHash:             genesisBlock.Hash(),

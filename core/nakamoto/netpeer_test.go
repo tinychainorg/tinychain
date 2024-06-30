@@ -39,7 +39,9 @@ func getRandomPort() string {
 	}
 	defer listener.Close()
 
-	return strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	portStr := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	fmt.Printf("got random port: %s\n", portStr)
+	return portStr
 }
 
 func waitForPeersOnline(peers []*PeerCore) {

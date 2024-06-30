@@ -33,7 +33,7 @@ func newStateDB() *sql.DB {
 	return db
 }
 
-func StateMachineIdea(t *testing.T) {
+func TestStateMachineIdea(t *testing.T) {
 	// Basically the state machine works as so:
 	// - we deliver a rawtransaction
 	// - we call statemachine.transition

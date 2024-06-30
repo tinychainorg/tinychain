@@ -28,11 +28,14 @@ func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
 func MakeCoinbaseTx(wallet *core.Wallet) RawTransaction {
 	// Construct coinbase tx.
 	tx := RawTransaction{
+		Version:    1,
 		Sig:        [64]byte{},
-		FromPubkey: [65]byte{},
-		Data:       []byte("coinbase"),
+		FromPubkey: wallet.PubkeyBytes(),
+		ToPubkey:   wallet.PubkeyBytes(),
+		Amount:     1000000000,
+		Fee:        0,
+		Nonce:      0,
 	}
-	tx.FromPubkey = wallet.PubkeyBytes()
 	envelope := tx.Envelope()
 	sig, err := wallet.Sign(envelope)
 	if err != nil {

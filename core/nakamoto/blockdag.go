@@ -58,7 +58,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			return nil, fmt.Errorf("error creating 'raw_blocks' table: %s", err)
 		}
 
-		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, data blob, txindex int)")
+		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, to_pubkey blob, amount integer, fee integer, nonce integer, txindex integer)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
@@ -370,12 +370,15 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	for i, block_tx := range raw.Transactions {
 		txhash := block_tx.Hash()
 		_, err = tx.Exec(
-			"insert into transactions (hash, block_hash, sig, from_pubkey, data, txindex) values (?, ?, ?, ?, ?, ?)",
+			"insert into transactions (hash, block_hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, txindex) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			txhash[:],
 			blockhash[:],
 			block_tx.Sig[:],
 			block_tx.FromPubkey[:],
-			block_tx.Data[:],
+			block_tx.ToPubkey[:],
+			block_tx.Amount,
+			block_tx.Fee,
+			block_tx.Nonce,
 			i,
 		)
 		if err != nil {
@@ -517,7 +520,7 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 	txs := make([]Transaction, count)
 
 	// Load the transactions in.
-	rows, err = dag.db.Query("select hash, sig, from_pubkey, data, txindex from transactions where block_hash = ?", hash[:])
+	rows, err = dag.db.Query("select hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, txindex from transactions where block_hash = ?", hash[:])
 	if err != nil {
 		return nil, err
 	}
@@ -527,10 +530,13 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 		hash := []byte{}
 		sig := []byte{}
 		fromPubkey := []byte{}
-		data := []byte{}
-		index := 0
+		toPubkey := []byte{}
+		amount := uint64(0)
+		fee := uint64(0)
+		nonce := uint64(0)
+		var index uint64 = 0
 
-		err := rows.Scan(&hash, &sig, &fromPubkey, &data, &index)
+		err := rows.Scan(&hash, &sig, &fromPubkey, &toPubkey, &amount, &fee, &nonce, &index)
 		if err != nil {
 			return nil, err
 		}
@@ -538,7 +544,11 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 		copy(tx.Hash[:], hash)
 		copy(tx.Sig[:], sig)
 		copy(tx.FromPubkey[:], fromPubkey)
-		copy(tx.Data[:], data)
+		copy(tx.ToPubkey[:], toPubkey)
+		tx.Amount = amount
+		tx.Fee = fee
+		tx.Nonce = nonce
+		tx.TxIndex = index
 
 		txs[index] = tx
 	}

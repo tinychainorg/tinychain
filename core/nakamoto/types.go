@@ -77,18 +77,13 @@ func (b *RawBlock) HashStr() string {
 }
 
 type RawTransaction struct {
+	Version    byte     `json:"version"`
 	Sig        [64]byte `json:"sig"`
-	FromPubkey [65]byte `json:"from_pubkey"`
-	Data       []byte   `json:"data"`
-	// TODO add chain ID to prevent replaying sigs on other chains/networks.
-}
-
-func (t *RawTransaction) Bytes() []byte {
-	buf := make([]byte, 0)
-	buf = append(buf, t.Sig[:]...)
-	buf = append(buf, t.FromPubkey[:]...)
-	buf = append(buf, t.Data...)
-	return buf
+	FromPubkey [65]byte `json:"from"`
+	ToPubkey   [65]byte `json:"to"`
+	Amount     uint64   `json:"amount`
+	Fee        uint64   `json:"fee"`
+	Nonce      uint64   `json:"nonce"`
 }
 
 type Block struct {
@@ -119,10 +114,17 @@ func (b *Block) HashStr() string {
 }
 
 type Transaction struct {
-	Sig        [64]byte
-	FromPubkey [65]byte
-	Data       []byte
+	Version    byte     `json:"version"`
+	Sig        [64]byte `json:"sig"`
+	FromPubkey [65]byte `json:"from"`
+	ToPubkey   [65]byte `json:"to"`
+	Amount     uint64   `json:"amount"`
+	Fee        uint64   `json:"fee"`
+	Nonce      uint64   `json:"nonce"`
+
 	Hash       [32]byte
+	Blockhash  [32]byte
+	TxIndex    uint64
 }
 
 type BlockDAGInterface interface {
