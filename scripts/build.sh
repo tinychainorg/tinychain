@@ -9,6 +9,8 @@ set -ex
 export CGO_ENABLED=1
 export CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 
+mkdir -p build/
+
 cd cli/
 
 # target: mac arm64 (apple silicon)
@@ -16,5 +18,4 @@ export GOOS=darwin
 export GOARCH=arm64
 unset CC
 unset CXX
-go build -o tinychain-$GOOS-$GOARCH
-mv tinychain-$GOOS-$GOARCH ../build/
+go build -o ../build/tinychain-$GOOS-$GOARCH

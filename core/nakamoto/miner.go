@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"time"
 
+	"sync"
+
 	"github.com/liamzebedee/tinychain-go/core"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -15,6 +17,10 @@ type Miner struct {
 	dag             BlockDAG
 	minerWallet     *core.Wallet
 	IsRunning       bool
+
+	// Mutex.
+	mutex           sync.Mutex
+
 	OnBlockSolution func(block RawBlock)
 }
 
@@ -22,6 +28,8 @@ func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
 	return &Miner{
 		dag:         dag,
 		minerWallet: minerWallet,
+		IsRunning:   false,
+		mutex: 	 sync.Mutex{},
 	}
 }
 
@@ -173,12 +181,13 @@ func (node *Miner) MakeNewPuzzle() POWPuzzle {
 }
 
 func (node *Miner) Start(mineMaxBlocks int64) {
+	node.mutex.Lock()
 	if node.IsRunning {
-		// TODO: is this best?
-		panic("Miner already running")
+		minerLog.Printf("Miner already running")
+		return
 	}
-
 	node.IsRunning = true
+	node.mutex.Unlock()
 
 	// The next tip channel.
 	// next_tip := make(chan Block)
@@ -214,7 +223,9 @@ func (node *Miner) Start(mineMaxBlocks int64) {
 			blocksMined += 1
 			if mineMaxBlocks != -1 && mineMaxBlocks <= blocksMined {
 				minerLog.Println("Mined max blocks; stopping miner")
+				node.mutex.Lock()
 				node.IsRunning = false
+				node.mutex.Unlock()
 				return
 			}
 

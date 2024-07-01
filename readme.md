@@ -53,10 +53,19 @@ Work breakdown:
 - [x] constructing a blockdag and then choosing a tip
 - [x] fix tests, institute CI as development practice
 - [x] implement state machine, state snapshots
-- [ ] implement block sync
-- [ ] improve txs
-    - [ ] replay protection for txs, tx nonce
-    - [x] add version to RawBlock, RawTransaction for future prosperity
+- [ ] implement state sync
+    - [ ] 1. Ask peers for their latest tips. Verify the POW of each tip, and then pick the tip with the most work.
+    - [ ] 2. Download block headers using this tip. 3 years of block headers is 32.8MB, so it is feasible to download this in a short amount of time.
+    - [ ] 3. For the earliest ancestor, download the full block and ingest each one.
+    - [ ] 4. Continue until fully synced
+- [ ] implement node startup routine
+    - [ ] 1. Get the current tip from our block DAG. Load the state from disk. If the state.blockhash != tip.hash, then we recompute the state.
+    - [ ] 2. Bootstrap to peers in the network.
+    - [ ] 3. Full sync to determine latest tip.
+    - [ ] 4. Recompute the state.
+    - [ ] 5. Begin the miner, begin ingesting blocks and transactions.
+- [ ] implement node state API's
+- [ ] implement the temporary block header cache, tx cache for when we receive stuff from network
 - [ ] implement tokenomics module
     - [ ] pure function given the current block, return the coinbase reward.
 - [ ] implement mempool
@@ -70,13 +79,14 @@ Work breakdown:
     - [ ] after new tip, mempool should clear out transactions that have already been mined.
     - [ ] handle reorg so we can reinsert values into mempool.
     - [ ] peer api to query tx confirmations (for exchange and wallets etc.)
-- [ ] block sync algorithm between nodes
+- [ ] improve txs
+    - [ ] replay protection for txs, tx nonce
+    - [x] add version to RawBlock, RawTransaction for future prosperity
 - [x] simple coin state machine
     - [x] coinbase
     - [x] state diffs
     - [x] adding a method to recompute the state machine and using cached state 
     - [ ] state snapshots/checkpoints
-- [ ] build a simple mempool module
 - [x] adding a simple state machine
     - [x] ValidateBlock
         - first transaction is the coinbase

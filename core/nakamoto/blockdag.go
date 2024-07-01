@@ -227,6 +227,8 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 4. Verify transactions are valid.
+	// TODO: We can parallelise this.
+	// This is one of the most expensive operations of the blockchain node.
 	for i, block_tx := range raw.Transactions {
 		logger.Printf("Verifying transaction %d\n", i)
 		isValid := core.VerifySignature(

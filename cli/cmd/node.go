@@ -69,6 +69,7 @@ func RunNode(cmdCtx *cli.Context) error {
 	port := cmdCtx.String("port")
 	dbPath := cmdCtx.String("db")
 	bootstrapPeers := cmdCtx.String("peers")
+	runMiner := cmdCtx.Bool("miner")
 
 	// DAG.
 	dag, _, _ := newBlockdag(dbPath)
@@ -114,6 +115,10 @@ func RunNode(cmdCtx *cli.Context) error {
 		}
 
 		node.Peer.Bootstrap(peerAddresses)
+	}
+
+	if runMiner {
+		go node.Miner.Start(-1)
 	}
 
 	node.Start()
