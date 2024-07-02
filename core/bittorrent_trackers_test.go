@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"net"
 	"testing"
 )
@@ -32,8 +31,6 @@ func TestBTTracker(t *testing.T) {
 	custom_peer_id := [20]byte{}
 	copy(custom_peer_id[:], custom_blob)
 
-	// custom_peer_id = sha1.Sum(custom_peer_id[:])
-
 	peerID := string(custom_peer_id[:])
 	infoHash := string(infohash[:])
 
@@ -44,23 +41,25 @@ func TestBTTracker(t *testing.T) {
 	// )
 
 	// Add peer to swarm
+	logger.Println("TEST: Adding peer to swarm")
 	err := addPeerToSwarm(peerID, infoHash)
 	if err != nil {
-		log.Fatal("Error adding peer to swarm:", err)
+		logger.Fatal("Error adding peer to swarm:", err)
 	}
 
 	// Get peers for infohash
 	// var err error
+	logger.Println("TEST: Getting peers")
 	resp, err := getPeers(peerID, infoHash)
 	if err != nil {
-		log.Fatal("Error getting peers:", err)
+		logger.Fatal("Error getting peers:", err)
 	}
 
-	fmt.Println("Peers for infohash", infoHash, ":", resp.Peers)
+	logger.Println("Peers for infohash", infoHash, ":", resp.Peers)
 	for i, peer := range resp.Peers {
 		// decode peer id
 		decoded_peerID := []byte(peer.ID)
 
-		fmt.Printf("#%d Peer IP: %s, Port: %d, ID: %s\n", i, peer.IP, peer.Port, hex.EncodeToString(decoded_peerID))
+		logger.Printf("#%d Peer IP: %s, Port: %d, ID: %s\n", i, peer.IP, peer.Port, hex.EncodeToString(decoded_peerID))
 	}
 }

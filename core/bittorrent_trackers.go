@@ -7,13 +7,14 @@
 package core
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 
 	"github.com/jackpal/bencode-go"
 )
+
+var logger = NewLogger("bittorrent trackers")
 
 const trackerList = `https://tracker.tamersunion.org:443/announce
 https://tracker.renfei.net:443/announce
@@ -33,7 +34,7 @@ https://tracker-zhuqiy.dgj055.icu:443/announce`
 
 const (
 	trackerURL = "https://t1.hloli.org:443/announce"
-	port       = 6881
+	port       = "6881"
 )
 
 type TrackerResponse struct {
@@ -57,20 +58,18 @@ type TrackerPeers struct {
 // }
 
 func addPeerToSwarm(peerID string, infoHash string) error {
-	fmt.Println("Adding peer to swarm")
-	fmt.Println("Peer ID:", peerID)
-	fmt.Println("Infohash:", infoHash)
+	logger.Printf("Adding peer to swarm\npeer_id: %d\ninfo_hash: %d", []byte(peerID), []byte(infoHash))
 
 	params := url.Values{}
 	params.Add("info_hash", infoHash)
 	params.Add("peer_id", peerID)
-	params.Add("port", "6881")
+	params.Add("port", port)
 	params.Add("uploaded", "0")
 	params.Add("downloaded", "0")
 	params.Add("left", "0")
 	params.Add("event", "started")
 
-	resp, err := http.Get(trackerURL + "?" + params.Encode()) //do we only want to announce to one tracker
+	resp, err := http.Get(trackerURL + "?" + params.Encode()) // TODO: do we only want to announce to one tracker
 	if err != nil {
 		return err
 	}
@@ -82,7 +81,7 @@ func addPeerToSwarm(peerID string, infoHash string) error {
 		return err
 	}
 
-	fmt.Println("addPeerToSwarm Tracker response:", string(body))
+	logger.Println("addPeerToSwarm Tracker response:", string(body))
 	return nil
 }
 
@@ -90,7 +89,7 @@ func getPeers(infoHash, peerID string) (*TrackerResponse, error) {
 	params := url.Values{}
 	params.Add("info_hash", infoHash)
 	params.Add("peer_id", peerID)
-	params.Add("port", "6881")
+	params.Add("port", port)
 	params.Add("uploaded", "0")
 	params.Add("downloaded", "0")
 	params.Add("left", "0")
@@ -101,8 +100,8 @@ func getPeers(infoHash, peerID string) (*TrackerResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("getPeers Tracker response status:", resp.Status)
-	fmt.Println("getPeers Tracker response body:", resp.Body)
+	logger.Println("getPeers Tracker response status:", resp.Status)
+	logger.Println("getPeers Tracker response body:", resp.Body)
 
 	var trackerResp TrackerResponse
 	err = bencode.Unmarshal(resp.Body, &trackerResp)
@@ -110,10 +109,10 @@ func getPeers(infoHash, peerID string) (*TrackerResponse, error) {
 		return nil, err
 	}
 
-	fmt.Printf("Interval: %d\n", trackerResp.Interval)
-	// fmt.Printf("Peers: %s\n", trackerResp.Peers)
+	logger.Printf("Interval: %d\n", trackerResp.Interval)
+
 	for _, peer := range trackerResp.Peers {
-		fmt.Printf("Peer: id=%s addr=%s:%d\n", peer.ID, peer.IP, peer.Port)
+		logger.Printf("Peer: id=%s addr=%s:%d\n", peer.ID, peer.IP, peer.Port)
 	}
 
 	return &trackerResp, nil
