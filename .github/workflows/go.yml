@@ -40,7 +40,6 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: [format, vet]
     steps:
     - uses: actions/checkout@v4
 
