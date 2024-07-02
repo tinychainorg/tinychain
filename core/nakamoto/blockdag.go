@@ -44,22 +44,41 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		logger.Printf("Running migration: %d\n", dbVersion)
 
 		// Create tables.
+
+		// epochs
 		_, err = db.Exec("create table epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
 
+		// blocks
 		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, graffiti blob, height integer, epoch TEXT, size_bytes integer, parent_total_work blob, acc_work blob, foreign key (epoch) REFERENCES epochs (id))")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
 
+		// raw_blocks
 		_, err = db.Exec("create table raw_blocks (hash blob primary key, data blob)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'raw_blocks' table: %s", err)
 		}
 
-		_, err = db.Exec("create table transactions (hash blob, block_hash blob, sig blob, from_pubkey blob, to_pubkey blob, amount integer, fee integer, nonce integer, txindex integer, version integer)")
+		// transactions_blocks
+		_, err = db.Exec(`
+			create table transactions_blocks (
+				block_hash blob, transaction_hash blob, txindex integer, 
+				
+				primary key (block_hash, transaction_hash, txindex),
+				foreign key (block_hash) references blocks (hash), 
+				foreign key (transaction_hash) references transactions (hash)
+			)
+		`)
+		if err != nil {
+			return nil, fmt.Errorf("error creating 'transactions_blocks' table: %s", err)
+		}
+
+		// transactions
+		_, err = db.Exec("create table transactions (hash blob primary key, sig blob, from_pubkey blob, to_pubkey blob, amount integer, fee integer, nonce integer, version integer)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
@@ -368,11 +387,40 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		return err
 	}
 
-	// Insert transactions.
+	// Insert transactions, transactions_blocks.
 	for i, block_tx := range raw.Transactions {
 		txhash := block_tx.Hash()
+
 		_, err = tx.Exec(
-			"insert into transactions (hash, block_hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, txindex, version) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			`insert into transactions_blocks (block_hash, transaction_hash, txindex) values (?, ?, ?)`,
+			blockhash[:],
+			txhash[:],
+			i,
+		)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		// Check if we already have the transaction.
+		rows, err := tx.Query("select count(*) from transactions where hash = ?", txhash[:])
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		count := 0
+		if rows.Next() {
+			rows.Scan(&count)
+		}
+		rows.Close()
+
+		if count > 0 {
+			continue
+		}
+
+		// Insert the transaction.
+		_, err = tx.Exec(
+			"insert into transactions (hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, version) values (?, ?, ?, ?, ?, ?, ?, ?)",
 			txhash[:],
 			blockhash[:],
 			block_tx.Sig[:],
@@ -381,7 +429,6 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 			block_tx.Amount,
 			block_tx.Fee,
 			block_tx.Nonce,
-			i,
 			block_tx.Version,
 		)
 		if err != nil {
@@ -528,7 +575,12 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 	txs := make([]Transaction, count)
 
 	// Load the transactions in.
-	rows, err = dag.db.Query("select hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, txindex from transactions where block_hash = ?", hash[:])
+	rows, err = dag.db.Query(`
+		SELECT t.hash, t.sig, t.from_pubkey, t.to_pubkey, t.amount, t.fee, t.nonce, tb.txindex, t.version
+		FROM transactions t
+		JOIN transactions_blocks tb ON t.hash = tb.transaction_hash
+		WHERE tb.block_hash = ?
+	`, hash[:])
 	if err != nil {
 		return nil, err
 	}

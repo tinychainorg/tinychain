@@ -143,6 +143,33 @@ func TestStartPeerHeartbeat(t *testing.T) {
 	assert.Equal(1, len(peer2.peers))
 }
 
+func TestPeerSyncNoReorg(t *testing.T) {}
+
+
+func TestPeerSyncReorg(t *testing.T) {
+	// Two peers for test:
+	// - peer A. Has mined a chain of 10 blocks. 
+	// - peer B. Has mined an alternative chain of 5 blocks.
+	// 
+	// Test routine:
+	// Peer A starts up, mines 10 blocks.
+	// Peer B starts up, mines 5 blocks, then connects to peer B.
+	// Peer B syncs with peer A.
+	// Peer B downloads the headers of peer A, and then downloads the bodies, ingests the blocks.
+	// Assert: peer B tip == peer A tip (longest chain)
+	// Assert: peer B state == peer A state (longest chain)
+}
+
+func TestPeerBuildState(t *testing.T) {
+	// Peer A. Mines chain of 10 blocks.
+	// Assert that the state is correctly computed.
+}
+
+func TestPeerBuildStateReorg(t *testing.T) {
+	// Peer A. Mines chain of 10 blocks.
+	// Assert that the state is correctly computed.
+}
+
 func TestPeerGossip(t *testing.T) {
 	// assert := assert.New(t)
 	peer1 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort()})
