@@ -1,5 +1,8 @@
 State sync
 ==========
+
+https://erigon.substack.com/p/erigon-stage-sync-and-control-flows
+
 When a node receives a block that it doesn't know, it will attempt to resync.
 Resyncing is an interesting process:
 - We don't know how out of sync the node is already. We can produce some simple estimates though by asking other nodes for their latest tip, and then computing the accumulated work done on this tip added together with the ParentTotalWork.
