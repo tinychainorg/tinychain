@@ -13,6 +13,7 @@ package nakamoto
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"math/bits"
 )
 
@@ -20,6 +21,8 @@ var ErrInsufficientBalance = errors.New("insufficient balance")
 var ErrToBalanceOverflow = errors.New("\"to\" balance overflow")
 var ErrMinerBalanceOverflow = errors.New("\"miner\" balance overflow")
 var ErrAmountPlusFeeOverflow = errors.New("(amount + fee) overflow")
+
+var stateMachineLogger = NewLogger("state-machine", "")
 
 type StateLeaf struct {
 	PubKey  [65]byte
@@ -39,15 +42,12 @@ type StateMachineInput struct {
 }
 
 type StateMachine struct {
-	db *sql.DB
-
 	// The current state.
 	state map[[65]byte]uint64
 }
 
 func NewStateMachine(db *sql.DB) (*StateMachine, error) {
 	return &StateMachine{
-		db:    db,
 		state: make(map[[65]byte]uint64),
 	}, nil
 }
@@ -97,8 +97,8 @@ func (c *StateMachine) transitionTransfer(input StateMachineInput) ([]*StateLeaf
 
 	// Check if the `from` account has enough balance.
 	if fromBalance < (amount + fee) {
-		return nil, ErrInsufficientBalance
 		// return nil, fmt.Errorf("insufficient balance. balance=%d, amount=%d", fromBalance, amount)
+		return nil, ErrInsufficientBalance
 	}
 
 	// Deduct the coins from the `from` account balance.
@@ -162,4 +162,83 @@ func (c *StateMachine) GetBalance(account [65]byte) uint64 {
 // Returns a list of modified accounts.
 func (c *StateMachine) GetStateSnapshot() []StateLeaf {
 	return nil
+}
+
+// Given a block DAG and a list of block hashes, extracts the transaction sequence, applies each transaction in order, and returns the final state.
+func ReconstructState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList [][32]byte) (*StateMachine, error) {
+	for _, blockHash := range longestChainHashList {
+		txs := []RawTransaction{}
+
+		// 1. Get all transactions for block.
+		// ignore: nonce, sig
+		rows, err := dag.db.Query(`select version, from_pubkey, to_pubkey, amount, fee from transactions where block_hash = ? order by txindex`, blockHash[:])
+		if err != nil {
+			return nil, err
+		}
+
+		for rows.Next() {
+			version := 0
+			fromPubkeyBuf := []byte{}
+			toPubkeyBuf := []byte{}
+			var amount uint64
+			var fee uint64
+
+			err = rows.Scan(&version, &fromPubkeyBuf, &toPubkeyBuf, &amount, &fee)
+			if err != nil {
+				return nil, err
+			}
+
+			var fromPubkey [65]byte
+			var toPubkey [65]byte
+			copy(fromPubkey[:], fromPubkeyBuf[:])
+			copy(toPubkey[:], toPubkeyBuf[:])
+
+			txs = append(txs, RawTransaction{
+				Version:    byte(version),
+				FromPubkey: fromPubkey,
+				ToPubkey:   toPubkey,
+				Amount:     amount,
+				Fee:        fee,
+				Nonce:      0,
+				Sig:        [64]byte{},
+			})
+		}
+
+		stateMachineLogger.Printf("Processing block %x with %d transactions", blockHash, len(txs))
+
+		// 2. Map transactions to state leaves through state machine transition function.
+		var stateMachineInput StateMachineInput
+		var minerPubkey [65]byte
+		isCoinbase := false
+
+		for i, tx := range txs {
+			// Special case: coinbase tx is always the first tx in the block.
+			if i == 0 {
+				minerPubkey = tx.FromPubkey
+				isCoinbase = true
+			}
+
+			// Construct the state machine input.
+			stateMachineInput = StateMachineInput{
+				RawTransaction: tx,
+				IsCoinbase:     isCoinbase,
+				MinerPubkey:    minerPubkey,
+			}
+
+			// Transition the state machine.
+			effects, err := stateMachine.Transition(stateMachineInput)
+			if err != nil {
+				return nil, fmt.Errorf("Error transitioning state machine: block=%x txindex=%d error=\"%s\"", blockHash, i, err)
+			}
+
+			// Apply the effects.
+			stateMachine.Apply(effects)
+
+			if i == 0 {
+				isCoinbase = false
+			}
+		}
+	}
+
+	return &stateMachine, nil
 }
