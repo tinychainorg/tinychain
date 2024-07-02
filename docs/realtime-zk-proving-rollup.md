@@ -20,26 +20,26 @@ Using the Poseidon ZK-friendly hashing function, according to the benchmarks fro
 
 I've run some benchmarks using the tinychain Go implementation, which uses go's crypto/ecdsa package.
 
-1 ECDSA sign - 213.833µs
-1 ECDSA verify - 125.459µs
+1 ECDSA sign - 213.833µs\
+1 ECDSA verify - 125.459µs\
 Signature size - 64 B
 
 Comparing this against groth16 BN256 Poseidon signatures:
 
-1 ZK sign - 43.1ms
-1 ZK verify - 1.2ms
+1 ZK sign - 43.1ms\
+1 ZK verify - 1.2ms\
 Signature size - 24 B
 
 So roughly speaking, with a block size of 1MB:
 
-Tx base size w/out signature = 91 B
-ECDSA tx size = 91 + 64 = 155 B
+Tx base size w/out signature = 91 B\
+ECDSA tx size = 91 + 64 = 155 B\
 ZK tx size = 91 + 24 = 115 B
 
-Total ECDSA txs / 1 MB block = 1000*1000 / 155 = 6451
+Total ECDSA txs / 1 MB block = 1000*1000 / 155 = 6451\
 Total ZK txs / 1 MB block = 1000*1000 / 115 = 8695
 
-ECDSA sig verification time / block = 6451*125/1000 = 806ms
+ECDSA sig verification time / block = 6451*125/1000 = 806ms\
 ZK sig verification time / block = 8695*1.2 = 10,434ms = 1.04s
 
 ## Hashcash solution
@@ -60,14 +60,14 @@ Nonetheless, we can use Snarkpack as a napkin estimate.
 
 This might mean that miners can realtime generate proofs of blocks as they mine them.
 
-1 proof = 24 B
-1 sig = 1 proof
+1 proof = 24 B\
+1 sig = 1 proof\
 Max block size 1MB = 8695 ZK sigs / block
 
-For reasoning's sake, instead of 8695 txs, let's consider Snarkpack's 8192 proofs, which is pretty close to our maximum number of ZK sigs in a block
+For reasoning's sake, instead of 8695 txs, let's consider Snarkpack's 8192 proofs, which is pretty close to our maximum number of ZK sigs in a block.
 
-Time to prove 1 block = 8.7s
-Time to verify 1 block's aggregate proof = 163ms
+Time to prove 1 block = 8.7s\
+Time to verify 1 block's aggregate proof = 163ms\
 Size of block aggregated proof ~= 20kB (from paper)
 
 ## Recursively verifying blocks
@@ -76,9 +76,9 @@ Now we can prove 1 block within the bounds of "realtime" (8.7s) and the proof is
 
 I guess the next part of this is actually committing to the blockchain's state inside the block proof. Then you never need to recompute the state.
 
-Reconstructing the state is actually very cheap - I ran some numbers last night and it took 9s to process ~1 years worth of transactions at full blocks of 1MB containing 6451 txs per block
+Reconstructing the state is actually very cheap - I ran some numbers last night and it took 9s to process ~1 years worth of transactions at full blocks of 1MB containing 6451 txs per block.
 
-The big bottleneck is actually downloading the txs in order to compute the state. But if you didn't have to, if there was a ZK proof of the up-to-date chain state, then it would be O(N) cost where N is the number of UXTO's
+The big bottleneck is actually downloading the txs in order to compute the state. But if you didn't have to, if there was a ZK proof of the up-to-date chain state, then it would be O(N) cost where N is the number of UXTO's.
 
 ## State size.
 
