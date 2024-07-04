@@ -260,21 +260,21 @@ func (p *PeerCore) GossipPeers() {
 	}
 }
 
-// func (p *PeerCore) GetBlocks(block RawBlock) {
-//     peerLogger.Printf("Asking peers for blocks\n", block.HashStr(), len(p.peers))
+func (p *PeerCore) GetBlockHeaders(peer Peer, blockHashes [][32]byte) ([][]byte, error) {
+    peerLogger.Printf("Asking peers for blocks\n", block.HashStr(), len(p.peers))
 
-//     // Send block to all peers.
-//     for _, peer := range p.peers {
-//         newBlockMsg := NewBlockMessage{
-//             Type: "new_block",
-//             RawBlock: block,
-//         }
-//         _, err := SendMessageToPeer(peer.url, newBlockMsg)
-//         if err != nil {
-//             peerLogger.Printf("Failed to send block to peer: %v", err)
-//         }
-//     }
-// }
+    // // Send block to all peers.
+    // for _, peer := range p.peers {
+    //     newBlockMsg := NewBlockMessage{
+    //         Type: "new_block",
+    //         RawBlock: block,
+    //     }
+    //     _, err := SendMessageToPeer(peer.url, newBlockMsg)
+    //     if err != nil {
+    //         peerLogger.Printf("Failed to send block to peer: %v", err)
+    //     }
+    // }
+}
 
 // Bootstraps the connection to the network.
 func (p *PeerCore) Bootstrap(peerInfos []string) {

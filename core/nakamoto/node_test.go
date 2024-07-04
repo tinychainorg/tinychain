@@ -194,12 +194,10 @@ func TestNodeSyncMissingBlocks(t *testing.T) {
 	node1 := newNodeFromConfig(t)
 	node2 := newNodeFromConfig(t)
 
-	// Start the node.
+	// Start node1 only.
 	go node1.Peer.Start()
-	go node2.Peer.Start()
-
-	// Wait for peers to come online.
-	waitForPeersOnline([]*PeerCore{node1.Peer, node2.Peer})
+	// Wait for node1 to come online.
+	waitForPeersOnline([]*PeerCore{node1.Peer})
 
 	// Bootstrap.
 	node1.Peer.Bootstrap([]string{
@@ -210,6 +208,14 @@ func TestNodeSyncMissingBlocks(t *testing.T) {
 	})
 
 	node1.Miner.Start(10)
+
+
+	// Start node2.
+	go node2.Peer.Start()
+	// Wait for node2 to come online.
+	waitForPeersOnline([]*PeerCore{node2.Peer})
+
+	// Wait for node 2 to sync completely.
 
 	// Then we check the tips.
 	tip1 := node1.Dag.Tip

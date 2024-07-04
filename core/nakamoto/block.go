@@ -104,3 +104,47 @@ func (b *RawBlock) SizeBytes() uint64 {
 	// Calculate the size of the block.
 	return uint64(len(b.Envelope()))
 }
+
+
+func (b *BlockHeader) Envelope() []byte {
+	// Encode canonically.
+	buf := new(bytes.Buffer)
+
+	err := binary.Write(buf, binary.BigEndian, b.ParentHash)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.ParentTotalWork)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.Timestamp)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.NumTransactions)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.TransactionsMerkleRoot)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.Nonce)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.Graffiti)
+	if err != nil {
+		panic(err)
+	}
+
+	return buf.Bytes()
+}
+
+func (b *BlockHeader) Hash() [32]byte {
+	// Hash the envelope.
+	h := sha256.New()
+	h.Write(b.Envelope())
+	return sha256.Sum256(h.Sum(nil))
+}

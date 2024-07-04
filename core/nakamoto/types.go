@@ -91,6 +91,17 @@ func (tx *RawTransaction) SizeBytes() uint64 {
 	return 1 + 65 + 65 + 8 + 8 + 8
 }
 
+// TODO embed in Block?
+type BlockHeader struct {
+	ParentHash             [32]byte
+	ParentTotalWork        big.Int
+	Timestamp              uint64
+	NumTransactions        uint64
+	TransactionsMerkleRoot [32]byte
+	Nonce                  [32]byte
+	Graffiti               [32]byte
+}
+
 type Block struct {
 	// Block header.
 	ParentHash             [32]byte
