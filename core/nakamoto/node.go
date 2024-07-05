@@ -106,8 +106,7 @@ func (n *Node) Sync() {
 	// 4. Reduce the tips to (tip, work, num_peers).
 	// 5. Choose the tip with the highest work and the most peers mining on it.
 	// 6. Sync:
-	//   a. Compute the common ancestor.
-	//      i. Contact one of the peers with our tip's height, ask for their block at that height.
+	//   a. Compute the common ancestor (interactive binary search).
 	//   b. In parallel, download all the block headers from the common ancestor to the tip.
 	//   c. Validate these block headers.
 	//   d. In parallel, download all the block bodies (transactions) from the common ancestor to the tip.
@@ -121,6 +120,11 @@ func (n *Node) Sync() {
 	//   c. Begin mining on the new tip.
 	// 
 	
+	// Network messages:
+	// - get_current_tip (include block header)
+	// - has_block? (blockhash)
+	// - get_block_headers from_blockhash skip=n limit=n
+	// - get_block_bodies from_blockhash skip=n limit=n
 
 	// Things I am worrying about and not sure how to do:
 	// - where else do we recompute state?
