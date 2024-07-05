@@ -85,6 +85,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 		}
 	})()
 
+	// Routine: Mine.
 	for {
 		var i uint64 = 0
 		minerLog.Println("Waiting for new puzzle")
@@ -94,6 +95,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 		target := puzzle.target
 		minerLog.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
 
+		// Loop: mine 1 hash.
 		for {
 			numHashes++
 			i++

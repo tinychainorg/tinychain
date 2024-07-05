@@ -120,6 +120,9 @@ func (n *Node) Sync() {
 	//   c. Begin mining on the new tip.
 	// 
 
+	
+
+
 	// 
 	// Simple modelling of the costs:
 	// 
