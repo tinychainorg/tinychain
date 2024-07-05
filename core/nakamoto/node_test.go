@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+	"encoding/binary"
+	"math"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
@@ -309,4 +311,81 @@ func TestNodeBuildStateReorg(t *testing.T) {
 // Total networking cost is O(40 * log N), bitcoin's chain height is 850585, O(40 * log 850585) = O(40 * 20) = O(800) bytes.
 // Less than 1KB of data to find common ancestor.
 func TestInteractiveBinarySearchFindCommonAncestor(t *testing.T) {
+	local_chainhashes := [][32]byte{}
+	remote_chainhashes := [][32]byte{}
+
+	// Populate blockhashes for test.
+	for i := 0; i < 100; i++ {
+		local_chainhashes = append(local_chainhashes, uint64To32ByteArray(uint64(i)))
+		remote_chainhashes = append(remote_chainhashes, uint64To32ByteArray(uint64(i)))
+	}
+	// Set remote to branch at block height 90. 
+	for i := 90; i < 100; i++ {
+		remote_chainhashes[i] = uint64To32ByteArray(uint64(i + 1000))
+	}
+
+	// Print both for debugging.
+	t.Logf("Local chainhashes:\n")
+	for _, x := range local_chainhashes {
+		t.Logf("%x", x)
+	}
+	t.Logf("\n")
+	t.Logf("Remote chainhashes:\n")
+	for _, x := range remote_chainhashes {
+		t.Logf("%x", x)
+	}
+	t.Logf("\n")
+
+	// Peer method.
+	hasBlockhash := func(blockhash [32]byte) bool {
+		for _, x := range remote_chainhashes {
+			if x == blockhash {
+				return true
+			}
+		}
+		return false
+	}
+
+	// 
+	// Find the common ancestor.
+	// 
+
+	// This is a classical binary search algorithm.
+	floor := 0
+	ceil := len(local_chainhashes)
+	n_iterations := 0
+
+	for (floor + 1) < ceil {
+		guess_idx := (floor + ceil) / 2
+		guess_value := local_chainhashes[guess_idx]
+
+		t.Logf("Iteration %d: floor=%d, ceil=%d, guess_idx=%d, guess_value=%x", n_iterations, floor, ceil, guess_idx, guess_value)
+		n_iterations += 1
+
+		// Send our tip's blockhash
+		// Peer responds with "SEEN" or "NOT SEEN"
+		// If "SEEN", we move to the right half.
+		// If "NOT SEEN", we move to the left half.
+		if hasBlockhash(guess_value) {
+			// Move to the right half.
+			floor = guess_idx
+		} else {
+			// Move to the left half.
+			ceil = guess_idx
+		}
+	}
+
+	ancestor := local_chainhashes[floor]
+	t.Logf("Common ancestor: %x", ancestor)
+	t.Logf("Found in %d iterations.", n_iterations)
+
+	expectedIterations := math.Ceil(math.Log2(float64(len(local_chainhashes))))
+	t.Logf("Expected iterations: %f", expectedIterations)
 }
+
+func uint64To32ByteArray(num uint64) [32]byte {
+	var arr [32]byte
+	binary.BigEndian.PutUint64(arr[24:], num) // Store the uint64 in the last 8 bytes of the array
+	return arr
+}
+

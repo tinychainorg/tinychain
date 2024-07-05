@@ -8,7 +8,7 @@
 // 
 // Note that due to how Nakamoto consensus works, there is the possibility of reorgs, which means that a block that was previously mined may be replaced by a longer chain. In this case, transactions which have been taken from the mempool and included in a block that is later reorged out should be "returned" to the mempool. This is the intuition for the mempool's behaviour, however it is designed as a one-way flow.
 // 
-package core
+package nakamoto
 
 type Mempool struct {
 }
@@ -26,7 +26,9 @@ func NewMempool() *Mempool {
 
 func (m *Mempool) AddTransaction(tx *Transaction) {}
 
-func (m *Mempool) GetFeeRates() FeeInfo {}
+func (m *Mempool) GetFeeRates() FeeInfo {
+	return FeeInfo{}
+}
 
 func (m *Mempool) BuildBundle() []*Transaction {
 	txs := []*Transaction{}

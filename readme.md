@@ -7,6 +7,7 @@ A full blockchain in Go;
    * Dynamic difficulty retargeting (epochs).
    * Proof-of-work consensus - longest/heaviest chain rule.
    * Merklized transaction tree for light client availability.
+ * State sync - interactive binary search for common ancestor, parallelised block header download from multiple peers.
  * Ethereum-like coin state machine - basic ERC20 transfers.
  * ECDSA (curve P256) wallets for signing transactions. Signature malleability fixes.
  * Core data structures: RawBlock, RawTx, Block, Tx, Epoch, BlockDAG, current tip, Miner, NetPeer, Node
