@@ -280,3 +280,33 @@ func TestNodeBuildStateReorg(t *testing.T) {
 	// Peer A. Mines chain of 10 blocks.
 	// Assert that the state is correctly computed.
 }
+
+// One part of the block sync algorithm is determining the common ancestor of two chains:
+//  Chain 1: the chain we have on our local node.
+//  Chain 2: the chain of a remote peer who has a more recent tip.
+// We determine the common ancestor in order to download the most minimal set of block headers required to sync to the latest tip.
+// There are a few approaches to this:
+// - naive approach: download all headers from the tip to the remote peer's genesis block, and then compare the headers to find the common ancestor. This is O(N) where N is the length of the longest chain.
+// - naive approach 2: send the peer the block we have at (height - 6), which is according to Nakamoto's calculations, "probabilistically final" and unlikely to be reorg-ed. Ask them if they have this block, and if so, sync the remaining 6 blocks. This fails when there is ongoing volatile reorgs, as well as doesn't work for a full sync.
+// - slightly less naive approach: send the peer "checkpoints" at a regular interval. So for the full list of block hashes, we send H/I where I is the interval size, and use this to sync. This is O(H/I). 
+// - slightly slightly less naive approach: send the peer a list of "checkpoints" at exponentially decreasing intervals. This is smart since the finality of a block increases exponentially with the number of confirmations. This is O(H/log(H)).
+// - the most efficient approach. Interactively binary search with the node. At each step of the binary search, we split their view of the chain hash list in half, and ask them if they have the block at the midpoint. 
+// 
+// Let me explain the binary search.
+// <------------------------>   our view
+// <------------------------> their view
+// n=1
+// <------------|-----------> their view
+// <------------------|-----> their view
+// <---------------|--------> their view
+// At each iteration we ask: do you have a block at height/2 with this hash?
+// - if the answer is yes, we move to the right half.
+// - if the answer is no, we move to the left half.
+// We continue until the length of our search space = 1.
+// 
+// Now for some modelling.
+// Finding the common ancestor is O(log N). Each message is (blockhash [32]byte, height uint64). Message size is 40 bytes.
+// Total networking cost is O(40 * log N), bitcoin's chain height is 850585, O(40 * log 850585) = O(40 * 20) = O(800) bytes.
+// Less than 1KB of data to find common ancestor.
+func TestInteractiveBinarySearchFindCommonAncestor(t *testing.T) {
+}

@@ -107,6 +107,7 @@ func (n *Node) Sync() {
 	// 5. Choose the tip with the highest work and the most peers mining on it.
 	// 6. Sync:
 	//   a. Compute the common ancestor.
+	//      i. Contact one of the peers with our tip's height, ask for their block at that height.
 	//   b. In parallel, download all the block headers from the common ancestor to the tip.
 	//   c. Validate these block headers.
 	//   d. In parallel, download all the block bodies (transactions) from the common ancestor to the tip.
@@ -119,8 +120,11 @@ func (n *Node) Sync() {
 	//      - Revalidate the tx set. O(K).
 	//   c. Begin mining on the new tip.
 	// 
-
 	
+
+	// Things I am worrying about and not sure how to do:
+	// - where else do we recompute state?
+	// - where else do we restart the miner?
 
 
 	// 
