@@ -46,7 +46,7 @@ func getRandomPort() string {
 
 func waitForPeersOnline(peers []*PeerCore) {
 	ready := make(chan bool, 1)
- 
+
 	go func() {
 		for {
 			numOnline := 0

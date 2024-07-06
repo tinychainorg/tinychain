@@ -223,23 +223,23 @@ func TestCalculateWork(t *testing.T) {
 }
 
 // Poseidon is a ZK-friendly hash function.
-// 
+//
 // This is a benchmark from Starkware's original prover, ethSTARK, which was research done for the Ethereum Foundation.
 // https://eprint.iacr.org/2021/582.pdf
-// 
+//
 // 1. Operating-System: Linux 5.3.0-51-generic x86_64.
 // 2. CPU: Intel(R) Core(TM) i7-7700K @ 4.20GHz (4 cores, 2 threads per core).
 // 3. RAM: 16GB DDR4 (8GB × 2, Speed: 2667 MHz)
 // 4. STARK bits of security: 80 bits.
 // 5. Hash function used: Rescue (another ZK-friendly hash function).
-// 
+//
 // Proving:
 // - Number of hashes: 12,288
 // - Prove time: 1s
 // Verification:
 // - Proof size: ~40kB
 // - Verify time: 1.9mS
-// 
+//
 // We note these benchmarks are similar to the Poseidon paper's libsnark implementation.
 // Field: BN254
 // Proofing system: groth16
@@ -247,14 +247,12 @@ func TestCalculateWork(t *testing.T) {
 // Prove time: 43.1ms
 // Proof size: 200 bytes (3 field elements, 252 bits each, ~3*8 bytes, 24 bytes)
 // Verify time: 1.2ms
-// 
+//
 // Interestingly, you can use a ZK proof of revealing a hash preimage as a digital signature.
 // How does this compare to digital signatures?
-// 
-// 
 func TestPoseidonHashFunction(t *testing.T) {
 	// poseidon hash with 3 input elements and 1 output element.
-    input := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	input := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
 
 	// generate round constants for poseidon hash.
 	// width=len(input)+1.

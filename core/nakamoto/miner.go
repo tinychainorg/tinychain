@@ -14,12 +14,12 @@ import (
 var minerLog = NewLogger("miner", "")
 
 type Miner struct {
-	dag             BlockDAG
-	minerWallet     *core.Wallet
-	IsRunning       bool
+	dag         BlockDAG
+	minerWallet *core.Wallet
+	IsRunning   bool
 
 	// Mutex.
-	mutex           sync.Mutex
+	mutex sync.Mutex
 
 	OnBlockSolution func(block RawBlock)
 }
@@ -29,7 +29,7 @@ func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
 		dag:         dag,
 		minerWallet: minerWallet,
 		IsRunning:   false,
-		mutex: 	 sync.Mutex{},
+		mutex:       sync.Mutex{},
 	}
 }
 

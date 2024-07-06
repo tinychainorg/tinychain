@@ -1,11 +1,11 @@
 package nakamoto
 
 import (
+	"encoding/binary"
 	"encoding/json"
+	"math"
 	"testing"
 	"time"
-	"encoding/binary"
-	"math"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
@@ -211,7 +211,6 @@ func TestNodeSyncMissingBlocks(t *testing.T) {
 
 	node1.Miner.Start(10)
 
-
 	// Start node2.
 	go node2.Peer.Start()
 	// Wait for node2 to come online.
@@ -227,17 +226,15 @@ func TestNodeSyncMissingBlocks(t *testing.T) {
 	assert.Equal(tip1, tip2)
 }
 
-
 func TestNodeSyncNoReorg(t *testing.T) {
 
 }
 
-
 // func TestNodeSyncReorg(t *testing.T) {
 // 	// Two peers for test:
-// 	// - peer A. Has mined a chain of 10 blocks. 
+// 	// - peer A. Has mined a chain of 10 blocks.
 // 	// - peer B. Has mined an alternative chain of 5 blocks.
-// 	// 
+// 	//
 // 	// Test routine:
 // 	// Peer A starts up, mines 10 blocks.
 // 	// Peer B starts up, mines 5 blocks, then connects to peer B.
@@ -245,7 +242,6 @@ func TestNodeSyncNoReorg(t *testing.T) {
 // 	// Peer B downloads the headers of peer A, and then downloads the bodies, ingests the blocks.
 // 	// Assert: peer B tip == peer A tip (longest chain)
 // 	// Assert: peer B state == peer A state (longest chain)
-
 
 // 	// assert := assert.New(t)
 
@@ -275,7 +271,7 @@ func TestNodeBuildState(t *testing.T) {
 	node1.Peer.Start()
 	node1.Miner.Start(10)
 
-	// 
+	//
 }
 
 func TestNodeBuildStateReorg(t *testing.T) {
@@ -284,16 +280,18 @@ func TestNodeBuildStateReorg(t *testing.T) {
 }
 
 // One part of the block sync algorithm is determining the common ancestor of two chains:
-//  Chain 1: the chain we have on our local node.
-//  Chain 2: the chain of a remote peer who has a more recent tip.
+//
+//	Chain 1: the chain we have on our local node.
+//	Chain 2: the chain of a remote peer who has a more recent tip.
+//
 // We determine the common ancestor in order to download the most minimal set of block headers required to sync to the latest tip.
 // There are a few approaches to this:
 // - naive approach: download all headers from the tip to the remote peer's genesis block, and then compare the headers to find the common ancestor. This is O(N) where N is the length of the longest chain.
 // - naive approach 2: send the peer the block we have at (height - 6), which is according to Nakamoto's calculations, "probabilistically final" and unlikely to be reorg-ed. Ask them if they have this block, and if so, sync the remaining 6 blocks. This fails when there is ongoing volatile reorgs, as well as doesn't work for a full sync.
-// - slightly less naive approach: send the peer "checkpoints" at a regular interval. So for the full list of block hashes, we send H/I where I is the interval size, and use this to sync. This is O(H/I). 
+// - slightly less naive approach: send the peer "checkpoints" at a regular interval. So for the full list of block hashes, we send H/I where I is the interval size, and use this to sync. This is O(H/I).
 // - slightly slightly less naive approach: send the peer a list of "checkpoints" at exponentially decreasing intervals. This is smart since the finality of a block increases exponentially with the number of confirmations. This is O(H/log(H)).
-// - the most efficient approach. Interactively binary search with the node. At each step of the binary search, we split their view of the chain hash list in half, and ask them if they have the block at the midpoint. 
-// 
+// - the most efficient approach. Interactively binary search with the node. At each step of the binary search, we split their view of the chain hash list in half, and ask them if they have the block at the midpoint.
+//
 // Let me explain the binary search.
 // <------------------------>   our view
 // <------------------------> their view
@@ -305,7 +303,7 @@ func TestNodeBuildStateReorg(t *testing.T) {
 // - if the answer is yes, we move to the right half.
 // - if the answer is no, we move to the left half.
 // We continue until the length of our search space = 1.
-// 
+//
 // Now for some modelling.
 // Finding the common ancestor is O(log N). Each message is (blockhash [32]byte, height uint64). Message size is 40 bytes.
 // Total networking cost is O(40 * log N), bitcoin's chain height is 850585, O(40 * log 850585) = O(40 * 20) = O(800) bytes.
@@ -319,7 +317,7 @@ func TestInteractiveBinarySearchFindCommonAncestor(t *testing.T) {
 		local_chainhashes = append(local_chainhashes, uint64To32ByteArray(uint64(i)))
 		remote_chainhashes = append(remote_chainhashes, uint64To32ByteArray(uint64(i)))
 	}
-	// Set remote to branch at block height 90. 
+	// Set remote to branch at block height 90.
 	for i := 90; i < 100; i++ {
 		remote_chainhashes[i] = uint64To32ByteArray(uint64(i + 1000))
 	}
@@ -346,9 +344,9 @@ func TestInteractiveBinarySearchFindCommonAncestor(t *testing.T) {
 		return false
 	}
 
-	// 
+	//
 	// Find the common ancestor.
-	// 
+	//
 
 	// This is a classical binary search algorithm.
 	floor := 0
@@ -389,3 +387,85 @@ func uint64To32ByteArray(num uint64) [32]byte {
 	return arr
 }
 
+//
+// Simple modelling of the costs:
+//
+// Assumptions:
+// Number of peers : P = 5
+// Download bandwidth : 1MB/s
+// Block rate = 1 block / 10 mins
+// Max block size = 1 MB
+// Block header size = 208 B
+// Transaction size = 155 B
+// Block body max size = 999792 B
+// Maximum transactions per block = 6450
+// Assuming full blocks, 1 block = 1MB
+// Our last sync = 1 week ago = 7*24*60/(1/10) = 1008 blocks
+//
+// Getting tips from all peers. O(P * 208) bytes.
+// Downloading block headers. O(1008 * 208) bytes.
+//   Total download = 1008 * 208 = 209,664 = 209 KB
+//   Download on each peer. O(1008 * 208 / P) bytes per peer.
+//                          O(1008 * 208 / 5) = 41932 = 41 KB
+//   Time to sync headers = 1008 * 208 / 1 MB/s = 1000*208/1000/1000 = 0.2s
+// Downloading block bodies. O(1008 * 999792)
+//   Total download = 1008 * 999792 = 1,007,790,336 = 1.007 GB
+//   Download on each peer. O(1008 * 999792 / P) bytes per peer.
+//                          O(1008 * 999792 / 5) = 201,558,067 = 201 MB
+//   Time to sync bodies = 1008 * 999792 / 1 MB/s = 1000*999792/1000/1000 = 999s = 16.65 mins
+//
+
+//
+// What about when we simply miss a block in the 1...6 finality period?
+// We will know because the peer sends us the new block, and we don't know the parent.
+//
+//
+
+// tips := make([]BlockHeader, 0)
+// for _, peer := range n.Peer.Peers {
+// 	tip, err := peer.GetTip()
+// 	if err != nil {
+// 		nodeLog.Printf("Failed to get tip from peer: %s\n", err)
+// 		continue
+// 	}
+
+// 	// Get the block header for each of these tips.
+// 	blockHeaders, err := peer.GetBlockHeaders(tip)
+// 	if err != nil {
+// 		nodeLog.Printf("Failed to get block header from peer: %s\n", err)
+// 		continue
+// 	}
+// 	if len(blockHeaders) == 0 {
+// 		nodeLog.Printf("No block headers from peer: %s\n", peer.GetLocalAddr())
+// 		continue
+// 	}
+// 	blockHeader := blockHeaders[0]
+
+// 	// Verify block header's work.
+// 	// TODO.
+// 	work := CalculateWork(Bytes32ToBigInt(blockHeader.Hash()))
+
+// 	tips = append(tips, blockHeader)
+// }
+
+// Verify the POW on the tip to check the tip is valid.
+// Select the tip with the highest work according to ParentTotalWork.
+// TODO.
+
+// Get a set of block "checkpoints", evenly spaced out, from the peer.
+// O(N/(10*6*24)) = O(N/1440) blocks = 1 checkpoint for each day.
+// We can then use these to determine:
+// (1) the multiple branches of the blocktree (if any)
+// (2) which peers store which blocks
+// (3) a mapping of ancestor -> []peer
+
+// Expressed by intuition, we ask all our peers for their view of the longest chain on each day stretching back to genesis.
+// From there, we can determine the "common base" they are building of, and where it diverges.
+// Where there is a common base ancestor, we can request that block history from all those peers who share that common ancestor IN PARALLEL.
+// It is akin to BitTorrent, where we can download chunks in parallel from all peers in a swarm.
+
+// Download all of the block headers from tip backwards.
+// Download the blocks from the tip to the common ancestor from all our peers.
+// Store them in a temporary storage.
+// Ingest the blocks in reverse order.
+// Begin mining.

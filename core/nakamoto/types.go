@@ -2,7 +2,6 @@ package nakamoto
 
 import (
 	"database/sql"
-	"encoding/binary"
 	"encoding/hex"
 	"math/big"
 	"strconv"
@@ -42,38 +41,6 @@ type RawBlock struct {
 
 	// Block body.
 	Transactions []RawTransaction `json:"transactions"`
-}
-
-func (b *RawBlock) Header() (header [208]byte) {
-	// total header size = 1 + 32 + 32 + 32 + 8 + 8 + 32 + 32 + 32
-
-	// Parent hash.
-	copy(header[0:32], b.ParentHash[:])
-	// Parent total work.
-	copy(header[32:64], b.ParentTotalWork[:])
-	// Difficulty.
-	copy(header[64:96], b.Difficulty[:])
-	// Timestamp.
-	timestamp := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestamp, b.Timestamp)
-	copy(header[96:104], timestamp)
-	// Num transactions.
-	numTransactions := make([]byte, 8)
-	binary.BigEndian.PutUint64(numTransactions, b.NumTransactions)
-	copy(header[104:112], numTransactions)
-	// Transactions merkle root.
-	copy(header[112:144], b.TransactionsMerkleRoot[:])
-	// Nonce.
-	copy(header[144:176], b.Nonce[:])
-	// Graffiti.
-	copy(header[176:208], b.Graffiti[:])
-
-	return header
-}
-
-func (b *RawBlock) HashStr() string {
-	sl := b.Hash()
-	return hex.EncodeToString(sl[:])
 }
 
 type RawTransaction struct {
@@ -244,8 +211,8 @@ type HeartbeatMesage struct {
 }
 
 type GetTipMessage struct {
-	Type string `json:"type"` // "get_tip"
-	Tip  string `json:"myTip"`
+	Type string      `json:"type"` // "get_tip"
+	Tip  BlockHeader `json:"tip"`
 }
 
 type NewBlockMessage struct {
@@ -281,4 +248,14 @@ type GetBlocksHeadersReply struct {
 type GossipPeersMessage struct {
 	Type  string   `json:"type"` // "gossip_peers"
 	Peers []string `json:"myPeers"`
+}
+
+type HasBlockMessage struct {
+	Type      string `json:"type"` // "have_block"
+	BlockHash string `json:"blockHash"`
+}
+
+type HasBlockReply struct {
+	Type string `json:"type"` // "have_block_reply"
+	Has  bool   `json:"has"`
 }

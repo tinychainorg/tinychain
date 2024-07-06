@@ -117,7 +117,6 @@ func DiscoverIP() (string, int, error) {
 // Format 2:
 // prefix="prefix" prefix2="prefix2"
 // 2024/06/30 00:56:06 [prefix] (prefix2) message
-//
 func NewLogger(prefix string, prefix2 string) *log.Logger {
 	prefixFull := color.HiGreenString(fmt.Sprintf("[%s] ", prefix))
 	if prefix2 != "" {

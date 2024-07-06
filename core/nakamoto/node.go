@@ -2,14 +2,17 @@ package nakamoto
 
 import (
 	"fmt"
+	"log"
+	"sync"
+	"time"
+	"math/big"
 )
-
-var nodeLog = NewLogger("node", "")
 
 type Node struct {
 	Dag   BlockDAG
 	Miner *Miner
 	Peer  *PeerCore
+	log *log.Logger
 }
 
 func NewNode(dag BlockDAG, miner *Miner, peer *PeerCore) *Node {
@@ -17,6 +20,7 @@ func NewNode(dag BlockDAG, miner *Miner, peer *PeerCore) *Node {
 		Dag:   dag,
 		Miner: miner,
 		Peer:  peer,
+		log: NewLogger("node", ""),
 	}
 	n.setup()
 	return n
@@ -25,23 +29,23 @@ func NewNode(dag BlockDAG, miner *Miner, peer *PeerCore) *Node {
 func (n *Node) setup() {
 	// Listen for new blocks.
 	n.Peer.OnNewBlock = func(b RawBlock) {
-		nodeLog.Printf("New block gossip from peer: block=%s\n", b.HashStr())
+		n.log.Printf("New block gossip from peer: block=%s\n", b.HashStr())
 
 		if n.Dag.HasBlock(b.Hash()) {
-			nodeLog.Printf("Block already in DAG: block=%s\n", b.HashStr())
+			n.log.Printf("Block already in DAG: block=%s\n", b.HashStr())
 			return
 		}
 
 		isUnknownParent := n.Dag.HasBlock(b.ParentHash)
 		if isUnknownParent {
 			// We need to sync the chain.
-			nodeLog.Printf("Block parent unknown: block=%s\n", b.HashStr())
+			n.log.Printf("Block parent unknown: block=%s\n", b.HashStr())
 		}
 
 		// Ingest the block.
 		err := n.Dag.IngestBlock(b)
 		if err != nil {
-			nodeLog.Printf("Failed to ingest block from peer: %s\n", err)
+			n.log.Printf("Failed to ingest block from peer: %s\n", err)
 		}
 	}
 
@@ -73,12 +77,12 @@ func (n *Node) setup() {
 
 	// Gossip blocks when we mine a new solution.
 	n.Miner.OnBlockSolution = func(b RawBlock) {
-		nodeLog.Printf("Mined new block: %s\n", b.HashStr())
+		n.log.Printf("Mined new block: %s\n", b.HashStr())
 
 		// Ingest the block.
 		err := n.Dag.IngestBlock(b)
 		if err != nil {
-			nodeLog.Printf("Failed to ingest block from miner: %s\n", err)
+			n.log.Printf("Failed to ingest block from miner: %s\n", err)
 		}
 
 		// Gossip the block.
@@ -86,9 +90,19 @@ func (n *Node) setup() {
 	}
 
 	// Gossip the latest tip.
-	n.Peer.OnGetTip = func(msg GetTipMessage) ([32]byte, error) {
-		tip := n.Dag.Tip.Hash
-		return tip, nil
+	n.Peer.OnGetTip = func(msg GetTipMessage) (BlockHeader, error) {
+		tip := n.Dag.Tip
+		// Convert to BlockHeader
+		blockHeader := BlockHeader{
+			ParentHash: 		  tip.ParentHash,
+			ParentTotalWork: 	  tip.ParentTotalWork,
+			Timestamp: 		  tip.Timestamp,
+			NumTransactions: 	  tip.NumTransactions,
+			TransactionsMerkleRoot: tip.TransactionsMerkleRoot,
+			Nonce                  : tip.Nonce,
+			Graffiti               : tip.Graffiti,
+		}
+		return blockHeader, nil
 	}
 
 	// Recompute the state after a new tip.
@@ -100,17 +114,33 @@ func (n *Node) setup() {
 }
 
 func (n *Node) Sync() {
-	// 1. Contact all our peers.
-	// 2. Get their current tips (including block header and "optimistic" height).
-	// 3. Sort the tips by max(work).
-	// 4. Reduce the tips to (tip, work, num_peers).
-	// 5. Choose the tip with the highest work and the most peers mining on it.
+	n.log.Printf("Performing sync...\n")
+
+	bestTip := n.sync_getBestTipFromPeers()
+
+	// TODO parallelise this algo:
+	// For one peer.
+		// Get common ancestor. 640B space cost, 17 messages time cost, for 840,000 blocks.
+		// Download all block headers from common ancestor to tip.
+		// Validate block headers.
+		// Download all block bodies from common ancestor to tip.
+		// Validate and ingest blocks.
+	
+	// A parallel version of this algorithm:
+	// - split the blocks we need up into batches of 10.
+	// - perform one step:
+	//   - batch_size / num_peers
+	//   - download
+	//   - measure peer download speed
+	//    - fuck we have to check the peer even has the block for this step in their inventory
+
 	// 6. Sync:
 	//   a. Compute the common ancestor (interactive binary search).
 	//   b. In parallel, download all the block headers from the common ancestor to the tip.
 	//   c. Validate these block headers.
 	//   d. In parallel, download all the block bodies (transactions) from the common ancestor to the tip.
 	//   e. Validate and ingest these blocks.
+
 	// 7. Sync complete, now rework:
 	//   a. Recompute the state.
 	//   b. Recompute the mempool. Mempool size = K txs.
@@ -129,90 +159,127 @@ func (n *Node) Sync() {
 	// Things I am worrying about and not sure how to do:
 	// - where else do we recompute state?
 	// - where else do we restart the miner?
+}
 
+// Contacts all our peers in parallel, gets the block header of their tip, and returns the best tip based on total work.
+func (n *Node) sync_getBestTipFromPeers() ([32]byte) {
+	syncLog := NewLogger("node", "sync")
 
-	// 
-	// Simple modelling of the costs:
-	// 
-	// Assumptions:
-	// Number of peers : P = 5
-	// Download bandwidth : 1MB/s
-	// Block rate = 1 block / 10 mins
-	// Max block size = 1 MB
-	// Block header size = 208 B
-	// Transaction size = 155 B
-	// Block body max size = 999792 B
-	// Maximum transactions per block = 6450
-	// Assuming full blocks, 1 block = 1MB
-	// Our last sync = 1 week ago = 7*24*60/(1/10) = 1008 blocks
-	// 
-	// Getting tips from all peers. O(P * 208) bytes.
-	// Downloading block headers. O(1008 * 208) bytes.
-	//   Total download = 1008 * 208 = 209,664 = 209 KB
-	//   Download on each peer. O(1008 * 208 / P) bytes per peer.
-	//                          O(1008 * 208 / 5) = 41932 = 41 KB
-	//   Time to sync headers = 1008 * 208 / 1 MB/s = 1000*208/1000/1000 = 0.2s
-	// Downloading block bodies. O(1008 * 999792)
-	//   Total download = 1008 * 999792 = 1,007,790,336 = 1.007 GB
-	//   Download on each peer. O(1008 * 999792 / P) bytes per peer.
-	//                          O(1008 * 999792 / 5) = 201,558,067 = 201 MB
-	//   Time to sync bodies = 1008 * 999792 / 1 MB/s = 1000*999792/1000/1000 = 999s = 16.65 mins
-	// 
+	// 1. Contact all our peers.
+	// 2. Get their current tips in parallel.
+	syncLog.Printf("Getting tips from %d peers...\n", len(n.Peer.peers))
 
-	// 
-	// What about when we simply miss a block in the 1...6 finality period?
-	// We will know because the peer sends us the new block, and we don't know the parent.
-	// 
-	// 
+	var wg sync.WaitGroup
+	
+	tips := make([]BlockHeader, 0)
+	tipsChan := make(chan BlockHeader, len(n.Peer.peers))
+    timeout := time.After(5 * time.Second)
 
-	// tips := make([]BlockHeader, 0)
-	// for _, peer := range n.Peer.Peers {
-	// 	tip, err := peer.GetTip()
-	// 	if err != nil {
-	// 		nodeLog.Printf("Failed to get tip from peer: %s\n", err)
-	// 		continue
-	// 	}
+	for _, peer := range n.Peer.peers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tip, err := n.Peer.GetTip(peer)
+			if err != nil {
+				syncLog.Printf("Failed to get tip from peer: %s\n", err)
+				return
+			}
+			syncLog.Printf("Got tip from peer: hash=%s\n", tip.HashStr())
+			tipsChan <- tip
+		}()
+	}
 
-	// 	// Get the block header for each of these tips.
-	// 	blockHeaders, err := peer.GetBlockHeaders(tip)
-	// 	if err != nil {
-	// 		nodeLog.Printf("Failed to get block header from peer: %s\n", err)
-	// 		continue
-	// 	}
-	// 	if len(blockHeaders) == 0 {
-	// 		nodeLog.Printf("No block headers from peer: %s\n", peer.GetLocalAddr())
-	// 		continue
-	// 	}
-	// 	blockHeader := blockHeaders[0]
+	go func() {
+        wg.Wait()
+        close(tipsChan)
+    }()
 
-	// 	// Verify block header's work.
-	// 	// TODO.
-	// 	work := CalculateWork(Bytes32ToBigInt(blockHeader.Hash()))
+	for {
+		select {
+		case tip, ok := <-tipsChan:
+			if !ok {
+				break
+			}
+			tips = append(tips, tip)
+		case <-timeout:
+			syncLog.Printf("Timed out getting tips from peers\n")
+		}
+	}
+	
+	syncLog.Printf("Received %d tips\n", len(tips))
+	if len(tips) == 0 {
+		syncLog.Printf("No tips received. Exiting sync.\n")
+		return
+	}
+	
+	// 3. Sort the tips by max(work).
+	// 4. Reduce the tips to (tip, work, num_peers).
+	// 5. Choose the tip with the highest work and the most peers mining on it.
+	numPeersOnTip := make(map[[32]byte]int)
+	tipWork := make(map[[32]byte]*big.Int)
 
-	// 	tips = append(tips, blockHeader)
-	// }
+	highestWork := big.NewInt(0)
+	bestTipHash := [32]byte{}
 
-	// Verify the POW on the tip to check the tip is valid.
-	// Select the tip with the highest work according to ParentTotalWork.
-	// TODO.
+	for _, tip := range tips {
+		hash := tip.Hash()
+		// TODO embed difficulty into block header so we can verify POW.
+		work := CalculateWork(Bytes32ToBigInt(hash))
 
-	// Get a set of block "checkpoints", evenly spaced out, from the peer.
-	// O(N/(10*6*24)) = O(N/1440) blocks = 1 checkpoint for each day.
-	// We can then use these to determine:
-	// (1) the multiple branches of the blocktree (if any)
-	// (2) which peers store which blocks
-	// (3) a mapping of ancestor -> []peer
+		// -1 if x < y
+		// highestWork < work
+		if highestWork.Cmp(work) == -1 {
+			highestWork = work
+			bestTipHash = hash
+		}
 
-	// Expressed by intuition, we ask all our peers for their view of the longest chain on each day stretching back to genesis.
-	// From there, we can determine the "common base" they are building of, and where it diverges.
-	// Where there is a common base ancestor, we can request that block history from all those peers who share that common ancestor IN PARALLEL.
-	// It is akin to BitTorrent, where we can download chunks in parallel from all peers in a swarm.
+		numPeersOnTip[hash] += 1
+		tipWork[hash] = work
+	}
 
-	// Download all of the block headers from tip backwards.
-	// Download the blocks from the tip to the common ancestor from all our peers.
-	// Store them in a temporary storage.
-	// Ingest the blocks in reverse order.
-	// Begin mining.
+	syncLog.Printf("Best tip: %s\n", bestTipHash)
+	return bestTipHash
+}
+
+// Computes the common ancestor of our local canonical chain and a remote peer's canonical chain through an interactive binary search.
+// O(log N * query_size).
+// query_size = 32 B, N = 850,000
+// log(850,000) * 32 = 20 * 32 = 640 B
+func (n *Node) sync_computeCommonAncestorWithPeer(remotePeer Peer, local_chainhashes &[][32]byte) [32]byte {
+	// 850,000 Bitcoin blocks since 2009.
+	// 850000*32 = 27.2 MB
+	// Not too bad, we can fit it all in memory.
+
+	// 6a. Compute the common ancestor (interactive binary search).
+	// This is a classical binary search algorithm.
+	floor := 0
+	ceil := len(local_chainhashes)
+	n_iterations := 0
+
+	for (floor + 1) < ceil {
+		guess_idx := (floor + ceil) / 2
+		guess_value := local_chainhashes[guess_idx]
+
+		t.Logf("Iteration %d: floor=%d, ceil=%d, guess_idx=%d, guess_value=%x", n_iterations, floor, ceil, guess_idx, guess_value)
+		n_iterations += 1
+
+		// Send our tip's blockhash
+		// Peer responds with "SEEN" or "NOT SEEN"
+		// If "SEEN", we move to the right half.
+		// If "NOT SEEN", we move to the left half.
+		if n.Peer.HasBlock(peer, guess_value) {
+			// Move to the right half.
+			floor = guess_idx
+		} else {
+			// Move to the left half.
+			ceil = guess_idx
+		}
+	}
+
+	ancestor := local_chainhashes[floor]
+	t.Logf("Common ancestor: %x", ancestor)
+	t.Logf("Found in %d iterations.", n_iterations)
+	return ancestor
 }
 
 func (n *Node) Start() {
@@ -228,6 +295,6 @@ func (n *Node) Shutdown() {
 	// Close the database.
 	err := n.Dag.db.Close()
 	if err != nil {
-		nodeLog.Printf("Failed to close database: %s\n", err)
+		n.log.Printf("Failed to close database: %s\n", err)
 	}
 }

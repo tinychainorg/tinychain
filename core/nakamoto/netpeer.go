@@ -37,7 +37,7 @@ type PeerCore struct {
 
 	OnNewBlock  func(block RawBlock)
 	OnGetBlocks func(msg GetBlocksMessage) ([][]byte, error)
-	OnGetTip    func(msg GetTipMessage) ([32]byte, error)
+	OnGetTip    func(msg GetTipMessage) (BlockHeader, error)
 
 	peerLogger log.Logger
 }
@@ -129,7 +129,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 
 			return GetTipMessage{
 				Type: "get_tip",
-				Tip:  Bytes32ToHexString(tip),
+				Tip:  tip,
 			}, nil
 		}
 
@@ -260,21 +260,43 @@ func (p *PeerCore) GossipPeers() {
 	}
 }
 
-// func (p *PeerCore) GetBlockHeaders(peer Peer, blockHashes [][32]byte) ([][]byte, error) {
-// 	p.peerLogger.Printf("Asking peers for %d blocks\n", len(blockHashes))
+func (p *PeerCore) GetTip(peer Peer) (BlockHeader, error) {
+	msg := GetTipMessage{
+		Type: "get_tip",
+		Tip:  BlockHeader{},
+	}
+	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	if err != nil {
+		p.peerLogger.Printf("Failed to send block to peer: %v", err)
+	}
 
-//     // // Send block to all peers.
-//     for _, peer := range p.peers {
-//         newBlockMsg := GetBlocksMessage{
-//             Type: "get_blocks",
-//             BlockHashes: blockHashes,
-//         }
-//         _, err := SendMessageToPeer(peer.url, newBlockMsg, &p.peerLogger)
-//         if err != nil {
-//             peerLogger.Printf("Failed to send block to peer: %v", err)
-//         }
-//     }
-// }
+	// Decode reply.
+	var reply GetTipMessage
+	if err := json.Unmarshal(res, &reply); err != nil {
+		return reply.Tip, err
+	}
+
+	return reply.Tip, nil
+}
+
+func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (HasBlockReply, error) {
+	msg := HasBlockMessage{
+		Type:      "has_block",
+		BlockHash: blockhash,
+	}
+	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	if err != nil {
+		p.peerLogger.Printf("Failed to send block to peer: %v", err)
+	}
+
+	// Decode reply.
+	var reply HasBlockReply
+	if err := json.Unmarshal(res, &reply); err != nil {
+		return reply.Tip, err
+	}
+
+	return reply.Tip, nil
+}
 
 // Bootstraps the connection to the network.
 func (p *PeerCore) Bootstrap(peerInfos []string) {

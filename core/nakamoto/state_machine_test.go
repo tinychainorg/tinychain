@@ -256,7 +256,7 @@ func TestNodeReorgStateMachine(t *testing.T) {
 // One of the core considerations:
 // There are 2 approaches to the state construction:
 // 1. Space tradeoff - store 60mb a day of state snapshots.
-// 2. Time tradeoff  - spend 0.96s to process a day of state transitions. 
+// 2. Time tradeoff  - spend 0.96s to process a day of state transitions.
 //
 
 func newUnsignedTransferTx(from [65]byte, to [65]byte, amount uint64, wallet *core.Wallet, fee uint64) RawTransaction {
