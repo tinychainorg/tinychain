@@ -3,9 +3,6 @@ package nakamoto
 import (
 	"fmt"
 	"log"
-	"sync"
-	"time"
-	"math/big"
 )
 
 type Node struct {

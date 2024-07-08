@@ -279,10 +279,10 @@ func (p *PeerCore) GetTip(peer Peer) (BlockHeader, error) {
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (HasBlockReply, error) {
+func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (bool, error) {
 	msg := HasBlockMessage{
 		Type:      "has_block",
-		BlockHash: blockhash,
+		BlockHash: fmt.Sprintf("%x", blockhash),
 	}
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
@@ -292,10 +292,10 @@ func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (HasBlockReply, error
 	// Decode reply.
 	var reply HasBlockReply
 	if err := json.Unmarshal(res, &reply); err != nil {
-		return reply.Tip, err
+		return reply.Has, err
 	}
 
-	return reply.Tip, nil
+	return reply.Has, nil
 }
 
 // Bootstraps the connection to the network.
