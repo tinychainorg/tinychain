@@ -241,7 +241,7 @@ type GetBlocksReply struct {
 
 // get_block_headers
 type GetBlockHeadersMessage struct {
-	Type        string   `json:"type"` // "get_block_headers"
+	Type        string   `json:"type"` // "sync_get_block_headers"
 	BlockHashes []string `json:"blockHashes"`
 }
 

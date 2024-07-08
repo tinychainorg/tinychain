@@ -87,6 +87,43 @@ func (n *Node) downloadHeaders(fromNode [32]byte, fromHeight uint64, heightMap c
 	return headers
 }
 
+// get_tip_at_height(dag_node_hash, depth) -> BlockHeader
+// get_headers(base_node, base_height, height_set) -> []BlockHeader
+// get_blocks(base_node, base_height, height_set) - > [][]Transaction
+
+type SyncGetTipMessage struct {
+	Type string
+	FromBlock [32]byte
+	Depth uint64
+}
+
+type SyncGetTipReply struct {
+	Type string
+	Tip BlockHeader
+}
+
+type GetBlockHeadersMessage struct {
+	Type string
+	FromBlock [32]byte
+	Heights core.Bitstring
+}
+
+type GetBlockHeadersReply struct {
+	Type string
+	Headers []BlockHeader
+}
+
+type GetBlockTxsMessage struct {
+	Type string
+	FromBlock [32]byte
+	Heights core.Bitstring
+}
+
+type GetBlockTxsReply struct {
+	Type string
+	Txs [][]Transaction
+}
+
 // Syncs the node with the network.
 // 
 // The blockchain sync algorithm is the most complex part of the system. The Nakamoto blockchain is defined simply as a linked list of blocks, where the canonical chain is the one with the most amount of work done on it. A blockchain network is composed of peers who disseminate blocks and transactions, and take turns in being the leader to mine a new block.
@@ -109,6 +146,7 @@ func (n *Node) Sync() {
 	peers = n.Peer.peers
 	currentTipHash := [32]byte{}
 	currentTipHeight := 0
+
 }
 
 func (n *Node) rework() {
