@@ -53,12 +53,30 @@ Work breakdown:
 - [x] computing the cumulative work in a chain of blocks
 - [x] constructing a blockdag and then choosing a tip
 - [x] fix tests, institute CI as development practice
+- [x] simple coin state machine
+    - [x] coinbase
+    - [x] state diffs
+    - [x] adding a method to recompute the state machine and using cached state 
+    - [ ] state snapshots/checkpoints
+- [x] adding a simple state machine
+    - [x] ValidateBlock
+        - first transaction is the coinbase
+        - maintain a uxto set - unspent transaction outputs
+        - validate txs - validate signature, transfer the coins
+- [x] implement simple peer
+    - [x] can send and receive blocks via network
+    - [x] gossip block, gossip tx, get blocks, sync tip
+    - [x] implement peer discovery and bootstrapping
 - [x] implement state machine, state snapshots
+  - [ ] design state model
+  - [ ] model state growth costs and time to reconstruct state
 - [ ] implement state sync
-    - [ ] 1. Ask peers for their latest tips. Verify the POW of each tip, and then pick the tip with the most work.
-    - [ ] 2. Download block headers using this tip. 3 years of block headers is 32.8MB, so it is feasible to download this in a short amount of time.
-    - [ ] 3. For the earliest ancestor, download the full block and ingest each one.
-    - [ ] 4. Continue until fully synced
+    - [ ] get tips from all peers in parallel
+    - [ ] interactive binary search to find common ancestor for peer
+    - [ ] download block headers
+    - [ ] download block bodies
+    - [ ] validate and ingest blocks
+    - [ ] implement the temporary block header cache, tx cache for when we receive stuff from network
 - [ ] implement node startup routine
     - [ ] 1. Get the current tip from our block DAG. Load the state from disk. If the state.blockhash != tip.hash, then we recompute the state.
     - [ ] 2. Bootstrap to peers in the network.
@@ -66,7 +84,6 @@ Work breakdown:
     - [ ] 4. Recompute the state.
     - [ ] 5. Begin the miner, begin ingesting blocks and transactions.
 - [ ] implement node state API's
-- [ ] implement the temporary block header cache, tx cache for when we receive stuff from network
 - [ ] implement tokenomics module
     - [ ] pure function given the current block, return the coinbase reward.
 - [ ] implement mempool
@@ -83,26 +100,12 @@ Work breakdown:
 - [ ] improve txs
     - [ ] replay protection for txs, tx nonce
     - [x] add version to RawBlock, RawTransaction for future prosperity
-- [x] simple coin state machine
-    - [x] coinbase
-    - [x] state diffs
-    - [x] adding a method to recompute the state machine and using cached state 
-    - [ ] state snapshots/checkpoints
-- [x] adding a simple state machine
-    - [x] ValidateBlock
-        - first transaction is the coinbase
-        - maintain a uxto set - unspent transaction outputs
-        - validate txs - validate signature, transfer the coins
 - [x] implementing networking
     - [ ] simple wrapper for sockets - address, port, and hof's to wrap the latency delays dropped packets etc
     - [x] peers connect
     - [x] peers can send messages, peers can register message handlers
     - [x] gossip peers routine
     - [ ] peer discovery from bittorrent trackers
-- [x] implement simple peer
-    - [x] can send and receive blocks via network
-    - [x] gossip block, gossip tx, get blocks, sync tip
-- [x] implement peer discovery and bootstrapping
 - [ ] implement wallet and cli tool
 - [x] implement miner process
 - [ ] implement admin api
@@ -116,7 +119,7 @@ Work breakdown:
 - [ ] refactoring
     - [x] add nonce to tx
     - [ ] rename difficulty -> difficulty_target
-    - [ ] refactor miner code to be pretty
+    - [x] refactor miner code to be pretty
     - [ ] improve robustness of sql queries- need to verify we use right number of columns and ?'s
     - [ ] improve block/rawblock. missing fields, unset fields etc. tests for this.
     - [ ] double check big endian canonical encoding

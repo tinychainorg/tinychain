@@ -210,21 +210,25 @@ type HeartbeatMesage struct {
 	Time time.Time
 }
 
+// get_tip
 type GetTipMessage struct {
 	Type string      `json:"type"` // "get_tip"
 	Tip  BlockHeader `json:"tip"`
 }
 
+// new_block
 type NewBlockMessage struct {
 	Type     string   `json:"type"` // "new_block"
 	RawBlock RawBlock `json:"rawBlock"`
 }
 
+// new_transaction
 type NewTransactionMessage struct {
 	Type           string         `json:"type"` // "new_transaction"
 	RawTransaction RawTransaction `json:"rawTransaction"`
 }
 
+// get_blocks
 type GetBlocksMessage struct {
 	Type        string   `json:"type"` // "get_blocks"
 	BlockHashes []string `json:"blockHashes"`
@@ -235,6 +239,7 @@ type GetBlocksReply struct {
 	RawBlockDatas [][]byte `json:"rawBlockDatas"`
 }
 
+// get_block_headers
 type GetBlockHeadersMessage struct {
 	Type        string   `json:"type"` // "get_block_headers"
 	BlockHashes []string `json:"blockHashes"`
@@ -245,11 +250,20 @@ type GetBlocksHeadersReply struct {
 	RawBlockDatas [][]byte `json:"rawBlockHeaders"`
 }
 
-type GossipPeersMessage struct {
-	Type  string   `json:"type"` // "gossip_peers"
-	Peers []string `json:"myPeers"`
+// get_block_bodies
+type GetBlockBodiesMessage struct {
+	Type string `json:"type"` // get_block_bodies
+	FromBlockhash string
+	Skip int
+	Limit int
 }
 
+type GetBlockBodiesReply struct {
+	Type string `json:"type"` // get_block_bodies_reply
+	RawBlockDatas [][]byte `json:"rawBlockHeaders"`
+}
+
+// has_block
 type HasBlockMessage struct {
 	Type      string `json:"type"` // "have_block"
 	BlockHash string `json:"blockHash"`
@@ -259,3 +273,10 @@ type HasBlockReply struct {
 	Type string `json:"type"` // "have_block_reply"
 	Has  bool   `json:"has"`
 }
+
+// gossip_peers
+type GossipPeersMessage struct {
+	Type  string   `json:"type"` // "gossip_peers"
+	Peers []string `json:"myPeers"`
+}
+
