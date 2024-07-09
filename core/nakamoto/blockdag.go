@@ -667,18 +667,18 @@ func (dag *BlockDAG) GetLatestTip() (Block, error) {
 		return Block{}, fmt.Errorf("No blocks found.")
 	}
 
-	hash := []byte{}
-	err = rows.Scan(&hash)
+	hashBuf := []byte{}
+	err = rows.Scan(&hashBuf)
 	if err != nil {
 		return Block{}, err
 	}
 	rows.Close()
 
-	fhash := [32]byte{}
-	copy(fhash[:], hash)
+	hash := [32]byte{}
+	copy(hash[:], hashBuf)
 
 	// Get the block.
-	block, err := dag.GetBlockByHash(fhash)
+	block, err := dag.GetBlockByHash(hash)
 	if err != nil {
 		return Block{}, err
 	}
