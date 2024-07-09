@@ -83,7 +83,7 @@ func RecomputeDifficulty(epochStart uint64, epochEnd uint64, currDifficulty big.
 func CalculateWork(solution big.Int) *big.Int {
 	// In Bitcoin POW, the work is defined as:
 	// work = 2^256 / (diff_target + 1)
-	// We take a difference approach. Note the invariant solution < diff_target.
+	// We take a difference approach. Note the invariant: solution < diff_target. For the puzzle to be solved, it must always satisfy this condition.
 	// While estimating the work as a function of the difficulty target does work,
 	// it is more precise to estimate the work of the individual guess (solution).
 	work := big.NewInt(2).Exp(big.NewInt(2), big.NewInt(256), nil)
