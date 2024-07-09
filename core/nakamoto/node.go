@@ -6,18 +6,25 @@ import (
 )
 
 type Node struct {
-	Dag   BlockDAG
-	Miner *Miner
-	Peer  *PeerCore
-	log *log.Logger
+	Dag     BlockDAG
+	Miner   *Miner
+	Peer    *PeerCore
+	log     *log.Logger
+	syncLog *log.Logger
+}
+
+type SyncState struct {
+	// How does the sync design work with the block DAG?
+	// The block DAG thus far is only designed for queuing blocks.
 }
 
 func NewNode(dag BlockDAG, miner *Miner, peer *PeerCore) *Node {
 	n := &Node{
-		Dag:   dag,
-		Miner: miner,
-		Peer:  peer,
-		log: NewLogger("node", ""),
+		Dag:     dag,
+		Miner:   miner,
+		Peer:    peer,
+		log:     NewLogger("node", ""),
+		syncLog: NewLogger("node", "sync"),
 	}
 	n.setup()
 	return n
@@ -91,13 +98,13 @@ func (n *Node) setup() {
 		tip := n.Dag.Tip
 		// Convert to BlockHeader
 		blockHeader := BlockHeader{
-			ParentHash: 		  tip.ParentHash,
-			ParentTotalWork: 	  tip.ParentTotalWork,
-			Timestamp: 		  tip.Timestamp,
-			NumTransactions: 	  tip.NumTransactions,
+			ParentHash:             tip.ParentHash,
+			ParentTotalWork:        tip.ParentTotalWork,
+			Timestamp:              tip.Timestamp,
+			NumTransactions:        tip.NumTransactions,
 			TransactionsMerkleRoot: tip.TransactionsMerkleRoot,
-			Nonce                  : tip.Nonce,
-			Graffiti               : tip.Graffiti,
+			Nonce:                  tip.Nonce,
+			Graffiti:               tip.Graffiti,
 		}
 		return blockHeader, nil
 	}

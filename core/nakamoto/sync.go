@@ -8,6 +8,17 @@ import (
 	"github.com/liamzebedee/tinychain-go/core"
 )
 
+// The sync engine is a sort of quasi-light client.
+// It allows the node to download headers, insert them into the block DAG, and it calculates the heaviest tip of that DAG.
+// It then downloads the block bodies in parallel, validates them, and inserts them into the block DAG.
+// The sync engine does not operate a state machine, although it is necessary to construct the state of a chain
+//
+// How it works:
+// once we have synced to the highest block tip we can find
+// we can ingest the blocks into the state machine
+type SyncEngine struct {
+}
+
 // Downloads block headers in parallel from a set of peers for a set of heights, relative to a base blockhash and height.
 //
 // The total number of headers we are downloading is represented by the count of items inside the heightMap.
@@ -17,12 +28,12 @@ import (
 //
 // This function supports downloading as few as 1 header, which will download from a single peer, or 2048 headers, which
 // will download from as many as 9 peers in parallel.
-func (n *Node) downloadHeaders(fromNode [32]byte, fromHeight uint64, heightMap core.Bitstring, peers []Peer) []BlockHeader {
+func (n *Node) downloadHeaders(fromNode [32]byte, heightMap core.Bitset, peers []Peer) []BlockHeader {
 	// Size of a block header is 200 B.
 	HEADER_SIZE := 200
-	
+
 	// Size of a chunk we request from a peer is 50 KB.
-	CHUNK_SIZE := 50*1000
+	CHUNK_SIZE := 50 * 1000
 
 	// Total number of headers we're requesting.
 	NUM_HEADERS := heightMap.Count()
@@ -34,55 +45,59 @@ func (n *Node) downloadHeaders(fromNode [32]byte, fromHeight uint64, heightMap c
 	// header_size = 200 B
 	// chunk_size = 50 KB
 	// ...
-		// num_headers = 100
-		// num_chunks = (100 * 200 / 50,000) + 1 = 1 chunks
+	// num_headers = 100
+	// num_chunks = (100 * 200 / 50,000) + 1 = 1 chunks
 	// ...
-		// num_headers = 2048
-		// num_chunks = (2048 * 200 / 50,000) + 1 = 9 chunks
+	// num_headers = 2048
+	// num_chunks = (2048 * 200 / 50,000) + 1 = 9 chunks
 
 	// Then we distribute these work items to our peers.
 	type ChunkWorkItem struct {
-		heights core.Bitstring
+		heights core.Bitset
 	}
 	resultsChan := make(chan []BlockHeader, NUM_CHUNKS)
 	workItems := make([]ChunkWorkItem, NUM_CHUNKS)
-	
+
 	// Distribute the work:
 	// ...
-		// num_headers = 2048
-		// num_chunks = (2048 * 200 / 50,000) + 1 = 9 chunks
-		// work:
-			// 1: heights 0..79
-			// 2: heights 80..159
-			// N: heights 
-				// i * NUM_HEADERS / NUM_CHUNKS = i * 2048 / 9 = i * 227
-				// i*227 = 0, 227, 454, 681, 908, 1135, 1362, 1589, 1816
+	// num_headers = 2048
+	// num_chunks = (2048 * 200 / 50,000) + 1 = 9 chunks
+	// work:
+	// 1: heights 0..79
+	// 2: heights 80..159
+	// N: heights
+	// i * NUM_HEADERS / NUM_CHUNKS = i * 2048 / 9 = i * 227
+	// i*227 = 0, 227, 454, 681, 908, 1135, 1362, 1589, 1816
 	for i := 0; i < NUM_CHUNKS; i++ {
 		startHeight := i * (NUM_HEADERS / NUM_CHUNKS)
 		endHeight := (i + 1) * (NUM_HEADERS / NUM_CHUNKS)
-		heights := core.NewBitstring(heightMap.Size())
+		heights := core.NewBitset(heightMap.Size())
 		for j := startHeight; j < endHeight; j++ {
-			heights.SetBit(j)
+			heights.Insert(j)
 		}
 		workItems[i] = ChunkWorkItem{heights: *heights}
 	}
 
 	// Distribute the work items to our peers.
-	// for i, item := range workItems {
-	// 	peer := peers[i % len(peers)]
-	// 	go func() {
-	// 		// headers := n.Peer.GetHeaders(peer, fromNode, fromHeight, item.heights)
-	// 		headers := make([]BlockHeader, 0)
-	// 		resultsChan <- headers
-	// 	}()
-	// }
+	// TODO: queue work items only one per peer. if failure, return work item to queue for another peer to fill.
+	for i, item := range workItems {
+		peer := peers[i%len(peers)]
+		go func() {
+			headers, err := n.Peer.SyncGetBlockHeaders(peer, fromNode, item.heights)
+			if err != nil {
+				// TODO handle error
+				n.syncLog.Printf("Failed to get headers from peer: %s\n", err)
+				return
+			}
+			resultsChan <- headers
+		}()
+	}
 
 	// Collect the results.
 	headers := make([]BlockHeader, 0)
-	resultsChan <- headers // placeholder
-	// for i := 0; i < NUM_CHUNKS; i++ {
-	// 	headers = append(headers, <-resultsChan...)
-	// }
+	for i := 0; i < NUM_CHUNKS; i++ {
+		headers = append(headers, <-resultsChan...)
+	}
 
 	return headers
 }
@@ -91,62 +106,100 @@ func (n *Node) downloadHeaders(fromNode [32]byte, fromHeight uint64, heightMap c
 // get_headers(base_node, base_height, height_set) -> []BlockHeader
 // get_blocks(base_node, base_height, height_set) - > [][]Transaction
 
-type SyncGetTipMessage struct {
-	Type string
+type SyncGetTipAtDepthMessage struct {
+	Type      string
 	FromBlock [32]byte
-	Depth uint64
+	Depth     uint64
 }
 
 type SyncGetTipReply struct {
 	Type string
-	Tip BlockHeader
+	Tip  BlockHeader
 }
 
-type GetBlockHeadersMessage struct {
-	Type string
+type SyncGetBlockHeadersMessage struct {
+	Type      string
 	FromBlock [32]byte
-	Heights core.Bitstring
+	Heights   core.Bitset
 }
 
-type GetBlockHeadersReply struct {
-	Type string
+type SyncGetBlockHeadersReply struct {
+	Type    string
 	Headers []BlockHeader
 }
 
-type GetBlockTxsMessage struct {
-	Type string
+type SyncGetBlockTxsMessage struct {
+	Type      string
 	FromBlock [32]byte
-	Heights core.Bitstring
+	Heights   core.Bitset
 }
 
-type GetBlockTxsReply struct {
+type SyncGetBlockTxsReply struct {
 	Type string
-	Txs [][]Transaction
+	Txs  [][]Transaction
 }
 
 // Syncs the node with the network.
-// 
+//
 // The blockchain sync algorithm is the most complex part of the system. The Nakamoto blockchain is defined simply as a linked list of blocks, where the canonical chain is the one with the most amount of work done on it. A blockchain network is composed of peers who disseminate blocks and transactions, and take turns in being the leader to mine a new block.
 // Due to the properties of the P2P network, namely asynchronicity, network partitions, and latency, it is possible for nodes to have different views of the blockchain. Thus in practice, in order to converge on the canonical chain, blockchain nodes must keep track of the block tree (a type of DAG), where there are multiple differing branches.
-// 
+//
 // Synchronisation is the process of downloading the block tree from our peers, until our local tip matches the remote tip of the heaviest chain. At its core, the sync algorithm is a greedy iterative search, where we continue downloading block headers from all peers until we reach their tip (a complete view of the network's state).
-// 
+//
 // The sync algorithm traverses the block DAG in windows of 2048 blocks. At each iteration, it asks each of its peers for their tip at height N+2048, buckets them by tip hash, and downloads block headers in parallel from peers who share a mutual tip. After validating block headers, it chooses the heaviest tip and downloads block bodies in parallel, validates and ingests them. The algorithm resolves when our local tip matches the heaviest remote tip of our peer's tips.
-// 
+//
 // Parallel downloads are done BitTorrent-style, where we divide the total download work into fixed-size work items of 50KB each, and distribute them to all our peers in a round-robin fashion. So for 2048 block headers at 200 B each, this is 409 KB of download work, divided into 9 chunks of 50 KB each. If our peer set includes 3 peers, then 9/3 = 3 chunks are downloaded from each peer. The parallel download algorithm scales automatically with the number of peers we have and the amount of work to download, so if peers drop out, the algorithm will still continue to download from the remaining peers. The download also represents its download request compactly using a bitstring - a request for 2048 block headers is represented as a bitstring of 2048 bits, where a bit at index i represents a want for a header at height start_height + i. This data format is compact, allowing peers to specify download requests for N blocks in N bits, as opposed to N uint32 integers O(4N), while also remaining flexible - peers can indicate as few as 1 header to download.
-// 
+//
 // The sync algorithm is designed so it can be called at any time.
 func (n *Node) Sync() {
 	n.log.Printf("Performing sync...\n")
-	
+
 	// The sync algorithm is a greedy iterative search.
 	// We continue downloading block headers from a peer until we reach their tip.
 
+	// TODO handle peers joining.
 	WINDOW_SIZE := 2048
-	peers = n.Peer.peers
-	currentTipHash := [32]byte{}
-	currentTipHeight := 0
 
+	// Greedily searches the block DAG from a tip hash, downloading headers in parallel from peers from all subbranches up to a depth.
+	// The depth is referred to as the "window size", and is a constant value of 2048 blocks.
+	search := func(currentTipHash [32]byte) {
+		// Get the tips from all our peers and bucket them.
+		// NOTE: we only request their tip hash in order to bucket them.
+		peersTips := make(map[[32]byte][]Peer)
+		depth := uint64(WINDOW_SIZE)
+
+		for _, peer := range n.Peer.peers {
+			tip, err := n.Peer.SyncGetTipAtDepth(peer, currentTipHash, depth)
+			if err != nil {
+				// Skip. Peer will not be used for downloading.
+				continue
+			}
+			peersTips[tip.Hash()] = append(peersTips[tip.Hash()], peer)
+		}
+
+		// For each tip, download headers in parallel from all peers who share the same tip.
+		for _, peers := range peersTips {
+			heights := core.NewBitset(WINDOW_SIZE)
+			// Flag all heights.
+			for i := 0; i < WINDOW_SIZE; i++ {
+				heights.Insert(i)
+			}
+
+			headers := n.downloadHeaders(currentTipHash, *heights, peers)
+
+			// Validate headers.
+			// Choose the heaviest tip.
+			// syncEngine.dag.GetTip()
+
+			// Download block bodies in parallel.
+			// Validate and ingest them.
+		}
+	}
+
+	for {
+		// Search for headers from current tip.
+		// Exit when there are no more headers to download.
+	}
 }
 
 func (n *Node) rework() {
@@ -160,7 +213,7 @@ func (n *Node) rework() {
 }
 
 // Contacts all our peers in parallel, gets the block header of their tip, and returns the best tip based on total work.
-func (n *Node) sync_getBestTipFromPeers() ([32]byte) {
+func (n *Node) sync_getBestTipFromPeers() [32]byte {
 	syncLog := NewLogger("node", "sync")
 
 	// 1. Contact all our peers.
@@ -168,10 +221,10 @@ func (n *Node) sync_getBestTipFromPeers() ([32]byte) {
 	syncLog.Printf("Getting tips from %d peers...\n", len(n.Peer.peers))
 
 	var wg sync.WaitGroup
-	
+
 	tips := make([]BlockHeader, 0)
 	tipsChan := make(chan BlockHeader, len(n.Peer.peers))
-    timeout := time.After(5 * time.Second)
+	timeout := time.After(5 * time.Second)
 
 	for _, peer := range n.Peer.peers {
 		wg.Add(1)
@@ -188,9 +241,9 @@ func (n *Node) sync_getBestTipFromPeers() ([32]byte) {
 	}
 
 	go func() {
-        wg.Wait()
-        close(tipsChan)
-    }()
+		wg.Wait()
+		close(tipsChan)
+	}()
 
 	for {
 		select {
@@ -203,13 +256,13 @@ func (n *Node) sync_getBestTipFromPeers() ([32]byte) {
 			syncLog.Printf("Timed out getting tips from peers\n")
 		}
 	}
-	
+
 	syncLog.Printf("Received %d tips\n", len(tips))
 	if len(tips) == 0 {
 		syncLog.Printf("No tips received. Exiting sync.\n")
 		return [32]byte{} // TODO, should return error
 	}
-	
+
 	// 3. Sort the tips by max(work).
 	// 4. Reduce the tips to (tip, work, num_peers).
 	// 5. Choose the tip with the highest work and the most peers mining on it.
@@ -280,9 +333,6 @@ func (n *Node) sync_computeCommonAncestorWithPeer(peer Peer, local_chainhashes *
 	syncLog.Printf("Found in %d iterations.", n_iterations)
 	return ancestor
 }
-
-
-
 
 // Performance numbers:
 // 850,000 Bitcoin blocks since 2009.

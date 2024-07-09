@@ -239,30 +239,6 @@ type GetBlocksReply struct {
 	RawBlockDatas [][]byte `json:"rawBlockDatas"`
 }
 
-// get_block_headers
-type GetBlockHeadersMessage struct {
-	Type        string   `json:"type"` // "sync_get_block_headers"
-	BlockHashes []string `json:"blockHashes"`
-}
-
-type GetBlocksHeadersReply struct {
-	Type          string   `json:"type"` // "get_block_headers_reply"
-	RawBlockDatas [][]byte `json:"rawBlockHeaders"`
-}
-
-// get_block_bodies
-type GetBlockBodiesMessage struct {
-	Type string `json:"type"` // get_block_bodies
-	FromBlockhash string
-	Skip int
-	Limit int
-}
-
-type GetBlockBodiesReply struct {
-	Type string `json:"type"` // get_block_bodies_reply
-	RawBlockDatas [][]byte `json:"rawBlockHeaders"`
-}
-
 // has_block
 type HasBlockMessage struct {
 	Type      string `json:"type"` // "have_block"
@@ -279,4 +255,3 @@ type GossipPeersMessage struct {
 	Type  string   `json:"type"` // "gossip_peers"
 	Peers []string `json:"myPeers"`
 }
-
