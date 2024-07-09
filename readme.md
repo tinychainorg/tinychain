@@ -68,13 +68,13 @@ Work breakdown:
     - [x] gossip block, gossip tx, get blocks, sync tip
     - [x] implement peer discovery and bootstrapping
 - [x] implement state machine, state snapshots
-  - [ ] design state model
-  - [ ] model state growth costs and time to reconstruct state
+  - [x] design state model
+  - [x] model state growth costs and time to reconstruct state
 - [ ] implement state sync
-    - [ ] get tips from all peers in parallel
-    - [ ] interactive binary search to find common ancestor for peer
-    - [ ] download block headers
-    - [ ] download block bodies
+    - [x] get tips from all peers in parallel
+    - [x] interactive binary search to find common ancestor for peer
+    - [x] download block headers
+    - [x] download block bodies
     - [ ] validate and ingest blocks
     - [ ] implement the temporary block header cache, tx cache for when we receive stuff from network
 - [ ] implement node startup routine
