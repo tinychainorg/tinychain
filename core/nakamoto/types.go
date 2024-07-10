@@ -1,7 +1,6 @@
 package nakamoto
 
 import (
-	"database/sql"
 	"encoding/hex"
 	"math/big"
 	"strconv"
@@ -109,50 +108,6 @@ type Transaction struct {
 	Hash      [32]byte
 	Blockhash [32]byte
 	TxIndex   uint64
-}
-
-type BlockDAGInterface interface {
-	// Ingest block.
-	IngestBlock(b Block) error
-
-	// Get block.
-	GetBlockByHash(hash [32]byte) (*Block, error)
-
-	// Get block's transactions.
-	GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
-
-	// Get epoch for block.
-	GetEpochForBlockHash(blockhash [32]byte) (*Epoch, error)
-
-	// Get the tip of the chain, given a minimum number of confirmations.
-	GetLatestTip() (Block, error)
-
-	// Get the raw bytes of a block.
-	GetRawBlockDataByHash(hash [32]byte) ([]byte, error)
-}
-
-// The block DAG is the core data structure of the Nakamoto consensus protocol.
-// It is a directed acyclic graph of blocks, where each block has a parent block.
-// As it is infeasible to store the entirety of the blockchain in-memory,
-// the block DAG is backed by a SQL database.
-type BlockDAG struct {
-	// The backing SQL database store, which stores:
-	// - blocks
-	// - epochs
-	// - transactions
-	db *sql.DB
-
-	// The state machine.
-	stateMachine StateMachineInterface
-
-	// Consensus settings.
-	consensus ConsensusConfig
-
-	// Latest tip.
-	Tip Block
-
-	// OnNewTip handler.
-	OnNewTip func(tip Block, prevTip Block)
 }
 
 type StateMachineInterface interface {

@@ -8,17 +8,6 @@ import (
 	"github.com/liamzebedee/tinychain-go/core"
 )
 
-// The sync engine is a sort of quasi-light client.
-// It allows the node to download headers, insert them into the block DAG, and it calculates the heaviest tip of that DAG.
-// It then downloads the block bodies in parallel, validates them, and inserts them into the block DAG.
-// The sync engine does not operate a state machine, although it is necessary to construct the state of a chain
-//
-// How it works:
-// once we have synced to the highest block tip we can find
-// we can ingest the blocks into the state machine
-type SyncEngine struct {
-}
-
 // Downloads block headers in parallel from a set of peers for a set of heights, relative to a base blockhash and height.
 //
 // The total number of headers we are downloading is represented by the count of items inside the heightMap.
@@ -28,7 +17,7 @@ type SyncEngine struct {
 //
 // This function supports downloading as few as 1 header, which will download from a single peer, or 2048 headers, which
 // will download from as many as 9 peers in parallel.
-func (n *Node) downloadHeaders(fromNode [32]byte, heightMap core.Bitset, peers []Peer) []BlockHeader {
+func (n *Node) SyncDownloadHeaders(fromNode [32]byte, heightMap core.Bitset, peers []Peer) []BlockHeader {
 	// Size of a block header is 200 B.
 	HEADER_SIZE := 200
 
@@ -185,10 +174,10 @@ func (n *Node) Sync() {
 				heights.Insert(i)
 			}
 
-			headers := n.downloadHeaders(currentTipHash, *heights, peers)
+			headers := n.SyncDownloadHeaders(currentTipHash, *heights, peers)
 
 			// Validate we have all the headers.
-			
+
 
 			// Validate headers.
 			// Choose the heaviest tip.

@@ -101,6 +101,34 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	return db, err
 }
 
+// The block DAG is the core data structure of the Nakamoto consensus protocol.
+// It is a directed acyclic graph of blocks, where each block has a parent block.
+// As it is infeasible to store the entirety of the blockchain in-memory,
+// the block DAG is backed by a SQL database.
+type BlockDAG struct {
+	// The backing SQL database store, which stores:
+	// - blocks
+	// - epochs
+	// - transactions
+	db *sql.DB
+
+	// The state machine.
+	stateMachine StateMachineInterface
+
+	// Consensus settings.
+	consensus ConsensusConfig
+
+	// The "light client" tip. This is the tip of the heaviest chain of block headers.
+	HeadersTip Block
+
+	// The "full node" tip. This is the tip of the heaviest chain of full blocks.
+	FullTip Block
+
+	// OnNewTip handler.
+	OnNewHeadersTip func(tip Block, prevTip Block)
+	OnNewBodiesTip func(tip Block, prevTip Block)
+}
+
 func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus ConsensusConfig) (BlockDAG, error) {
 	dag := BlockDAG{
 		db:           db,
@@ -113,7 +141,12 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus
 		panic(err)
 	}
 
-	dag.Tip, err = dag.GetLatestTip()
+	dag.HeadersTip, err = dag.GetLatestTip()
+	if err != nil {
+		panic(err)
+	}
+
+	dag.FullTip, err = dag.GetLatestTip()
 	if err != nil {
 		panic(err)
 	}

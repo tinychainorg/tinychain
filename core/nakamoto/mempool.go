@@ -11,7 +11,7 @@ package nakamoto
 type Mempool struct {
 }
 
-type FeeInfo struct {
+type FeeRates struct {
 	MinFee    uint64
 	MedianFee uint64
 	MaxFee    uint64
@@ -24,8 +24,8 @@ func NewMempool() *Mempool {
 
 func (m *Mempool) AddTransaction(tx *Transaction) {}
 
-func (m *Mempool) GetFeeRates() FeeInfo {
-	return FeeInfo{}
+func (m *Mempool) GetFeeRates() FeeRates {
+	return FeeRates{}
 }
 
 func (m *Mempool) BuildBundle() []*Transaction {
