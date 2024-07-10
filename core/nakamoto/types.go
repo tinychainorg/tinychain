@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// The Nakamoto consensus configuration, pertaining to difficulty readjustment, genesis block, and block size.
 type ConsensusConfig struct {
 	// The length of an epoch.
 	EpochLengthBlocks uint64 `json:"epoch_length_blocks"`

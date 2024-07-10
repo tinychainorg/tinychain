@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// PeerServer is an RPC server running over HTTP.
+// Peers send messages to http://<host>:<port>/peerapi/inbox and receive response messages.
+// All messages are encoded using JSON.
 type PeerServer struct {
 	config          PeerConfig
 	messageHandlers map[string]PeerMessageHandler

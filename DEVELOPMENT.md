@@ -7,6 +7,13 @@ Tinychain development uses continuous integration. There are multiple workflows 
  - **format** - checks the Go code for formatting.
  - **vet** - a specialised Go tool which functions like a linter, catching potential errors in code.
 
+## Generating API documentation.
+
+```sh
+go install golang.org/x/tools/cmd/godoc@latest
+godoc -http=:6060
+```
+
 ## Running tests.
 
 ### Individual.

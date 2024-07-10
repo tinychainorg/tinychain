@@ -1,8 +1,9 @@
+package nakamoto
+
 // This is the core implementation of the block DAG data structure.
 // It mostly does these things:
 // - ingests new blocks, validates transactions
 // - manages reading/writing to the backing SQLite database.
-package nakamoto
 
 import (
 	"context"

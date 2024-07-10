@@ -13,6 +13,7 @@ import (
 
 var minerLog = NewLogger("miner", "")
 
+// The Miner is responsible for solving the Hashcash proof-of-work puzzle.
 type Miner struct {
 	dag         BlockDAG
 	minerWallet *core.Wallet

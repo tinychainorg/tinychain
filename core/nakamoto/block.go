@@ -1,6 +1,6 @@
-// Nakamoto consensus.
-
 package nakamoto
+
+// Nakamoto consensus.
 
 import (
 	"bytes"

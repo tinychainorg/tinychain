@@ -187,6 +187,9 @@ func (n *Node) Sync() {
 
 			headers := n.downloadHeaders(currentTipHash, *heights, peers)
 
+			// Validate we have all the headers.
+			
+
 			// Validate headers.
 			// Choose the heaviest tip.
 			// syncEngine.dag.GetTip()

@@ -28,6 +28,9 @@ var WIRE_PROTOCOL_VERSION = uint(1)
 // - on receiving a new block, we ingest it. then we restart miner process.
 // - on receiving new txs, we add them to our block. and restart miner process.
 
+// The PeerCore is the local peer for the blockchain network.
+// It handles bootstrapping, peer discovery, gossip routines for transactions and blocks.
+// It implements the wire protocol for the network, providing API's to send messages to other peers, and callbacks to handle messages sent to us. 
 type PeerCore struct {
 	peers        []Peer
 	server       *PeerServer

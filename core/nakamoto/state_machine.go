@@ -1,11 +1,3 @@
-// The state machine is the core of the business logic for the Nakamoto blockchain.
-// It performs the state transition function, which encapsulates:
-// 1. Minting coins into circulation via the coinbase transaction.
-// 2. Transferring coins between accounts.
-//
-// It is oblivious to:
-// - the consensus algorithm, transaction sequencing.
-// - signatures. The state machine does not care about validating signatures. At Bitcoin's core, it is a sequencing/DA layer.
 package nakamoto
 
 import (
@@ -39,6 +31,14 @@ type StateMachineInput struct {
 	MinerPubkey [65]byte
 }
 
+// The state machine is the core of the business logic for the Nakamoto blockchain.
+// It performs the state transition function, which encapsulates:
+// 1. Minting coins into circulation via the coinbase transaction.
+// 2. Transferring coins between accounts.
+//
+// It is oblivious to:
+//  - the consensus algorithm, transaction sequencing.
+//  - signatures. The state machine does not care about validating signatures. At Bitcoin's core, it is a sequencing/DA layer.
 type StateMachine struct {
 	// The current state.
 	state map[[65]byte]uint64

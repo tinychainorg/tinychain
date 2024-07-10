@@ -7,6 +7,7 @@ import (
 
 var powLogger = NewLogger("pow", "")
 
+// Verifies a proof-of-work solution.
 func VerifyPOW(blockhash [32]byte, target big.Int) bool {
 	powLogger.Printf("VerifyPOW target: %s\n", target.String())
 
@@ -14,6 +15,7 @@ func VerifyPOW(blockhash [32]byte, target big.Int) bool {
 	return hash.Cmp(&target) == -1
 }
 
+// Solves a proof-of-work puzzle.
 func SolvePOW(b RawBlock, startNonce big.Int, target big.Int, maxIterations uint64) (big.Int, error) {
 	powLogger.Printf("SolvePOW target: %s\n", target.String())
 
@@ -47,6 +49,7 @@ func SolvePOW(b RawBlock, startNonce big.Int, target big.Int, maxIterations uint
 	}
 }
 
+// Recomputes the difficulty for the next epoch.
 func RecomputeDifficulty(epochStart uint64, epochEnd uint64, currDifficulty big.Int, targetEpochLengthMillis uint64, epochLengthBlocks uint64, height uint64) big.Int {
 	// Compute the epoch duration.
 	epochDuration := epochEnd - epochStart
@@ -80,6 +83,7 @@ func RecomputeDifficulty(epochStart uint64, epochEnd uint64, currDifficulty big.
 	return *newDifficulty
 }
 
+// Calculates the work of a solution.
 func CalculateWork(solution big.Int) *big.Int {
 	// In Bitcoin POW, the work is defined as:
 	// work = 2^256 / (diff_target + 1)
