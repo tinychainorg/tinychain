@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 )
 
+// Builds a Merkle tree from a list of items and returns the root hash.
 func ComputeMerkleHash(items [][]byte) [32]byte {
 	if len(items) == 0 {
 		return [32]byte{}

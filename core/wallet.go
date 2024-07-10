@@ -10,6 +10,8 @@ import (
 	"math/big"
 )
 
+// The wallet represents a public-private keypair used for signing transactions.
+// It uses ECDSA with the NIST P-256 elliptic curve.
 type Wallet struct {
 	prvkey *ecdsa.PrivateKey
 }
@@ -95,6 +97,7 @@ func (w *Wallet) Sign(msg []byte) ([]byte, error) {
 	return signature, nil
 }
 
+// Verifies an ECDSA signature for a message using the public key.
 func VerifySignature(pubkeyStr string, sig, msg []byte) bool {
 	if len(sig) != 64 {
 		fmt.Printf("Invalid signature length: %d\n", len(sig)) // TODO
