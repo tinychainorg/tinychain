@@ -58,7 +58,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 	block := Block{}
 
 	// Query database.
-	rows, err := dag.db.Query("select hash, parent_hash, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1", hash[:])
+	rows, err := dag.db.Query("select hash, parent_hash, difficulty, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1", hash[:])
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +67,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 	if rows.Next() {
 		hash := []byte{}
 		parentHash := []byte{}
+		difficultyBuf := []byte{}
 		transactionsMerkleRoot := []byte{}
 		nonce := []byte{}
 		graffiti := []byte{}
@@ -76,6 +77,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 		err := rows.Scan(
 			&hash,
 			&parentHash,
+			&difficultyBuf,
 			&parentTotalWorkBuf,
 			&block.Timestamp,
 			&block.NumTransactions,
@@ -94,6 +96,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 
 		copy(block.Hash[:], hash)
 		copy(block.ParentHash[:], parentHash)
+		copy(block.Difficulty[:], difficultyBuf)
 		copy(block.TransactionsMerkleRoot[:], transactionsMerkleRoot)
 		copy(block.Nonce[:], nonce)
 		copy(block.Graffiti[:], graffiti)

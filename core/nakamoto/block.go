@@ -10,7 +10,6 @@ import (
 	"math/big"
 )
 
-// TODO embed in Block?
 type BlockHeader struct {
 	ParentHash             [32]byte
 	ParentTotalWork        [32]byte 
@@ -26,6 +25,7 @@ type Block struct {
 	// Block header.
 	ParentHash             [32]byte
 	ParentTotalWork        big.Int
+	Difficulty             [32]byte
 	Timestamp              uint64
 	NumTransactions        uint64
 	TransactionsMerkleRoot [32]byte
