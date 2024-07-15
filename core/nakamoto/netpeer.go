@@ -164,31 +164,8 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		return nil, nil
 	})
 
-	p.server.RegisterMesageHandler("get_block_headers", func(message []byte) (interface{}, error) {
-		var msg SyncGetBlockHeadersMessage
-		if err := json.Unmarshal(message, &msg); err != nil {
-			return nil, err
-		}
-
-		// TODO.
-
-		// if p.OnGetTip != nil {
-		// 	tip, err := p.OnGetTip(msg)
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-
-		// 	return GetTipMessage{
-		// 		Type: "get_tip",
-		// 		Tip:  tip,
-		// 	}, nil
-		// }
-
-		return nil, nil
-	})
-
-	p.server.RegisterMesageHandler("get_block_txs", func(message []byte) (interface{}, error) {
-		var msg SyncGetBlockTxsMessage
+	p.server.RegisterMesageHandler("sync_get_data", func(message []byte) (interface{}, error) {
+		var msg SyncGetDataMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
 			return nil, err
 		}
@@ -377,20 +354,22 @@ func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights core.Bitset) ([]BlockHeader, error) {
-	msg := SyncGetBlockHeadersMessage{
+func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights core.Bitset) ([]RawBlockHeader, error) {
+	msg := SyncGetDataMessage{
 		Type:      "get_block_headers",
 		FromBlock: fromBlock,
 		Heights:   heights,
+		Headers:   true,
+		Bodies:       false,
 	}
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return []BlockHeader{}, err
+		return []RawBlockHeader{}, err
 	}
 
 	// Decode reply.
-	var reply SyncGetBlockHeadersReply
+	var reply SyncGetDataReply
 	if err := json.Unmarshal(res, &reply); err != nil {
 		return reply.Headers, err
 	}
@@ -399,10 +378,12 @@ func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights co
 }
 
 func (p *PeerCore) SyncGetBlockTransactions(peer Peer, fromBlock [32]byte, heights core.Bitset) ([][]Transaction, error) {
-	msg := SyncGetBlockTxsMessage{
+	msg := SyncGetDataMessage{
 		Type:      "get_block_txs",
 		FromBlock: fromBlock,
 		Heights:   heights,
+		Headers:   false,
+		Bodies:    true,
 	}
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
@@ -411,12 +392,12 @@ func (p *PeerCore) SyncGetBlockTransactions(peer Peer, fromBlock [32]byte, heigh
 	}
 
 	// Decode reply.
-	var reply SyncGetBlockTxsReply
+	var reply SyncGetDataReply
 	if err := json.Unmarshal(res, &reply); err != nil {
-		return reply.Txs, err
+		return reply.Bodies, err
 	}
 
-	return reply.Txs, nil
+	return reply.Bodies, nil
 }
 
 func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (bool, error) {

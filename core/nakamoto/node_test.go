@@ -127,8 +127,8 @@ func TestTwoNodeEqualMining(t *testing.T) {
 	}
 
 	// Then we check the tips.
-	tip1 := node1.Dag.Tip
-	tip2 := node2.Dag.Tip
+	tip1 := node1.Dag.FullTip
+	tip2 := node2.Dag.FullTip
 
 	// Check that the tips are the same.
 	assert.Equal(tip1, tip2)
@@ -171,13 +171,13 @@ func TestTwoNodeUnequalMining(t *testing.T) {
 	time.Sleep(25 * time.Second)
 
 	// Then we check the tips.
-	tip1 := node1.Dag.Tip
-	tip2 := node2.Dag.Tip
+	tip1 := node1.Dag.FullTip
+	tip2 := node2.Dag.FullTip
 
 	// Check that the tips are the same.
 	assert.Equal(tip1.Hash, tip2.Hash)
 	// Check that we are on node1's branch which has more work.
-	node1Tip := node1.Dag.Tip
+	node1Tip := node1.Dag.FullTip
 	// Print the height of the tip.
 	t.Logf("Tip height: %d", node1Tip.Height)
 }
@@ -219,8 +219,8 @@ func TestNodeSyncMissingBlocks(t *testing.T) {
 	// Wait for node 2 to sync completely.
 
 	// Then we check the tips.
-	tip1 := node1.Dag.Tip
-	tip2 := node2.Dag.Tip
+	tip1 := node1.Dag.FullTip
+	tip2 := node2.Dag.FullTip
 
 	// Check that the tips are the same.
 	assert.Equal(tip1, tip2)

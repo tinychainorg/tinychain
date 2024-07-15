@@ -52,7 +52,22 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 
 		// blocks
-		_, err = db.Exec("create table blocks (hash blob primary key, parent_hash blob, difficulty blob, timestamp integer, num_transactions integer, transactions_merkle_root blob, nonce blob, graffiti blob, height integer, epoch TEXT, size_bytes integer, parent_total_work blob, acc_work blob, foreign key (epoch) REFERENCES epochs (id))")
+		_, err = db.Exec(`create table blocks (
+			hash blob primary key, 
+			parent_hash blob, 
+			difficulty blob, 
+			timestamp integer, 
+			num_transactions integer, 
+			transactions_merkle_root blob, 
+			nonce blob, 
+			graffiti blob, 
+			height integer, 
+			epoch TEXT, 
+			size_bytes integer, 
+			parent_total_work blob, 
+			acc_work blob, 
+			foreign key (epoch) REFERENCES epochs (id)
+		)`)
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
@@ -126,7 +141,7 @@ type BlockDAG struct {
 
 	// OnNewTip handler.
 	OnNewHeadersTip func(tip Block, prevTip Block)
-	OnNewBodiesTip func(tip Block, prevTip Block)
+	OnNewFullTip func(tip Block, prevTip Block)
 }
 
 func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus ConsensusConfig) (BlockDAG, error) {
@@ -260,6 +275,20 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 	return nil
 }
 
+// Ingests a block header, and recomputes the headers tip. Used by light clients / SPV sync.
+func (dag *BlockDAG) IngestHeader(block RawBlock) error {
+	// Ingest block into table.
+	// No transactions.
+	return nil
+}
+
+// Ingests a block's body, which is linked to a previously ingested block header.
+func (dag *BlockDAG) IngestBlockBody(block RawBlock) error {
+	
+	return nil
+}
+
+// Ingests a full block, and recomputes the full tip.
 func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// 1. Verify parent is known.
 	parentBlock, err := dag.GetBlockByHash(raw.ParentHash)
@@ -474,7 +503,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// Update the tip.
 	// TODO this is bad for performance.
 	// TODO also this is not atomic.
-	prev_tip := dag.Tip
+	prev_tip := dag.FullTip
 	curr_tip, err := dag.GetLatestTip()
 	if err != nil {
 		return err
@@ -482,9 +511,9 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 
 	if prev_tip.Hash != curr_tip.Hash {
 		logger.Printf("New tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
-		dag.Tip = curr_tip
-		if dag.OnNewTip != nil {
-			dag.OnNewTip(curr_tip, prev_tip)
+		dag.FullTip = curr_tip
+		if dag.OnNewFullTip != nil {
+			dag.OnNewFullTip(curr_tip, prev_tip)
 		}
 	}
 

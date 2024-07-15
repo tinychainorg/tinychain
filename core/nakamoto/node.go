@@ -94,12 +94,12 @@ func (n *Node) setup() {
 	}
 
 	// Gossip the latest tip.
-	n.Peer.OnGetTip = func(msg GetTipMessage) (BlockHeader, error) {
-		tip := n.Dag.Tip
+	n.Peer.OnGetTip = func(msg GetTipMessage) (RawBlockHeader, error) {
+		tip := n.Dag.FullTip
 		// Convert to BlockHeader
-		blockHeader := BlockHeader{
+		blockHeader := RawBlockHeader{
 			ParentHash:             tip.ParentHash,
-			ParentTotalWork:        tip.ParentTotalWork,
+			// ParentTotalWork:        tip.ParentTotalWork, // TODO: Fix this.
 			Timestamp:              tip.Timestamp,
 			NumTransactions:        tip.NumTransactions,
 			TransactionsMerkleRoot: tip.TransactionsMerkleRoot,
@@ -110,7 +110,7 @@ func (n *Node) setup() {
 	}
 
 	// Recompute the state after a new tip.
-	n.Dag.OnNewTip = func(new_tip Block, prev_tip Block) {
+	n.Dag.OnNewFullTip = func(new_tip Block, prev_tip Block) {
 		// Find the common ancestor of the two tips.
 		// Revert the state to this ancestor.
 		// Recompute the state from the ancestor to the new tip.

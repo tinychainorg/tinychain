@@ -180,7 +180,7 @@ func TestLatestTipIsSet(t *testing.T) {
 
 	// The genesis block should be the latest tip.
 	// FIXME
-	assert.Equal(genesisBlock.Hash(), dag.Tip.Hash)
+	assert.Equal(genesisBlock.Hash(), dag.FullTip.Hash)
 }
 
 func TestAddBlockUnknownParent(t *testing.T) {
@@ -666,7 +666,7 @@ func TestGetLatestTip(t *testing.T) {
 	assert.Equal(raw.Hash(), current_tip.Hash)
 
 	// Check the in-memory latest tip is updated.
-	assert.Equal(raw.Hash(), blockdag.Tip.Hash)
+	assert.Equal(raw.Hash(), blockdag.FullTip.Hash)
 }
 
 func TestMinerProcedural(t *testing.T) {
