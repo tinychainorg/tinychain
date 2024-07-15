@@ -14,6 +14,7 @@ import (
 type BlockHeader struct {
 	ParentHash             [32]byte
 	ParentTotalWork        big.Int
+	Difficulty             [32]byte
 	Timestamp              uint64
 	NumTransactions        uint64
 	TransactionsMerkleRoot [32]byte
@@ -62,10 +63,32 @@ type RawBlock struct {
 	Transactions []RawTransaction `json:"transactions"`
 }
 
+
+// Block.
+// =====================================================================================================================
+
 func (b *Block) HashStr() string {
 	sl := b.Hash[:]
 	return hex.EncodeToString(sl)
 }
+
+// Convert a block to a raw block.
+func (b *Block) ToRawBlock() RawBlock {
+	return RawBlock{
+		ParentHash:             b.ParentHash,
+		ParentTotalWork:        BigIntToBytes32(b.ParentTotalWork),
+		Difficulty:             BigIntToBytes32(b.Work),
+		Timestamp:              b.Timestamp,
+		NumTransactions:        b.NumTransactions,
+		TransactionsMerkleRoot: b.TransactionsMerkleRoot,
+		Nonce:                  b.Nonce,
+		Graffiti:               b.Graffiti,
+		Transactions:           b.Transactions,
+	}
+}
+
+// RawBlock.
+// =====================================================================================================================
 
 func (b *RawBlock) SetNonce(i big.Int) {
 	b.Nonce = BigIntToBytes32(i)
@@ -80,6 +103,10 @@ func (b *RawBlock) Bytes() []byte {
 		panic(err)
 	}
 	err = binary.Write(buf, binary.BigEndian, b.ParentTotalWork)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.Difficulty)
 	if err != nil {
 		panic(err)
 	}
@@ -115,6 +142,7 @@ func (b *RawBlock) Bytes() []byte {
 	return buf.Bytes()
 }
 
+// Returns the envelope used for block hashing, which merklizes the transactions list into a merkle root.
 func (b *RawBlock) Envelope() []byte {
 	// Encode canonically.
 	buf := new(bytes.Buffer)
@@ -124,6 +152,10 @@ func (b *RawBlock) Envelope() []byte {
 		panic(err)
 	}
 	err = binary.Write(buf, binary.BigEndian, b.ParentTotalWork)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.Difficulty)
 	if err != nil {
 		panic(err)
 	}
@@ -152,18 +184,23 @@ func (b *RawBlock) Envelope() []byte {
 }
 
 func (b *RawBlock) Hash() [32]byte {
-	// Hash the envelope.
-	h := sha256.New()
-	h.Write(b.Envelope())
-	return sha256.Sum256(h.Sum(nil))
+	return sha256.Sum256(b.Envelope())
+}
+
+func (b *RawBlock) HashStr() string {
+	sl := b.Hash()
+	return hex.EncodeToString(sl[:])
 }
 
 func (b *RawBlock) SizeBytes() uint64 {
 	// Calculate the size of the block.
-	return uint64(len(b.Envelope()))
+	return uint64(len(b.Bytes()))
 }
 
-func (b *BlockHeader) Envelope() []byte {
+// BlockHeader.
+// =====================================================================================================================
+
+func (b *BlockHeader) Bytes() []byte {
 	// Encode canonically.
 	buf := new(bytes.Buffer)
 
@@ -172,6 +209,10 @@ func (b *BlockHeader) Envelope() []byte {
 		panic(err)
 	}
 	err = binary.Write(buf, binary.BigEndian, b.ParentTotalWork)
+	if err != nil {
+		panic(err)
+	}
+	err = binary.Write(buf, binary.BigEndian, b.Difficulty)
 	if err != nil {
 		panic(err)
 	}
@@ -199,46 +240,11 @@ func (b *BlockHeader) Envelope() []byte {
 	return buf.Bytes()
 }
 
-func (b *BlockHeader) Hash() [32]byte {
-	// Hash the envelope.
-	h := sha256.New()
-	h.Write(b.Envelope())
-	return sha256.Sum256(h.Sum(nil))
+func (b *BlockHeader) BlockHash() [32]byte {
+	return sha256.Sum256(b.Bytes())
 }
 
-func (b *BlockHeader) HashStr() string {
-	sl := b.Hash()
-	return hex.EncodeToString(sl[:])
-}
-
-func (b *RawBlock) Header() (header [208]byte) {
-	// total header size = 1 + 32 + 32 + 32 + 8 + 8 + 32 + 32 + 32
-
-	// Parent hash.
-	copy(header[0:32], b.ParentHash[:])
-	// Parent total work.
-	copy(header[32:64], b.ParentTotalWork[:])
-	// Difficulty.
-	copy(header[64:96], b.Difficulty[:])
-	// Timestamp.
-	timestamp := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestamp, b.Timestamp)
-	copy(header[96:104], timestamp)
-	// Num transactions.
-	numTransactions := make([]byte, 8)
-	binary.BigEndian.PutUint64(numTransactions, b.NumTransactions)
-	copy(header[104:112], numTransactions)
-	// Transactions merkle root.
-	copy(header[112:144], b.TransactionsMerkleRoot[:])
-	// Nonce.
-	copy(header[144:176], b.Nonce[:])
-	// Graffiti.
-	copy(header[176:208], b.Graffiti[:])
-
-	return header
-}
-
-func (b *RawBlock) HashStr() string {
-	sl := b.Hash()
+func (b *BlockHeader) BlockHashStr() string {
+	sl := b.BlockHash()
 	return hex.EncodeToString(sl[:])
 }
