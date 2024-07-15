@@ -42,7 +42,9 @@ type PeerCore struct {
 
 	OnNewBlock  func(block RawBlock)
 	OnGetBlocks func(msg GetBlocksMessage) ([][]byte, error)
-	OnGetTip    func(msg GetTipMessage) (BlockHeader, error)
+	OnGetTip      func(msg GetTipMessage) (BlockHeader, error)
+	OnSyncGetTipAtDepth func(msg SyncGetTipAtDepthMessage) (SyncGetTipAtDepthReply, error)
+	OnSyncGetData func(msg SyncGetDataMessage) (SyncGetDataReply, error)
 
 	peerLogger log.Logger
 }
@@ -126,42 +128,37 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 			return nil, err
 		}
 
-		if p.OnGetTip != nil {
-			tip, err := p.OnGetTip(msg)
-			if err != nil {
-				return nil, err
-			}
-
-			return GetTipMessage{
-				Type: "get_tip",
-				Tip:  tip,
-			}, nil
+		if p.OnGetTip == nil {
+			return nil, fmt.Errorf("GetTip callback not set")
 		}
 
-		return nil, nil
+		tip, err := p.OnGetTip(msg)
+		if err != nil {
+			return nil, err
+		}
+
+		return GetTipMessage{
+			Type: "get_tip",
+			Tip:  tip,
+		}, nil
 	})
 
-	p.server.RegisterMesageHandler("get_tip_at_depth", func(message []byte) (interface{}, error) {
+	p.server.RegisterMesageHandler("sync_get_tip_at_depth", func(message []byte) (interface{}, error) {
 		var msg SyncGetTipAtDepthMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
 			return nil, err
 		}
 
-		// TODO.
+		if p.OnSyncGetData == nil {
+			return nil, fmt.Errorf("SyncGetData callback not set")
+		}
 
-		// if p.OnGetTip != nil {
-		// 	tip, err := p.OnGetTip(msg)
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
+		reply, err := p.OnSyncGetTipAtDepth(msg)
+		if err != nil {
+			return nil, err
+		}
 
-		// 	return GetTipMessage{
-		// 		Type: "get_tip",
-		// 		Tip:  tip,
-		// 	}, nil
-		// }
-
-		return nil, nil
+		return reply, nil
 	})
 
 	p.server.RegisterMesageHandler("sync_get_data", func(message []byte) (interface{}, error) {
@@ -170,21 +167,16 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 			return nil, err
 		}
 
-		// TODO.
+		if p.OnSyncGetData == nil {
+			return nil, fmt.Errorf("SyncGetData callback not set")
+		}
 
-		// if p.OnGetTip != nil {
-		// 	tip, err := p.OnGetTip(msg)
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
+		reply, err := p.OnSyncGetData(msg)
+		if err != nil {
+			return nil, err
+		}
 
-		// 	return GetTipMessage{
-		// 		Type: "get_tip",
-		// 		Tip:  tip,
-		// 	}, nil
-		// }
-
-		return nil, nil
+		return reply, nil
 	})
 
 	p.server.RegisterMesageHandler("gossip_peers", func(message []byte) (interface{}, error) {
@@ -346,7 +338,7 @@ func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64
 	}
 
 	// Decode reply.
-	var reply SyncGetTipReply
+	var reply SyncGetTipAtDepthReply
 	if err := json.Unmarshal(res, &reply); err != nil {
 		return reply.Tip, err
 	}
@@ -377,7 +369,7 @@ func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights co
 	return reply.Headers, nil
 }
 
-func (p *PeerCore) SyncGetBlockTransactions(peer Peer, fromBlock [32]byte, heights core.Bitset) ([][]Transaction, error) {
+func (p *PeerCore) SyncGetBlockTransactions(peer Peer, fromBlock [32]byte, heights core.Bitset) ([][]RawTransaction, error) {
 	msg := SyncGetDataMessage{
 		Type:      "get_block_txs",
 		FromBlock: fromBlock,
@@ -388,7 +380,7 @@ func (p *PeerCore) SyncGetBlockTransactions(peer Peer, fromBlock [32]byte, heigh
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return [][]Transaction{}, err
+		return [][]RawTransaction{}, err
 	}
 
 	// Decode reply.

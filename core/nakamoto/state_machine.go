@@ -163,7 +163,7 @@ func (c *StateMachine) GetStateSnapshot() []StateLeaf {
 }
 
 // Given a block DAG and a list of block hashes, extracts the transaction sequence, applies each transaction in order, and returns the final state.
-func ReconstructState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList [][32]byte) (*StateMachine, error) {
+func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList [][32]byte) (*StateMachine, error) {
 	for _, blockHash := range longestChainHashList {
 		txs := []RawTransaction{}
 

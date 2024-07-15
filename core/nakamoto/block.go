@@ -87,6 +87,20 @@ func (b *Block) ToRawBlock() RawBlock {
 	}
 }
 
+// Convert a block to a block header.
+func (b *Block) ToBlockHeader() BlockHeader {
+	return BlockHeader{
+		ParentHash:             b.ParentHash,
+		ParentTotalWork:        BigIntToBytes32(b.ParentTotalWork),
+		Difficulty:             BigIntToBytes32(b.Work),
+		Timestamp:              b.Timestamp,
+		NumTransactions:        b.NumTransactions,
+		TransactionsMerkleRoot: b.TransactionsMerkleRoot,
+		Nonce:                  b.Nonce,
+		Graffiti:               b.Graffiti,
+	}
+}
+
 // RawBlock.
 // =====================================================================================================================
 

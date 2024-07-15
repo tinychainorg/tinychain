@@ -31,6 +31,18 @@ type Transaction struct {
 	TxIndex   uint64
 }
 
+func (tx *Transaction) ToRawTransaction() RawTransaction {
+	return RawTransaction{
+		Version:    tx.Version,
+		Sig:        tx.Sig,
+		FromPubkey: tx.FromPubkey,
+		ToPubkey:   tx.ToPubkey,
+		Amount:     tx.Amount,
+		Fee:        tx.Fee,
+		Nonce:      tx.Nonce,
+	}
+}
+
 func (tx *RawTransaction) SizeBytes() uint64 {
 	// Size of the transaction is the size of the envelope.
 	return 1 + 65 + 65 + 8 + 8 + 8

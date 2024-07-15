@@ -95,32 +95,34 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 // get_headers(base_node, base_height, height_set) -> []BlockHeader
 // get_blocks(base_node, base_height, height_set) - > [][]Transaction
 
+// sync_get_tip_at_depth
 type SyncGetTipAtDepthMessage struct {
-	Type      string
-	FromBlock [32]byte
-	Depth     uint64
+	Type      string   `json:"type"`
+	FromBlock [32]byte `json:"fromBlock"`
+	Depth     uint64   `json:"depth"`
 }
 
-type SyncGetTipReply struct {
-	Type string
-	Tip  BlockHeader
+type SyncGetTipAtDepthReply struct {
+	Type string      `json:"type"`
+	Tip  BlockHeader `json:"tip"`
 }
 
+// sync_get_data
 type SyncGetDataMessage struct {
-	Type      string
-	FromBlock [32]byte
-	Heights   core.Bitset
-	Headers   bool
-	Bodies    bool
+	Type      string      `json:"type"`
+	FromBlock [32]byte    `json:"fromBlock"`
+	Heights   core.Bitset `json:"heights"`
+	Headers   bool        `json:"headers"`
+	Bodies    bool        `json:"bodies"`
 }
 
 type SyncGetDataReply struct {
-	Type       string
-	Headers    []BlockHeader
-	Bodies  [][]Transaction
+	Type    string             `json:"type"`
+	Headers []BlockHeader      `json:"headers"`
+	Bodies  [][]RawTransaction `json:"bodies"`
 }
 
-func getValidHeaderChain(root [32]byte, headers []BlockHeader) ([]BlockHeader) {
+func getValidHeaderChain(root [32]byte, headers []BlockHeader) []BlockHeader {
 	// Verify the header chain we have received.
 	// ie. A -> B -> C ... -> Z
 	// We should have all the headers from A to Z.
@@ -193,7 +195,7 @@ func (n *Node) Sync() {
 			for i := 0; i < WINDOW_SIZE; i++ {
 				heights.Insert(i)
 			}
-			
+
 			// 2b. Download headers.
 			headers := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
 
@@ -203,10 +205,10 @@ func (n *Node) Sync() {
 			// ie. A -> B -> C ... -> Z
 			// We should have all the headers from A to Z.
 			headers2 := getValidHeaderChain(currentTipHash, headers)
-			
-			// 2d. Ingest headers. 
+
+			// 2d. Ingest headers.
 			for _, header := range headers2 {
-				err := n.Dag.IngestHeader(header) 
+				err := n.Dag.IngestHeader(header)
 				if err != nil {
 					// Skip. We will not be able to download the bodies.
 					continue
@@ -229,7 +231,7 @@ func (n *Node) Sync() {
 	for {
 		// Search for headers from current tip.
 		downloaded := search(currentTip.Hash)
-		
+
 		// Exit when there are no more headers to download.
 		if downloaded == 0 {
 			break
