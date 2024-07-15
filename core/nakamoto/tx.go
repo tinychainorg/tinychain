@@ -7,6 +7,35 @@ import (
 	"github.com/liamzebedee/tinychain-go/core"
 )
 
+type RawTransaction struct {
+	Version    byte     `json:"version"`
+	Sig        [64]byte `json:"sig"`
+	FromPubkey [65]byte `json:"from"`
+	ToPubkey   [65]byte `json:"to"`
+	Amount     uint64   `json:"amount"`
+	Fee        uint64   `json:"fee"`
+	Nonce      uint64   `json:"nonce"`
+}
+
+type Transaction struct {
+	Version    byte     `json:"version"`
+	Sig        [64]byte `json:"sig"`
+	FromPubkey [65]byte `json:"from"`
+	ToPubkey   [65]byte `json:"to"`
+	Amount     uint64   `json:"amount"`
+	Fee        uint64   `json:"fee"`
+	Nonce      uint64   `json:"nonce"`
+
+	Hash      [32]byte
+	Blockhash [32]byte
+	TxIndex   uint64
+}
+
+func (tx *RawTransaction) SizeBytes() uint64 {
+	// Size of the transaction is the size of the envelope.
+	return 1 + 65 + 65 + 8 + 8 + 8
+}
+
 func (tx *RawTransaction) Bytes() []byte {
 	buf := make([]byte, 0)
 	buf = append(buf, tx.Version)

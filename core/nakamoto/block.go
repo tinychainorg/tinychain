@@ -10,6 +10,63 @@ import (
 	"math/big"
 )
 
+// TODO embed in Block?
+type BlockHeader struct {
+	ParentHash             [32]byte
+	ParentTotalWork        big.Int
+	Timestamp              uint64
+	NumTransactions        uint64
+	TransactionsMerkleRoot [32]byte
+	Nonce                  [32]byte
+	Graffiti               [32]byte
+}
+
+type Block struct {
+	// Block header.
+	ParentHash             [32]byte
+	ParentTotalWork        big.Int
+	Timestamp              uint64
+	NumTransactions        uint64
+	TransactionsMerkleRoot [32]byte
+	Nonce                  [32]byte
+	Graffiti               [32]byte
+
+	// Block body.
+	Transactions []RawTransaction
+
+	// Metadata.
+	Height          uint64
+	Epoch           string
+	Work            big.Int
+	SizeBytes       uint64
+	Hash            [32]byte
+	AccumulatedWork big.Int
+}
+
+
+// A raw block is the block as transmitted on the network.
+// It contains the block header and the block body.
+// It does not contain any block metadata such as height, epoch, or difficulty.
+type RawBlock struct {
+	// Block header.
+	ParentHash             [32]byte `json:"parent_hash"`
+	ParentTotalWork        [32]byte `json:"parent_total_work"`
+	Difficulty             [32]byte `json:"difficulty"`
+	Timestamp              uint64   `json:"timestamp"`
+	NumTransactions        uint64   `json:"num_transactions"`
+	TransactionsMerkleRoot [32]byte `json:"transactions_merkle_root"`
+	Nonce                  [32]byte `json:"nonce"`
+	Graffiti               [32]byte `json:"graffiti"`
+
+	// Block body.
+	Transactions []RawTransaction `json:"transactions"`
+}
+
+func (b *Block) HashStr() string {
+	sl := b.Hash[:]
+	return hex.EncodeToString(sl)
+}
+
 func (b *RawBlock) SetNonce(i big.Int) {
 	b.Nonce = BigIntToBytes32(i)
 }

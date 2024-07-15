@@ -354,7 +354,7 @@ func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights core.Bitset) ([]RawBlockHeader, error) {
+func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights core.Bitset) ([]BlockHeader, error) {
 	msg := SyncGetDataMessage{
 		Type:      "get_block_headers",
 		FromBlock: fromBlock,
@@ -365,7 +365,7 @@ func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights co
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return []RawBlockHeader{}, err
+		return []BlockHeader{}, err
 	}
 
 	// Decode reply.

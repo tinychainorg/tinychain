@@ -106,26 +106,18 @@ type SyncGetTipReply struct {
 	Tip  BlockHeader
 }
 
-type SyncGetBlockHeadersMessage struct {
+type SyncGetDataMessage struct {
 	Type      string
 	FromBlock [32]byte
 	Heights   core.Bitset
+	Headers   bool
+	Bodies    bool
 }
 
-type SyncGetBlockHeadersReply struct {
-	Type    string
-	Headers []BlockHeader
-}
-
-type SyncGetBlockTxsMessage struct {
-	Type      string
-	FromBlock [32]byte
-	Heights   core.Bitset
-}
-
-type SyncGetBlockTxsReply struct {
-	Type string
-	Txs  [][]Transaction
+type SyncGetDataReply struct {
+	Type       string
+	Headers    []BlockHeader
+	Bodies  [][]Transaction
 }
 
 // Syncs the node with the network.

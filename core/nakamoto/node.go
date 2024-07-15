@@ -94,10 +94,10 @@ func (n *Node) setup() {
 	}
 
 	// Gossip the latest tip.
-	n.Peer.OnGetTip = func(msg GetTipMessage) (RawBlockHeader, error) {
+	n.Peer.OnGetTip = func(msg GetTipMessage) (BlockHeader, error) {
 		tip := n.Dag.FullTip
 		// Convert to BlockHeader
-		blockHeader := RawBlockHeader{
+		blockHeader := BlockHeader{
 			ParentHash:             tip.ParentHash,
 			// ParentTotalWork:        tip.ParentTotalWork, // TODO: Fix this.
 			Timestamp:              tip.Timestamp,
