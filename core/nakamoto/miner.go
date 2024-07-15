@@ -136,7 +136,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 }
 
 func (node *Miner) MakeNewPuzzle() POWPuzzle {
-	current_tip, err := node.dag.GetLatestTip()
+	current_tip, err := node.dag.GetLatestFullTip()
 	if err != nil {
 		// fmt.Fatalf("Failed to get current tip: %s", err)
 		panic(err)

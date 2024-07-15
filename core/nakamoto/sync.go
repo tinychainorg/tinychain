@@ -17,7 +17,7 @@ import (
 //
 // This function supports downloading as few as 1 header, which will download from a single peer, or 2048 headers, which
 // will download from as many as 9 peers in parallel.
-func (n *Node) SyncDownloadHeaders(fromNode [32]byte, heightMap core.Bitset, peers []Peer) []BlockHeader {
+func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers []Peer, getHeaders bool, getBodies bool) []BlockHeader {
 	// Size of a block header is 200 B.
 	HEADER_SIZE := 200
 
@@ -120,6 +120,33 @@ type SyncGetDataReply struct {
 	Bodies  [][]Transaction
 }
 
+func getValidHeaderChain(root [32]byte, headers []BlockHeader) ([]BlockHeader) {
+	// Verify the header chain we have received.
+	// ie. A -> B -> C ... -> Z
+	// We should have all the headers from A to Z.
+	base := root
+	chain := make([]BlockHeader, 0)
+
+	// Build cache of next pointers.
+	nextRefs := make(map[[32]byte]int)
+	for i, header := range headers {
+		nextRefs[header.ParentHash] = i
+	}
+
+	// While we have a child, append to the chain.
+	for {
+		if next, ok := nextRefs[base]; ok {
+			node := headers[next]
+			chain = append(chain, node)
+			base = node.BlockHash()
+		} else {
+			break
+		}
+	}
+
+	return chain
+}
+
 // Syncs the node with the network.
 //
 // The blockchain sync algorithm is the most complex part of the system. The Nakamoto blockchain is defined simply as a linked list of blocks, where the canonical chain is the one with the most amount of work done on it. A blockchain network is composed of peers who disseminate blocks and transactions, and take turns in being the leader to mine a new block.
@@ -143,8 +170,8 @@ func (n *Node) Sync() {
 
 	// Greedily searches the block DAG from a tip hash, downloading headers in parallel from peers from all subbranches up to a depth.
 	// The depth is referred to as the "window size", and is a constant value of 2048 blocks.
-	search := func(currentTipHash [32]byte) {
-		// Get the tips from all our peers and bucket them.
+	search := func(currentTipHash [32]byte) int {
+		// 1. Get the tips from all our peers and bucket them.
 		// NOTE: we only request their tip hash in order to bucket them.
 		peersTips := make(map[[32]byte][]Peer)
 		depth := uint64(WINDOW_SIZE)
@@ -155,34 +182,58 @@ func (n *Node) Sync() {
 				// Skip. Peer will not be used for downloading.
 				continue
 			}
-			peersTips[tip.Hash()] = append(peersTips[tip.Hash()], peer)
+			peersTips[tip.BlockHash()] = append(peersTips[tip.BlockHash()], peer)
 		}
 
-		// For each tip, download headers in parallel from all peers who share the same tip.
+		// 2. For each tip, download a window of headers and ingest them.
+		downloaded := 0
 		for _, peers := range peersTips {
+			// 2a. Identify heights.
 			heights := core.NewBitset(WINDOW_SIZE)
-			// Flag all heights.
 			for i := 0; i < WINDOW_SIZE; i++ {
 				heights.Insert(i)
 			}
+			
+			// 2b. Download headers.
+			headers := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
 
-			headers := n.SyncDownloadHeaders(currentTipHash, *heights, peers)
+			// 2c. Validate headers.
+			// Sanity-check: verify we have all the headers for the heights in order.
+			// Verify the header chain we have received.
+			// ie. A -> B -> C ... -> Z
+			// We should have all the headers from A to Z.
+			headers2 := getValidHeaderChain(currentTipHash, headers)
+			
+			// 2d. Ingest headers. 
+			for _, header := range headers2 {
+				err := n.Dag.IngestHeader(header) 
+				if err != nil {
+					// Skip. We will not be able to download the bodies.
+					continue
+				}
 
-			// Validate we have all the headers.
-
-
-			// Validate headers.
-			// Choose the heaviest tip.
-			// syncEngine.dag.GetTip()
-
-			// Download block bodies in parallel.
-			// Validate and ingest them.
+				downloaded += 1
+			}
 		}
+
+		// 3. Return the number of headers downloaded.
+		return downloaded
+	}
+
+	currentTip, err := n.Dag.GetLatestHeadersTip()
+	if err != nil {
+		n.log.Printf("Failed to get latest tip: %s\n", err)
+		return
 	}
 
 	for {
 		// Search for headers from current tip.
+		downloaded := search(currentTip.Hash)
+		
 		// Exit when there are no more headers to download.
+		if downloaded == 0 {
+			break
+		}
 	}
 }
 
@@ -219,7 +270,7 @@ func (n *Node) sync_getBestTipFromPeers() [32]byte {
 				syncLog.Printf("Failed to get tip from peer: %s\n", err)
 				return
 			}
-			syncLog.Printf("Got tip from peer: hash=%s\n", tip.HashStr())
+			syncLog.Printf("Got tip from peer: hash=%s\n", tip.BlockHashStr())
 			tipsChan <- tip
 		}()
 	}
@@ -257,7 +308,7 @@ func (n *Node) sync_getBestTipFromPeers() [32]byte {
 	bestTipHash := [32]byte{}
 
 	for _, tip := range tips {
-		hash := tip.Hash()
+		hash := tip.BlockHash()
 		// TODO embed difficulty into block header so we can verify POW.
 		work := CalculateWork(Bytes32ToBigInt(hash))
 

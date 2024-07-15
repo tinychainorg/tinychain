@@ -360,7 +360,7 @@ func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights co
 		FromBlock: fromBlock,
 		Heights:   heights,
 		Headers:   true,
-		Bodies:       false,
+		Bodies:    false,
 	}
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {

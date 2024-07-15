@@ -618,7 +618,7 @@ func TestGetLatestTip(t *testing.T) {
 	blockdag, _, _, genesisBlock := newBlockdag()
 
 	// The genesis will be the first tip.
-	current_tip, err := blockdag.GetLatestTip()
+	current_tip, err := blockdag.GetLatestFullTip()
 	assert.Equal(nil, err)
 	assert.Equal(genesisBlock.Hash(), current_tip.Hash)
 
@@ -661,7 +661,7 @@ func TestGetLatestTip(t *testing.T) {
 	}
 
 	// Check if the block is the latest tip.
-	current_tip, err = blockdag.GetLatestTip()
+	current_tip, err = blockdag.GetLatestFullTip()
 	assert.Equal(nil, err)
 	assert.Equal(raw.Hash(), current_tip.Hash)
 
@@ -814,7 +814,7 @@ func TestGetLongestChainHashList(t *testing.T) {
 	miner.Start(N_BLOCKS)
 
 	// Get the tip.
-	tip, err := dag.GetLatestTip()
+	tip, err := dag.GetLatestFullTip()
 	if err != nil {
 		t.Fatalf("Failed to get tip: %s", err)
 	}

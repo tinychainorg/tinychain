@@ -50,6 +50,6 @@ func GetRawGenesisBlockFromConfig(consensus ConsensusConfig) RawBlock {
 	// Calculate work.
 	work := CalculateWork(Bytes32ToBigInt(block.Hash()))
 
-	logger.Printf("Genesis block hash=%s work=%s\n", block.HashStr(), work.String())
+	logger.Printf("Genesis block hash=%x work=%s\n", block.Hash(), work.String())
 	return block
 }

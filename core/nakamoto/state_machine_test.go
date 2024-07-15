@@ -414,7 +414,7 @@ func TestStateMachineReconstructState(t *testing.T) {
 	miner.Start(100)
 
 	// Get the latest tip.
-	latestTip, err := dag.GetLatestTip()
+	latestTip, err := dag.GetLatestFullTip()
 	if err != nil {
 		t.Fatal(err)
 	}

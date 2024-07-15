@@ -13,7 +13,7 @@ import (
 // TODO embed in Block?
 type BlockHeader struct {
 	ParentHash             [32]byte
-	ParentTotalWork        big.Int
+	ParentTotalWork        [32]byte 
 	Difficulty             [32]byte
 	Timestamp              uint64
 	NumTransactions        uint64
