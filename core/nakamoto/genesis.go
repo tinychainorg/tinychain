@@ -1,6 +1,9 @@
 package nakamoto
 
-import "math/big"
+import (
+	"fmt"
+	"math/big"
+)
 
 // The Nakamoto consensus configuration, pertaining to difficulty readjustment, genesis block, and block size.
 type ConsensusConfig struct {
@@ -50,6 +53,6 @@ func GetRawGenesisBlockFromConfig(consensus ConsensusConfig) RawBlock {
 	// Calculate work.
 	work := CalculateWork(Bytes32ToBigInt(block.Hash()))
 
-	logger.Printf("Genesis block hash=%x work=%s\n", block.Hash(), work.String())
+	fmt.Printf("Genesis block hash=%x work=%s\n", block.Hash(), work.String())
 	return block
 }

@@ -4,15 +4,17 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math/big"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var logger = NewLogger("blockdag", "")
-
 func OpenDB(dbPath string) (*sql.DB, error) {
+	logger := NewLogger("blockdag", "db")
+
+
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
@@ -136,6 +138,8 @@ type BlockDAG struct {
 	// OnNewTip handler.
 	OnNewHeadersTip func(tip Block, prevTip Block)
 	OnNewFullTip func(tip Block, prevTip Block)
+
+	log *log.Logger
 }
 
 func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus ConsensusConfig) (BlockDAG, error) {
@@ -143,6 +147,7 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus
 		db:           db,
 		stateMachine: stateMachine,
 		consensus:    consensus,
+		log:          NewLogger("blockdag", ""),
 	}
 
 	err := dag.initialiseBlockDAG()
@@ -184,7 +189,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 	rows.Close()
 
 	// Begin initialisation.
-	logger.Printf("Initialising block DAG...\n")
+	dag.log.Printf("Initialising block DAG...\n")
 
 	// Insert the genesis epoch.
 	epoch0 := Epoch{
@@ -207,7 +212,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 	}
 
 	work := CalculateWork(Bytes32ToBigInt(genesisBlock.Hash()))
-	logger.Printf("Inserted genesis epoch difficulty=%s\n", dag.consensus.GenesisDifficulty.String())
+	dag.log.Printf("Inserted genesis epoch difficulty=%s\n", dag.consensus.GenesisDifficulty.String())
 	accWorkBuf := BigIntToBytes32(*work)
 
 	// Insert the genesis block.
@@ -231,7 +236,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 		return err
 	}
 
-	logger.Printf("Inserted genesis block hash=%s work=%s\n", hex.EncodeToString(genesisBlockHash[:]), work.String())
+	dag.log.Printf("Inserted genesis block hash=%s work=%s\n", hex.EncodeToString(genesisBlockHash[:]), work.String())
 
 	return nil
 }
@@ -244,7 +249,7 @@ func (dag *BlockDAG) updateHeadersTip() error {
 	}
 
 	if prev_tip.Hash != curr_tip.Hash {
-		logger.Printf("New headers tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
+		dag.log.Printf("New headers tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
 		dag.FullTip = curr_tip
 		if dag.OnNewHeadersTip == nil {
 			return nil
@@ -263,7 +268,7 @@ func (dag *BlockDAG) updateFullTip() error {
 	}
 
 	if prev_tip.Hash != curr_tip.Hash {
-		logger.Printf("New full tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
+		dag.log.Printf("New full tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
 		dag.FullTip = curr_tip
 		if dag.OnNewFullTip == nil {
 			return nil
@@ -312,7 +317,7 @@ func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
 	// Are we on an epoch boundary?
 	if height%dag.consensus.EpochLengthBlocks == 0 {
 		// Recompute difficulty and create new epoch.
-		logger.Printf("Recomputing difficulty for epoch %d\n", height/dag.consensus.EpochLengthBlocks)
+		dag.log.Printf("Recomputing difficulty for epoch %d\n", height/dag.consensus.EpochLengthBlocks)
 
 		// Get current epoch.
 		epoch, err = dag.GetEpochForBlockHash(raw.ParentHash)
@@ -359,7 +364,7 @@ func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
 	// 6c. Verify parent total work is correct.
 	parentTotalWork := Bytes32ToBigInt(raw.ParentTotalWork)
 	if parentBlock.AccumulatedWork.Cmp(&parentTotalWork) != 0 {
-		logger.Printf("Comparing parent total work. expected=%s actual=%s\n", parentBlock.AccumulatedWork.String(), parentTotalWork.String())
+		dag.log.Printf("Comparing parent total work. expected=%s actual=%s\n", parentBlock.AccumulatedWork.String(), parentTotalWork.String())
 		return fmt.Errorf("Parent total work is incorrect.")
 	}
 
@@ -432,7 +437,7 @@ func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) 
 	// TODO: We can parallelise this.
 	// This is one of the most expensive operations of the blockchain node.
 	for i, block_tx := range raw.Transactions {
-		logger.Printf("Verifying transaction %d\n", i)
+		dag.log.Printf("Verifying transaction %d\n", i)
 		isValid := core.VerifySignature(
 			hex.EncodeToString(block_tx.FromPubkey[:]),
 			block_tx.Sig[:],
@@ -557,7 +562,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// TODO: We can parallelise this.
 	// This is one of the most expensive operations of the blockchain node.
 	for i, block_tx := range raw.Transactions {
-		logger.Printf("Verifying transaction %d\n", i)
+		dag.log.Printf("Verifying transaction %d\n", i)
 		isValid := core.VerifySignature(
 			hex.EncodeToString(block_tx.FromPubkey[:]),
 			block_tx.Sig[:],
@@ -595,7 +600,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// Are we on an epoch boundary?
 	if height%dag.consensus.EpochLengthBlocks == 0 {
 		// Recompute difficulty and create new epoch.
-		logger.Printf("Recomputing difficulty for epoch %d\n", height/dag.consensus.EpochLengthBlocks)
+		dag.log.Printf("Recomputing difficulty for epoch %d\n", height/dag.consensus.EpochLengthBlocks)
 
 		// Get current epoch.
 		epoch, err = dag.GetEpochForBlockHash(raw.ParentHash)
@@ -642,7 +647,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// 6c. Verify parent total work is correct.
 	parentTotalWork := Bytes32ToBigInt(raw.ParentTotalWork)
 	if parentBlock.AccumulatedWork.Cmp(&parentTotalWork) != 0 {
-		logger.Printf("Comparing parent total work. expected=%s actual=%s\n", parentBlock.AccumulatedWork.String(), parentTotalWork.String())
+		dag.log.Printf("Comparing parent total work. expected=%s actual=%s\n", parentBlock.AccumulatedWork.String(), parentTotalWork.String())
 		return fmt.Errorf("Parent total work is incorrect.")
 	}
 
