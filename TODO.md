@@ -3,15 +3,21 @@
 Work breakdown:
 
 - Refactor block DAG
-    - Headers tip
-    - Bodies tip
-    - Ingest headers
-    - ingest Bodies
-    - ingest block
+    - x Headers tip
+    - x Bodies tip
+    - x Ingest headers
+    - x ingest Bodies
+    - x ingest block
 - rename: GetPath
 - getHeadersTip
 - GetBodiesTip
 - OnNewBodiesTip/OnNewHeadersTip
+
+
+
+now finish the node logic:
+- 
+
 
 
 GetBlockByHash - return block but with no txs (this is default behaviour anyways)

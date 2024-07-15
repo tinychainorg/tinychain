@@ -15,11 +15,6 @@ type Node struct {
 	syncLog *log.Logger
 }
 
-type SyncState struct {
-	// How does the sync design work with the block DAG?
-	// The block DAG thus far is only designed for queuing blocks.
-}
-
 func NewNode(dag *BlockDAG, miner *Miner, peer *PeerCore) *Node {
 	stateMachine, err := NewStateMachine(nil)
 	if err != nil {
@@ -103,18 +98,7 @@ func (n *Node) setup() {
 
 	// Gossip the latest tip.
 	n.Peer.OnGetTip = func(msg GetTipMessage) (BlockHeader, error) {
-		tip := n.Dag.FullTip
-		// Convert to BlockHeader
-		blockHeader := BlockHeader{
-			ParentHash:             tip.ParentHash,
-			ParentTotalWork:        tip.ParentTotalWork, // TODO: Fix this.
-			Timestamp:              tip.Timestamp,
-			NumTransactions:        tip.NumTransactions,
-			TransactionsMerkleRoot: tip.TransactionsMerkleRoot,
-			Nonce:                  tip.Nonce,
-			Graffiti:               tip.Graffiti,
-		}
-		return blockHeader, nil
+		return n.Dag.FullTip.ToBlockHeader(), nil
 	}
 
 	// Upload blocks to other peers.
