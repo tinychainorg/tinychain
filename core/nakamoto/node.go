@@ -156,14 +156,36 @@ func (n *Node) setup() {
 
 	// Recompute the state after a new tip.
 	n.Dag.OnNewFullTip = func(new_tip Block, prev_tip Block) {
+		// 1. Rebuild state.
+		// 2. Regenerate current mempool. 
+		
 		n.log.Printf("rebuild-state\n")
 		start := time.Now()
 
-		// Rebuild state.
 		n.rebuildState()
 		
 		duration := time.Since(start)
-		n.log.Printf("rebuild-state completed duration=%s blocks=%d\n", n.Dag.FullTip.Height, duration.String())
+		n.log.Printf("rebuild-state completed duration=%d blocks=%s\n", n.Dag.FullTip.Height, duration.String())
+	}
+
+	// When we get a tx, add it to the mempool.
+	// When mempool changes, restart miner.
+	// When DAG tip changes, restart miner.
+	// When we first boot node, perform a full sync before doing anything.
+	// When we get new block that doesn't have known parent, do a sync.
+
+	// 7. Sync complete, now rework:
+	//   a. Recompute the state.
+	//   b. Recompute the mempool. Mempool size = K txs.
+	//      - Remove all transactions that have been sequenced in the chain. O(K) lookups.
+	//      - Reinsert any transcations that were included in blocks that were orphaned, to a maximum depth of 1 day of blocks (144 blocks). O(144)
+	//      - Revalidate the tx set. O(K).
+	//   c. Begin mining on the new tip.
+
+	// When we get new transaction, add it to mempool.
+	n.Peer.OnNewTransaction = func(tx RawTransaction) {
+		// Add transaction to mempool.
+		// TODO.
 	}
 }
 

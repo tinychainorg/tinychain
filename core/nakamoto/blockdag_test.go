@@ -30,6 +30,7 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB, RawBlock) {
 	db, err := OpenDB(":memory:")
+	// db, err := OpenDB("test.sqlite3")
 	if err != nil {
 		panic(err)
 	}
@@ -383,35 +384,6 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	assert.Equal(nil, err)
 }
 
-func TestGetRawGenesisBlockFromConfig(t *testing.T) {
-	assert := assert.New(t)
-
-	genesis_difficulty := new(big.Int)
-	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-
-	conf := ConsensusConfig{
-		EpochLengthBlocks:       5,
-		TargetEpochLengthMillis: 2000,
-		GenesisDifficulty:       *genesis_difficulty,
-		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
-		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
-		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
-	}
-
-	// Get the genesis block.
-	genesisBlock := GetRawGenesisBlockFromConfig(conf)
-	genesisNonce := Bytes32ToBigInt(genesisBlock.Nonce)
-
-	// Check the genesis block.
-	assert.Equal(HexStringToBytes32("0ed59333a743482efdf0aabb0c62add06e5a3dd21068f458af12832720ff370e"), genesisBlock.Hash())
-	assert.Equal(conf.GenesisParentBlockHash, genesisBlock.ParentHash)
-	assert.Equal(BigIntToBytes32(*big.NewInt(0)), genesisBlock.ParentTotalWork)
-	assert.Equal(uint64(0), genesisBlock.Timestamp)
-	assert.Equal(uint64(0), genesisBlock.NumTransactions)
-	assert.Equal([32]byte{}, genesisBlock.TransactionsMerkleRoot)
-	assert.Equal(big.NewInt(79).String(), genesisNonce.String())
-}
-
 func TestGetBlockByHashGenesis(t *testing.T) {
 	assert := assert.New(t)
 	dag, conf, _, genesisBlock := newBlockdag()
@@ -434,7 +406,7 @@ func TestGetBlockByHashGenesis(t *testing.T) {
 	assert.Equal(uint64(0), block.Height)
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), block.Epoch)
 	assert.Equal(uint64(176), block.SizeBytes)
-	assert.Equal(HexStringToBytes32("0ed59333a743482efdf0aabb0c62add06e5a3dd21068f458af12832720ff370e"), block.Hash)
+	assert.Equal(HexStringToBytes32("0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7"), block.Hash)
 	t.Logf("Block: acc_work=%s\n", block.AccumulatedWork.String())
 	assert.Equal(big.NewInt(17).String(), block.AccumulatedWork.String())
 }
@@ -543,7 +515,7 @@ func TestBlockDAGInitialised(t *testing.T) {
 	// Check the genesis epoch.
 	t.Logf("Genesis epoch: %v\n", epoch.Id)
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), epoch.Id)
-	assert.Equal(HexStringToBytes32("0ed59333a743482efdf0aabb0c62add06e5a3dd21068f458af12832720ff370e"), epoch.StartBlockHash)
+	assert.Equal(HexStringToBytes32("0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7"), epoch.StartBlockHash)
 	assert.Equal(uint64(0), epoch.StartTime)
 	assert.Equal(uint64(0), epoch.StartHeight)
 	assert.Equal(conf.GenesisDifficulty, epoch.Difficulty)

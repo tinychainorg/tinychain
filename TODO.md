@@ -15,6 +15,51 @@ Work breakdown:
 
 
 
+```go
+func SQLiteDbString(file string, readonly bool) string {
+
+connectionParams := make(url.Values)
+connectionParams.Add("_journal_mode", "WAL")
+connectionParams.Add("_busy_timeout", "5000")
+connectionParams.Add("_synchronous", "NORMAL")
+connectionParams.Add("_cache_size", "-20000")
+connectionParams.Add("_foreign_keys", "true")
+if readonly {
+connectionParams.Add("mode", "ro")
+} else {
+connectionParams.Add("_txlock", "IMMEDIATE")
+connectionParams.Add("mode", "rwc")
+}
+
+return "file:" + file + "?" + connectionParams.Encode()
+}
+
+func OpenSqliteDatabase(file string, readonly bool) (*sql.DB, error) {
+
+dbString := SQLiteDbString(file, readonly)
+db, err := sql .Open("sqlite3", dbString)
+
+pragmasToSet := []string{
+"temp_store=memory",
+}
+
+for _, pragma := range pragmasToSet {
+_, err = db.Exec("PRAGMA " + pragma + ";")
+if err != nil {
+return nil, err
+}
+}
+
+if readonly {
+db.SetMaxOpenConns(max(4, runtime.NumCPU()))
+} else {
+db.SetMaxOpenConns(1)
+}
+
+return db, nil
+}
+```
+
 now finish the node logic:
 - 
 

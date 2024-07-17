@@ -41,6 +41,7 @@ type PeerCore struct {
 	GossipPeersIntervalSeconds int
 
 	OnNewBlock  func(block RawBlock)
+	OnNewTransaction func(tx RawTransaction)
 	OnGetBlocks func(msg GetBlocksMessage) ([][]byte, error)
 	OnGetTip      func(msg GetTipMessage) (BlockHeader, error)
 	OnSyncGetTipAtDepth func(msg SyncGetTipAtDepthMessage) (SyncGetTipAtDepthReply, error)
@@ -97,6 +98,19 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		// Call the OnNewBlock callback.
 		if p.OnNewBlock != nil {
 			p.OnNewBlock(msg.RawBlock)
+		}
+		return nil, nil
+	})
+
+	p.server.RegisterMesageHandler("new_tx", func(message []byte) (interface{}, error) {
+		var msg NewTransactionMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			return nil, err
+		}
+
+		// Call the OnNewTransaction callback.
+		if p.OnNewTransaction != nil {
+			p.OnNewTransaction(msg.RawTransaction)
 		}
 		return nil, nil
 	})

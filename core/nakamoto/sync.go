@@ -240,13 +240,7 @@ func (n *Node) Sync() {
 }
 
 func (n *Node) rework() {
-	// 7. Sync complete, now rework:
-	//   a. Recompute the state.
-	//   b. Recompute the mempool. Mempool size = K txs.
-	//      - Remove all transactions that have been sequenced in the chain. O(K) lookups.
-	//      - Reinsert any transcations that were included in blocks that were orphaned, to a maximum depth of 1 day of blocks (144 blocks). O(144)
-	//      - Revalidate the tx set. O(K).
-	//   c. Begin mining on the new tip.
+
 }
 
 // Contacts all our peers in parallel, gets the block header of their tip, and returns the best tip based on total work.

@@ -30,11 +30,11 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
-	defer rows.Close()
 	databaseVersion := 0
 	if rows.Next() {
 		rows.Scan(&databaseVersion)
 	}
+	rows.Close()
 
 	// Log version.
 	logger.Printf("Database version: %d\n", databaseVersion)
@@ -250,7 +250,7 @@ func (dag *BlockDAG) updateHeadersTip() error {
 
 	if prev_tip.Hash != curr_tip.Hash {
 		dag.log.Printf("New headers tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
-		dag.FullTip = curr_tip
+		dag.HeadersTip = curr_tip
 		if dag.OnNewHeadersTip == nil {
 			return nil
 		}
