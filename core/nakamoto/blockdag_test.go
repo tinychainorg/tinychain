@@ -29,13 +29,28 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 }
 
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB, RawBlock) {
-	db, err := OpenDB(":memory:")
+	db, err := OpenDB(":memory:?journal_mode=WAL&synchronous=NORMAL&locking_mode=IMMEDIATE")
 	// db, err := OpenDB("test.sqlite3")
 	if err != nil {
 		panic(err)
 	}
 	db.SetMaxOpenConns(1) // :memory: only
+	// Set WAL mode and synchronous to NORMAL
 	_, err = db.Exec("PRAGMA journal_mode = WAL;")
+	if err != nil {
+		panic(err)
+	}
+	_, err = db.Exec("PRAGMA synchronous = NORMAL;")
+	if err != nil {
+		panic(err)
+	}
+	// Set transaction locking mode to IMMEDIATE
+	_, err = db.Exec("PRAGMA locking_mode = IMMEDIATE;")
+	if err != nil {
+		panic(err)
+	}
+	// Set busy timeout to 5000 ms
+	_, err = db.Exec("PRAGMA busy_timeout = 5000;")
 	if err != nil {
 		panic(err)
 	}

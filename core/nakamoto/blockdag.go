@@ -14,19 +14,20 @@ import (
 func OpenDB(dbPath string) (*sql.DB, error) {
 	logger := NewLogger("blockdag", "db")
 
-
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
 
+	tx, err := db.Begin()
+
 	// Check to perform migrations.
-	_, err = db.Exec("create table if not exists tinychain_version (version int)")
+	_, err = tx.Exec("create table if not exists tinychain_version (version int)")
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
 	// Check the database version.
-	rows, err := db.Query("select version from tinychain_version limit 1")
+	rows, err := tx.Query("select version from tinychain_version limit 1")
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
@@ -34,7 +35,10 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	if rows.Next() {
 		rows.Scan(&databaseVersion)
 	}
-	rows.Close()
+	err = rows.Close() 
+	if err != nil {
+		return nil, err
+	}
 
 	// Log version.
 	logger.Printf("Database version: %d\n", databaseVersion)
@@ -48,13 +52,13 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		// Create tables.
 
 		// epochs
-		_, err = db.Exec("create table epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
+		_, err = tx.Exec("create table epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
 
 		// blocks
-		_, err = db.Exec(`create table blocks (
+		_, err = tx.Exec(`create table blocks (
 			hash blob primary key, 
 			parent_hash blob, 
 			difficulty blob, 
@@ -75,7 +79,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 
 		// transactions_blocks
-		_, err = db.Exec(`
+		_, err = tx.Exec(`
 			create table transactions_blocks (
 				block_hash blob, transaction_hash blob, txindex integer, 
 				
@@ -89,24 +93,29 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 
 		// transactions
-		_, err = db.Exec("create table transactions (hash blob primary key, sig blob, from_pubkey blob, to_pubkey blob, amount integer, fee integer, nonce integer, version integer)")
+		_, err = tx.Exec("create table transactions (hash blob primary key, sig blob, from_pubkey blob, to_pubkey blob, amount integer, fee integer, nonce integer, version integer)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
 
 		// Create indexes.
-		_, err = db.Exec("create index blocks_parent_hash on blocks (parent_hash)")
+		_, err = tx.Exec("create index blocks_parent_hash on blocks (parent_hash)")
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks_parent_hash' index: %s", err)
 		}
 
 		// Update version.
-		_, err = db.Exec("insert into tinychain_version (version) values (?)", dbVersion)
+		_, err = tx.Exec("insert into tinychain_version (version) values (?)", dbVersion)
 		if err != nil {
 			return nil, fmt.Errorf("error updating database version: %s", err)
 		}
 
 		logger.Printf("Database upgraded to: %d\n", dbVersion)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		panic(err)
 	}
 
 	return db, err
@@ -175,7 +184,12 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 	genesisHeight := uint64(0)
 
 	// Check if we have already initialised the database.
-	rows, err := dag.db.Query("select count(*) from blocks where hash = ?", genesisBlockHash[:])
+	tx, err := dag.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	rows, err := tx.Query("select count(*) from blocks where hash = ?", genesisBlockHash[:])
 	if err != nil {
 		return err
 	}
@@ -186,7 +200,6 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 	if count > 0 {
 		return nil
 	}
-	rows.Close()
 
 	// Begin initialisation.
 	dag.log.Printf("Initialising block DAG...\n")
@@ -199,7 +212,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 		StartHeight:    genesisHeight,
 		Difficulty:     dag.consensus.GenesisDifficulty,
 	}
-	_, err = dag.db.Exec(
+	_, err = tx.Exec(
 		"insert into epochs (id, start_block_hash, start_time, start_height, difficulty) values (?, ?, ?, ?, ?)",
 		epoch0.GetId(),
 		epoch0.StartBlockHash[:],
@@ -216,7 +229,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 	accWorkBuf := BigIntToBytes32(*work)
 
 	// Insert the genesis block.
-	_, err = dag.db.Exec(
+	_, err = tx.Exec(
 		"insert into blocks (hash, parent_hash, parent_total_work, difficulty, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
@@ -234,6 +247,10 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 	)
 	if err != nil {
 		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		panic(err)
 	}
 
 	dag.log.Printf("Inserted genesis block hash=%s work=%s\n", hex.EncodeToString(genesisBlockHash[:]), work.String())

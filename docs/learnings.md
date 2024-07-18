@@ -9,3 +9,4 @@
  * there are lots of things I didn't anticipate:
    * signature caching
    * `blocks_transactions` table. Originally thought transactions.block was a one-to-one. Derp, it's many-to-many.
+ * to check if a block is fully synced, we need to 
