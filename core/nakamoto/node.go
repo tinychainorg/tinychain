@@ -190,7 +190,7 @@ func (n *Node) setup() {
 }
 
 func (n *Node) rebuildState() {
-	longestChainHashList, err := n.Dag.GetLongestChainHashList(n.Dag.FullTip.Hash, uint64(10000000000000000000))
+	longestChainHashList, err := n.Dag.GetLongestChainHashList(n.Dag.FullTip.Hash, n.Dag.FullTip.Height)
 	if err != nil {
 		n.log.Printf("Failed to get longest chain hash list: %s\n", err)
 		return
