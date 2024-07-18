@@ -3,7 +3,6 @@ package nakamoto
 import (
 	"math/big"
 	"sync"
-	"time"
 
 	"github.com/liamzebedee/tinychain-go/core"
 )
@@ -255,7 +254,7 @@ func (n *Node) sync_getBestTipFromPeers() [32]byte {
 
 	tips := make([]BlockHeader, 0)
 	tipsChan := make(chan BlockHeader, len(n.Peer.peers))
-	timeout := time.After(5 * time.Second)
+	// timeout := time.After(5 * time.Second)
 
 	for _, peer := range n.Peer.peers {
 		wg.Add(1)
@@ -276,17 +275,18 @@ func (n *Node) sync_getBestTipFromPeers() [32]byte {
 		close(tipsChan)
 	}()
 
-	for {
-		select {
-		case tip, ok := <-tipsChan:
-			if !ok {
-				break
-			}
-			tips = append(tips, tip)
-		case <-timeout:
-			syncLog.Printf("Timed out getting tips from peers\n")
-		}
-	}
+	// TODO WIP
+	// for {
+	// 	select {
+	// 	case tip, ok := <-tipsChan:
+	// 		if !ok {
+	// 			break
+	// 		}
+	// 		tips = append(tips, tip)
+	// 	case <-timeout:
+	// 		syncLog.Printf("Timed out getting tips from peers\n")
+	// 	}
+	// }
 
 	syncLog.Printf("Received %d tips\n", len(tips))
 	if len(tips) == 0 {
