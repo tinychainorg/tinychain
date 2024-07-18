@@ -37,8 +37,8 @@ type StateMachineInput struct {
 // 2. Transferring coins between accounts.
 //
 // It is oblivious to:
-//  - the consensus algorithm, transaction sequencing.
-//  - signatures. The state machine does not care about validating signatures. At Bitcoin's core, it is a sequencing/DA layer.
+//   - the consensus algorithm, transaction sequencing.
+//   - signatures. The state machine does not care about validating signatures. At Bitcoin's core, it is a sequencing/DA layer.
 type StateMachine struct {
 	// The current state.
 	state map[[65]byte]uint64

@@ -12,7 +12,7 @@ import (
 
 type BlockHeader struct {
 	ParentHash             [32]byte
-	ParentTotalWork        [32]byte 
+	ParentTotalWork        [32]byte
 	Difficulty             [32]byte
 	Timestamp              uint64
 	NumTransactions        uint64
@@ -44,7 +44,6 @@ type Block struct {
 	AccumulatedWork big.Int
 }
 
-
 // A raw block is the block as transmitted on the network.
 // It contains the block header and the block body.
 // It does not contain any block metadata such as height, epoch, or difficulty.
@@ -62,7 +61,6 @@ type RawBlock struct {
 	// Block body.
 	Transactions []RawTransaction `json:"transactions"`
 }
-
 
 // Block.
 // =====================================================================================================================

@@ -7,12 +7,12 @@ import (
 )
 
 type Node struct {
-	Dag     *BlockDAG
-	Miner   *Miner
-	Peer    *PeerCore
+	Dag           *BlockDAG
+	Miner         *Miner
+	Peer          *PeerCore
 	StateMachine1 *StateMachine
-	log     *log.Logger
-	syncLog *log.Logger
+	log           *log.Logger
+	syncLog       *log.Logger
 }
 
 func NewNode(dag *BlockDAG, miner *Miner, peer *PeerCore) *Node {
@@ -22,12 +22,12 @@ func NewNode(dag *BlockDAG, miner *Miner, peer *PeerCore) *Node {
 	}
 
 	n := &Node{
-		Dag:     dag,
-		Miner:   miner,
-		Peer:    peer,
+		Dag:           dag,
+		Miner:         miner,
+		Peer:          peer,
 		StateMachine1: stateMachine,
-		log:     NewLogger("node", ""),
-		syncLog: NewLogger("node", "sync"),
+		log:           NewLogger("node", ""),
+		syncLog:       NewLogger("node", "sync"),
 	}
 	n.setup()
 	return n
@@ -114,7 +114,7 @@ func (n *Node) setup() {
 			return reply, err
 		}
 
-		// 2. Filter the nodes included in the height set. 
+		// 2. Filter the nodes included in the height set.
 		nodes2 := make([][32]byte, 0)
 		for i, node := range nodes1 {
 			if msg.Heights.Contains(i) {
@@ -157,13 +157,13 @@ func (n *Node) setup() {
 	// Recompute the state after a new tip.
 	n.Dag.OnNewFullTip = func(new_tip Block, prev_tip Block) {
 		// 1. Rebuild state.
-		// 2. Regenerate current mempool. 
-		
+		// 2. Regenerate current mempool.
+
 		n.log.Printf("rebuild-state\n")
 		start := time.Now()
 
 		n.rebuildState()
-		
+
 		duration := time.Since(start)
 		n.log.Printf("rebuild-state completed duration=%d blocks=%s\n", n.Dag.FullTip.Height, duration.String())
 	}

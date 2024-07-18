@@ -30,7 +30,7 @@ var WIRE_PROTOCOL_VERSION = uint(1)
 
 // The PeerCore is the local peer for the blockchain network.
 // It handles bootstrapping, peer discovery, gossip routines for transactions and blocks.
-// It implements the wire protocol for the network, providing API's to send messages to other peers, and callbacks to handle messages sent to us. 
+// It implements the wire protocol for the network, providing API's to send messages to other peers, and callbacks to handle messages sent to us.
 type PeerCore struct {
 	peers        []Peer
 	server       *PeerServer
@@ -40,12 +40,12 @@ type PeerCore struct {
 
 	GossipPeersIntervalSeconds int
 
-	OnNewBlock  func(block RawBlock)
-	OnNewTransaction func(tx RawTransaction)
-	OnGetBlocks func(msg GetBlocksMessage) ([][]byte, error)
-	OnGetTip      func(msg GetTipMessage) (BlockHeader, error)
+	OnNewBlock          func(block RawBlock)
+	OnNewTransaction    func(tx RawTransaction)
+	OnGetBlocks         func(msg GetBlocksMessage) ([][]byte, error)
+	OnGetTip            func(msg GetTipMessage) (BlockHeader, error)
 	OnSyncGetTipAtDepth func(msg SyncGetTipAtDepthMessage) (SyncGetTipAtDepthReply, error)
-	OnSyncGetData func(msg SyncGetDataMessage) (SyncGetDataReply, error)
+	OnSyncGetData       func(msg SyncGetDataMessage) (SyncGetDataReply, error)
 
 	peerLogger log.Logger
 }
