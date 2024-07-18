@@ -10,21 +10,11 @@ import (
 )
 
 func newBlockdagForMiner() (BlockDAG, ConsensusConfig, *sql.DB) {
-	useMemoryDB := true
-	var connectionString string
-	if useMemoryDB {
-		connectionString = "file:memdb1?mode=memory"
-	} else {
-		connectionString = "test.sqlite3"
-	}
-
-	db, err := OpenDB(connectionString)
+	db, err := OpenDB(":memory:")
 	if err != nil {
 		panic(err)
 	}
-	if useMemoryDB {
-		db.SetMaxOpenConns(1)
-	}
+	db.SetMaxOpenConns(1) // :memory: only
 	_, err = db.Exec("PRAGMA journal_mode = WAL;")
 	if err != nil {
 		panic(err)

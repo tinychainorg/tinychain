@@ -35,15 +35,15 @@ func Bytes32ToString(b [32]byte) string {
 	return hex.EncodeToString(sl)
 }
 
+func Bytes32ToHexString(b [32]byte) string {
+	return hex.EncodeToString(b[:])
+}
+
 func HexStringToBytes32(s string) [32]byte {
 	b, _ := hex.DecodeString(s)
 	var fbuf [32]byte
 	copy(fbuf[:], b)
 	return fbuf
-}
-
-func Bytes32ToHexString(b [32]byte) string {
-	return hex.EncodeToString(b[:])
 }
 
 func PadBytes(src []byte, length int) []byte {
@@ -108,15 +108,16 @@ func DiscoverIP() (string, int, error) {
 	return xorAddr.IP.String(), xorAddr.Port, nil
 }
 
+// Constructs a new logger with the given `prefix` and an optional `prefix2`.
+//
+// Format 1:
+// prefix="prefix" prefix2=""
+// 2024/06/30 00:56:06 [prefix] message
+//
+// Format 2:
+// prefix="prefix" prefix2="prefix2"
+// 2024/06/30 00:56:06 [prefix] (prefix2) message
 func NewLogger(prefix string, prefix2 string) *log.Logger {
-	// Logging formats:
-	//
-	// prefix="prefix" prefix2=""
-	// 2024/06/30 00:56:06 [prefix] message
-	//
-	// prefix="prefix" prefix2="prefix2"
-	// 2024/06/30 00:56:06 [prefix] (prefix2) message
-	//
 	prefixFull := color.HiGreenString(fmt.Sprintf("[%s] ", prefix))
 	if prefix2 != "" {
 		prefixFull += color.HiYellowString(fmt.Sprintf("(%s) ", prefix2))

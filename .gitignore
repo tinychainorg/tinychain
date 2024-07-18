@@ -5,3 +5,4 @@
 *.sqlite3-wal
 tinychain
 build
+website/

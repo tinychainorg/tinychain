@@ -34,6 +34,11 @@ func main() {
 						Usage: "A list of comma-separated peer URL's used to bootstrap connection to the network",
 						Value: "",
 					},
+					&cli.BoolFlag{
+						Name:  "miner",
+						Usage: "Run the miner",
+						Value: false,
+					},
 				},
 			},
 		},

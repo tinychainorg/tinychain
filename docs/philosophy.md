@@ -11,3 +11,8 @@ lol let's write down why this code is so based:
     RPC - just a way of invoking methods on objects across the network
     wire protocol - how we encode the RPC (HTTP+JSON)
     protocol - the abstract machine which we run the protocol on
+
+5. discover the core primitives through distillation
+
+    state sync - iterative greedy search from a single base node in a block DAG
+

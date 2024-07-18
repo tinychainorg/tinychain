@@ -2,21 +2,34 @@ package nakamoto
 
 import (
 	"fmt"
+	"log"
+	"time"
 )
 
-var nodeLog = NewLogger("node", "")
-
 type Node struct {
-	Dag   BlockDAG
-	Miner *Miner
-	Peer  *PeerCore
+	Dag           *BlockDAG
+	Miner         *Miner
+	Peer          *PeerCore
+	StateMachine1 *StateMachine
+	log           *log.Logger
+	syncLog       *log.Logger
+	stateLog      *log.Logger
 }
 
-func NewNode(dag BlockDAG, miner *Miner, peer *PeerCore) *Node {
+func NewNode(dag *BlockDAG, miner *Miner, peer *PeerCore) *Node {
+	stateMachine, err := NewStateMachine(nil)
+	if err != nil {
+		panic(err)
+	}
+
 	n := &Node{
-		Dag:   dag,
-		Miner: miner,
-		Peer:  peer,
+		Dag:           dag,
+		Miner:         miner,
+		Peer:          peer,
+		StateMachine1: stateMachine,
+		log:           NewLogger("node", ""),
+		syncLog:       NewLogger("node", "sync"),
+		stateLog:      NewLogger("node", "state"),
 	}
 	n.setup()
 	return n
@@ -25,23 +38,23 @@ func NewNode(dag BlockDAG, miner *Miner, peer *PeerCore) *Node {
 func (n *Node) setup() {
 	// Listen for new blocks.
 	n.Peer.OnNewBlock = func(b RawBlock) {
-		nodeLog.Printf("New block gossip from peer: block=%s\n", b.HashStr())
+		n.log.Printf("New block gossip from peer: block=%s\n", b.HashStr())
 
 		if n.Dag.HasBlock(b.Hash()) {
-			nodeLog.Printf("Block already in DAG: block=%s\n", b.HashStr())
+			n.log.Printf("Block already in DAG: block=%s\n", b.HashStr())
 			return
 		}
 
 		isUnknownParent := n.Dag.HasBlock(b.ParentHash)
 		if isUnknownParent {
 			// We need to sync the chain.
-			nodeLog.Printf("Block parent unknown: block=%s\n", b.HashStr())
+			n.log.Printf("Block parent unknown: block=%s\n", b.HashStr())
 		}
 
 		// Ingest the block.
 		err := n.Dag.IngestBlock(b)
 		if err != nil {
-			nodeLog.Printf("Failed to ingest block from peer: %s\n", err)
+			n.log.Printf("Failed to ingest block from peer: %s\n", err)
 		}
 	}
 
@@ -73,12 +86,12 @@ func (n *Node) setup() {
 
 	// Gossip blocks when we mine a new solution.
 	n.Miner.OnBlockSolution = func(b RawBlock) {
-		nodeLog.Printf("Mined new block: %s\n", b.HashStr())
+		n.log.Printf("Mined new block: %s\n", b.HashStr())
 
 		// Ingest the block.
 		err := n.Dag.IngestBlock(b)
 		if err != nil {
-			nodeLog.Printf("Failed to ingest block from miner: %s\n", err)
+			n.log.Printf("Failed to ingest block from miner: %s\n", err)
 		}
 
 		// Gossip the block.
@@ -86,22 +99,118 @@ func (n *Node) setup() {
 	}
 
 	// Gossip the latest tip.
-	n.Peer.OnGetTip = func(msg GetTipMessage) ([32]byte, error) {
-		tip := n.Dag.Tip.Hash
-		return tip, nil
+	n.Peer.OnGetTip = func(msg GetTipMessage) (BlockHeader, error) {
+		return n.Dag.FullTip.ToBlockHeader(), nil
+	}
+
+	// Upload blocks to other peers.
+	n.Peer.OnSyncGetData = func(msg SyncGetDataMessage) (SyncGetDataReply, error) {
+		reply := SyncGetDataReply{
+			Headers: make([]BlockHeader, 0),
+			Bodies:  make([][]RawTransaction, 0),
+		}
+
+		// 1. Get the path forward from baseNode -> baseNode.height + WINDOW_SIZE
+		nodes1, err := n.Dag.GetPath(msg.FromBlock, uint64(msg.Heights.Size()), 1)
+		if err != nil {
+			return reply, err
+		}
+
+		// 2. Filter the nodes included in the height set.
+		nodes2 := make([][32]byte, 0)
+		for i, node := range nodes1 {
+			if msg.Heights.Contains(i) {
+				nodes2 = append(nodes2, node)
+			}
+		}
+
+		// 3. Fetch their headers or bodies and return them.
+		if msg.Headers {
+			// Get the headers.
+			for _, node := range nodes2 {
+				block, err := n.Dag.GetBlockByHash(node)
+				if err != nil {
+					return reply, err
+				}
+
+				reply.Headers = append(reply.Headers, block.ToBlockHeader())
+			}
+		} else if msg.Bodies {
+			// Get the bodies.
+			for _, node := range nodes2 {
+				// Get the transactions.
+				transactions, err := n.Dag.GetBlockTransactions(node)
+				if err != nil {
+					return reply, err
+				}
+
+				rawTransactions := make([]RawTransaction, 0)
+				for _, tx := range *transactions {
+					rawTransactions = append(rawTransactions, tx.ToRawTransaction())
+				}
+
+				reply.Bodies = append(reply.Bodies, rawTransactions)
+			}
+		}
+
+		return reply, nil
+	}
+
+	// Recompute the state after a new tip.
+	n.Dag.OnNewFullTip = func(new_tip Block, prev_tip Block) {
+		// 1. Rebuild state.
+		// 2. Regenerate current mempool.
+
+		n.stateLog.Printf("rebuild-state\n")
+		start := time.Now()
+
+		err := n.rebuildState()
+		if err != nil {
+			n.stateLog.Printf("Failed to rebuild state: %s\n", err)
+			return
+		}
+
+		duration := time.Since(start)
+		n.stateLog.Printf("rebuild-state completed duration=%s n_blocks=%d\n", duration.String(), n.Dag.FullTip.Height)
+	}
+
+	// When we get a tx, add it to the mempool.
+	// When mempool changes, restart miner.
+	// When DAG tip changes, restart miner.
+	// When we first boot node, perform a full sync before doing anything.
+	// When we get new block that doesn't have known parent, do a sync.
+
+	// 7. Sync complete, now rework:
+	//   a. Recompute the state.
+	//   b. Recompute the mempool. Mempool size = K txs.
+	//      - Remove all transactions that have been sequenced in the chain. O(K) lookups.
+	//      - Reinsert any transcations that were included in blocks that were orphaned, to a maximum depth of 1 day of blocks (144 blocks). O(144)
+	//      - Revalidate the tx set. O(K).
+	//   c. Begin mining on the new tip.
+
+	// When we get new transaction, add it to mempool.
+	n.Peer.OnNewTransaction = func(tx RawTransaction) {
+		// Add transaction to mempool.
+		// TODO.
 	}
 }
 
-func (n *Node) Sync() {
-	// Contact all our peers.
-	// Get their current tips.
-	// Get the blocks for each of these tips.
-	// Verify the POW on the tip to check the tip is valid.
-	// Select the tip with the highest work according to ParentTotalWork.
-	// Download the blocks from the tip to the common ancestor from all our peers.
-	// Store them in a temporary storage.
-	// Ingest the blocks in reverse order.
-	// Begin mining.
+func (n *Node) rebuildState() error {
+	longestChainHashList, err := n.Dag.GetLongestChainHashList(n.Dag.FullTip.Hash, n.Dag.FullTip.Height)
+	if err != nil {
+		n.stateLog.Printf("Failed to get longest chain hash list: %s\n", err)
+		return err
+	}
+
+	state2, err := RebuildState(n.Dag, *n.StateMachine1, longestChainHashList)
+	if err != nil {
+		n.stateLog.Printf("Failed to rebuild state: %s\n", err)
+		return err
+	}
+
+	n.StateMachine1 = state2
+
+	return nil
 }
 
 func (n *Node) Start() {
@@ -117,6 +226,6 @@ func (n *Node) Shutdown() {
 	// Close the database.
 	err := n.Dag.db.Close()
 	if err != nil {
-		nodeLog.Printf("Failed to close database: %s\n", err)
+		n.log.Printf("Failed to close database: %s\n", err)
 	}
 }

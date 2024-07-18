@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/url"
 	"time"
+
+	"github.com/liamzebedee/tinychain-go/core"
 )
 
 var CLIENT_VERSION = "tinychain v0.0.0 / aggressive alpha"
@@ -26,6 +28,9 @@ var WIRE_PROTOCOL_VERSION = uint(1)
 // - on receiving a new block, we ingest it. then we restart miner process.
 // - on receiving new txs, we add them to our block. and restart miner process.
 
+// The PeerCore is the local peer for the blockchain network.
+// It handles bootstrapping, peer discovery, gossip routines for transactions and blocks.
+// It implements the wire protocol for the network, providing API's to send messages to other peers, and callbacks to handle messages sent to us.
 type PeerCore struct {
 	peers        []Peer
 	server       *PeerServer
@@ -35,9 +40,12 @@ type PeerCore struct {
 
 	GossipPeersIntervalSeconds int
 
-	OnNewBlock  func(block RawBlock)
-	OnGetBlocks func(msg GetBlocksMessage) ([][]byte, error)
-	OnGetTip    func(msg GetTipMessage) ([32]byte, error)
+	OnNewBlock          func(block RawBlock)
+	OnNewTransaction    func(tx RawTransaction)
+	OnGetBlocks         func(msg GetBlocksMessage) ([][]byte, error)
+	OnGetTip            func(msg GetTipMessage) (BlockHeader, error)
+	OnSyncGetTipAtDepth func(msg SyncGetTipAtDepthMessage) (SyncGetTipAtDepthReply, error)
+	OnSyncGetData       func(msg SyncGetDataMessage) (SyncGetDataReply, error)
 
 	peerLogger log.Logger
 }
@@ -94,6 +102,19 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		return nil, nil
 	})
 
+	p.server.RegisterMesageHandler("new_tx", func(message []byte) (interface{}, error) {
+		var msg NewTransactionMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			return nil, err
+		}
+
+		// Call the OnNewTransaction callback.
+		if p.OnNewTransaction != nil {
+			p.OnNewTransaction(msg.RawTransaction)
+		}
+		return nil, nil
+	})
+
 	p.server.RegisterMesageHandler("get_blocks", func(message []byte) (interface{}, error) {
 		var msg GetBlocksMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
@@ -121,19 +142,55 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 			return nil, err
 		}
 
-		if p.OnGetTip != nil {
-			tip, err := p.OnGetTip(msg)
-			if err != nil {
-				return nil, err
-			}
-
-			return GetTipMessage{
-				Type: "get_tip",
-				Tip:  Bytes32ToHexString(tip),
-			}, nil
+		if p.OnGetTip == nil {
+			return nil, fmt.Errorf("GetTip callback not set")
 		}
 
-		return nil, nil
+		tip, err := p.OnGetTip(msg)
+		if err != nil {
+			return nil, err
+		}
+
+		return GetTipMessage{
+			Type: "get_tip",
+			Tip:  tip,
+		}, nil
+	})
+
+	p.server.RegisterMesageHandler("sync_get_tip_at_depth", func(message []byte) (interface{}, error) {
+		var msg SyncGetTipAtDepthMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			return nil, err
+		}
+
+		if p.OnSyncGetData == nil {
+			return nil, fmt.Errorf("SyncGetData callback not set")
+		}
+
+		reply, err := p.OnSyncGetTipAtDepth(msg)
+		if err != nil {
+			return nil, err
+		}
+
+		return reply, nil
+	})
+
+	p.server.RegisterMesageHandler("sync_get_data", func(message []byte) (interface{}, error) {
+		var msg SyncGetDataMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			return nil, err
+		}
+
+		if p.OnSyncGetData == nil {
+			return nil, fmt.Errorf("SyncGetData callback not set")
+		}
+
+		reply, err := p.OnSyncGetData(msg)
+		if err != nil {
+			return nil, err
+		}
+
+		return reply, nil
 	})
 
 	p.server.RegisterMesageHandler("gossip_peers", func(message []byte) (interface{}, error) {
@@ -218,6 +275,7 @@ func (p *PeerCore) GossipBlock(block RawBlock) {
 		_, err := SendMessageToPeer(peer.url, newBlockMsg, &p.peerLogger)
 		if err != nil {
 			p.peerLogger.Printf("Failed to send block to peer: %v", err)
+			continue
 		}
 	}
 }
@@ -245,6 +303,7 @@ func (p *PeerCore) GossipPeers() {
 		var msg GossipPeersMessage
 		if err := json.Unmarshal(reply, &msg); err != nil {
 			p.peerLogger.Printf("Failed to unmarshal gossip peers reply: %v", err)
+			continue
 		}
 
 		// Ingest new peers.
@@ -260,21 +319,112 @@ func (p *PeerCore) GossipPeers() {
 	}
 }
 
-// func (p *PeerCore) GetBlocks(block RawBlock) {
-//     peerLogger.Printf("Asking peers for blocks\n", block.HashStr(), len(p.peers))
+func (p *PeerCore) GetTip(peer Peer) (BlockHeader, error) {
+	msg := GetTipMessage{
+		Type: "get_tip",
+		Tip:  BlockHeader{},
+	}
+	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	if err != nil {
+		p.peerLogger.Printf("Failed to send block to peer: %v", err)
+		return BlockHeader{}, err
+	}
 
-//     // Send block to all peers.
-//     for _, peer := range p.peers {
-//         newBlockMsg := NewBlockMessage{
-//             Type: "new_block",
-//             RawBlock: block,
-//         }
-//         _, err := SendMessageToPeer(peer.url, newBlockMsg)
-//         if err != nil {
-//             peerLogger.Printf("Failed to send block to peer: %v", err)
-//         }
-//     }
-// }
+	// Decode reply.
+	var reply GetTipMessage
+	if err := json.Unmarshal(res, &reply); err != nil {
+		return reply.Tip, err
+	}
+
+	return reply.Tip, nil
+}
+
+func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64) (BlockHeader, error) {
+	msg := SyncGetTipAtDepthMessage{
+		Type:      "get_tip_at_depth",
+		FromBlock: fromBlock,
+		Depth:     depth,
+	}
+	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	if err != nil {
+		p.peerLogger.Printf("Failed to send message to peer: %v", err)
+		return BlockHeader{}, err
+	}
+
+	// Decode reply.
+	var reply SyncGetTipAtDepthReply
+	if err := json.Unmarshal(res, &reply); err != nil {
+		return reply.Tip, err
+	}
+
+	return reply.Tip, nil
+}
+
+func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights core.Bitset) ([]BlockHeader, error) {
+	msg := SyncGetDataMessage{
+		Type:      "get_block_headers",
+		FromBlock: fromBlock,
+		Heights:   heights,
+		Headers:   true,
+		Bodies:    false,
+	}
+	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	if err != nil {
+		p.peerLogger.Printf("Failed to send message to peer: %v", err)
+		return []BlockHeader{}, err
+	}
+
+	// Decode reply.
+	var reply SyncGetDataReply
+	if err := json.Unmarshal(res, &reply); err != nil {
+		return reply.Headers, err
+	}
+
+	return reply.Headers, nil
+}
+
+func (p *PeerCore) SyncGetBlockTransactions(peer Peer, fromBlock [32]byte, heights core.Bitset) ([][]RawTransaction, error) {
+	msg := SyncGetDataMessage{
+		Type:      "get_block_txs",
+		FromBlock: fromBlock,
+		Heights:   heights,
+		Headers:   false,
+		Bodies:    true,
+	}
+	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	if err != nil {
+		p.peerLogger.Printf("Failed to send message to peer: %v", err)
+		return [][]RawTransaction{}, err
+	}
+
+	// Decode reply.
+	var reply SyncGetDataReply
+	if err := json.Unmarshal(res, &reply); err != nil {
+		return reply.Bodies, err
+	}
+
+	return reply.Bodies, nil
+}
+
+func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (bool, error) {
+	msg := HasBlockMessage{
+		Type:      "has_block",
+		BlockHash: fmt.Sprintf("%x", blockhash),
+	}
+	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	if err != nil {
+		p.peerLogger.Printf("Failed to send block to peer: %v", err)
+		return false, err
+	}
+
+	// Decode reply.
+	var reply HasBlockReply
+	if err := json.Unmarshal(res, &reply); err != nil {
+		return reply.Has, err
+	}
+
+	return reply.Has, nil
+}
 
 // Bootstraps the connection to the network.
 func (p *PeerCore) Bootstrap(peerInfos []string) {

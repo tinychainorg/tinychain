@@ -1,14 +1,19 @@
+package nakamoto
+
 // This is the core implementation of the block DAG data structure.
 // It mostly does these things:
 // - ingests new blocks, validates transactions
 // - manages reading/writing to the backing SQLite database.
-package nakamoto
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
+
+	"github.com/mattn/go-sqlite3"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
@@ -24,23 +29,28 @@ func (m *MockStateMachine) VerifyTx(tx RawTransaction) error {
 }
 
 func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB, RawBlock) {
-	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
-	useMemoryDB := true
-	var connectionString string
-	if useMemoryDB {
-		connectionString = "file:memdb1?mode=memory"
-	} else {
-		connectionString = "test.sqlite3"
-	}
-
-	db, err := OpenDB(connectionString)
+	db, err := OpenDB(":memory:?journal_mode=WAL&synchronous=NORMAL&locking_mode=IMMEDIATE")
+	// db, err := OpenDB("test.sqlite3")
 	if err != nil {
 		panic(err)
 	}
-	if useMemoryDB {
-		db.SetMaxOpenConns(1)
-	}
+	db.SetMaxOpenConns(1) // :memory: only
+	// Set WAL mode and synchronous to NORMAL
 	_, err = db.Exec("PRAGMA journal_mode = WAL;")
+	if err != nil {
+		panic(err)
+	}
+	_, err = db.Exec("PRAGMA synchronous = NORMAL;")
+	if err != nil {
+		panic(err)
+	}
+	// Set transaction locking mode to IMMEDIATE
+	_, err = db.Exec("PRAGMA locking_mode = IMMEDIATE;")
+	if err != nil {
+		panic(err)
+	}
+	// Set busy timeout to 5000 ms
+	_, err = db.Exec("PRAGMA busy_timeout = 5000;")
 	if err != nil {
 		panic(err)
 	}
@@ -73,11 +83,14 @@ func newValidTx(t *testing.T) (RawTransaction, error) {
 	wallets := getTestingWallets(t)
 
 	tx := RawTransaction{
-		FromPubkey: [65]byte{},
+		Version:    1,
 		Sig:        [64]byte{},
-		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
+		FromPubkey: wallets[0].PubkeyBytes(),
+		ToPubkey:   [65]byte{},
+		Amount:     0,
+		Fee:        0,
+		Nonce:      0,
 	}
-	tx.FromPubkey = wallets[0].PubkeyBytes()
 
 	envelope := tx.Envelope()
 	sig, err := wallets[0].Sign(envelope)
@@ -107,6 +120,68 @@ func getTestingWallets(t *testing.T) []core.Wallet {
 	return []core.Wallet{*wallet1, *wallet2}
 }
 
+// Copies an in-memory SQLite database to a file.
+// Thank you: https://rbn.im/backing-up-a-SQLite-database-with-Go/backing-up-a-SQLite-database-with-Go.html
+func backupDBToFile(destDb, srcDb *sql.DB) error {
+	destConn, err := destDb.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+
+	srcConn, err := srcDb.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+
+	return destConn.Raw(func(destConn interface{}) error {
+		return srcConn.Raw(func(srcConn interface{}) error {
+			destSQLiteConn, ok := destConn.(*sqlite3.SQLiteConn)
+			if !ok {
+				return fmt.Errorf("can't convert destination connection to SQLiteConn")
+			}
+
+			srcSQLiteConn, ok := srcConn.(*sqlite3.SQLiteConn)
+			if !ok {
+				return fmt.Errorf("can't convert source connection to SQLiteConn")
+			}
+
+			b, err := destSQLiteConn.Backup("main", srcSQLiteConn, "main")
+			if err != nil {
+				return fmt.Errorf("error initializing SQLite backup: %w", err)
+			}
+
+			done, err := b.Step(-1)
+			if !done {
+				return fmt.Errorf("step of -1, but not done")
+			}
+			if err != nil {
+				return fmt.Errorf("error in stepping backup: %w", err)
+			}
+
+			err = b.Finish()
+			if err != nil {
+				return fmt.Errorf("error finishing backup: %w", err)
+			}
+
+			return err
+		})
+	})
+}
+
+// Usage: saveDbForInspection(blockdag.db, "testing.db")
+func saveDbForInspection(db *sql.DB) error {
+	// Backup DB to file.
+	backupDb, err := OpenDB("testing.db")
+	if err != nil {
+		return fmt.Errorf("Failed to open backup database: %s", err)
+	}
+	err = backupDBToFile(backupDb, db)
+	if err != nil {
+		return fmt.Errorf("Failed to backup database: %s", err)
+	}
+	return nil
+}
+
 func TestOpenDB(t *testing.T) {
 	// test not null
 	_, err := OpenDB(":memory:")
@@ -115,58 +190,16 @@ func TestOpenDB(t *testing.T) {
 	}
 }
 
-func TestLatestTipIsSet(t *testing.T) {
+func TestDagLatestTipIsSet(t *testing.T) {
 	assert := assert.New(t)
 	dag, _, _, genesisBlock := newBlockdag()
 
 	// The genesis block should be the latest tip.
 	// FIXME
-	assert.Equal(genesisBlock.Hash(), dag.Tip.Hash)
+	assert.Equal(genesisBlock.Hash(), dag.FullTip.Hash)
 }
 
-// TODO fix use genesis block
-// func TestImportBlocksIntoDAG(t *testing.T) {
-// 	// Generate 10 blocks and insert them into DAG.
-// 	blockdag := BlockDAG{}
-// 	assert := assert.New(t)
-
-// 	// Build a chain of 6 blocks.
-// 	chain := make([]RawBlock, 0)
-// 	curr_block := RawBlock{}
-
-// 	// Fixed target for test.
-// 	target := new(big.Int)
-// 	target.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-
-// 	for {
-// 		solution, err := SolvePOW(curr_block, *new(big.Int), *target, 100000000000)
-// 		if err != nil {
-// 			assert.Nil(t, err)
-// 		}
-
-// 		// Seal the block.
-// 		curr_block.SetNonce(solution)
-
-// 		// Append the block to the chain.
-// 		blockdag.IngestBlock(curr_block)
-
-// 		// Create a new block.
-// 		timestamp := uint64(0)
-// 		curr_block = RawBlock{
-// 			ParentHash:      curr_block.Hash(),
-// 			Timestamp:       timestamp,
-// 			NumTransactions: 0,
-// 			Transactions:    []RawTransaction{},
-// 		}
-
-// 		// Exit if the chain is long enough.
-// 		if len(chain) >= 6 {
-// 			break
-// 		}
-// 	}
-// }
-
-func TestAddBlockUnknownParent(t *testing.T) {
+func TestDagAddBlockUnknownParent(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, _ := newBlockdag()
 
@@ -183,9 +216,14 @@ func TestAddBlockUnknownParent(t *testing.T) {
 	assert.Equal("Unknown parent block.", err.Error())
 }
 
-func TestAddBlockTxCount(t *testing.T) {
+func TestDagAddBlockTxCount(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
+
+	tx, err := newValidTx(t)
+	if err != nil {
+		panic(err)
+	}
 
 	b := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
@@ -194,18 +232,15 @@ func TestAddBlockTxCount(t *testing.T) {
 		TransactionsMerkleRoot: [32]byte{0xCA, 0xFE, 0xBA, 0xBE},
 		Nonce:                  [32]byte{0xBB},
 		Transactions: []RawTransaction{
-			RawTransaction{
-				Sig:  [64]byte{0xCA, 0xFE, 0xBA, 0xBE},
-				Data: []byte{0xCA, 0xFE, 0xBA, 0xBE},
-			},
+			tx,
 		},
 	}
 
-	err := blockdag.IngestBlock(b)
+	err = blockdag.IngestBlock(b)
 	assert.Equal("Num transactions does not match length of transactions list.", err.Error())
 }
 
-func TestAddBlockTxsValid(t *testing.T) {
+func TestDagAddBlockTxsValid(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -232,7 +267,7 @@ func TestAddBlockTxsValid(t *testing.T) {
 	assert.Equal("Transaction 0 is invalid: signature invalid.", err.Error())
 }
 
-func TestAddBlockTxMerkleRootValid(t *testing.T) {
+func TestDagAddBlockTxMerkleRootValid(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -256,34 +291,35 @@ func TestAddBlockTxMerkleRootValid(t *testing.T) {
 	assert.Equal("Merkle root does not match computed merkle root.", err.Error())
 }
 
-func TestAddBlockSuccess(t *testing.T) {
+func TestDagAddBlockSuccess(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
 	// Create a tx with a valid signature.
 	wallets := getTestingWallets(t)
 	tx := RawTransaction{
-		FromPubkey: [65]byte{},
+		Version:    1,
 		Sig:        [64]byte{},
-		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
+		FromPubkey: wallets[0].PubkeyBytes(),
+		ToPubkey:   [65]byte{},
+		Amount:     0,
+		Fee:        0,
+		Nonce:      0,
 	}
 	tx.FromPubkey = wallets[0].PubkeyBytes()
+
 	// sig, err := wallets[0].Sign(tx.Envelope())
 	// if err != nil {
 	// 	t.Fatalf("Failed to sign transaction: %s", err)
 	// }
 	// t.Logf("Signature: %s\n", hex.EncodeToString(sig))
-	sigHex := "2b803490a6f14f9937f9ec49f6cc2de7bbb2e77ee54ea1b89d740352846e215601c1417f85c92553ed0972b259ac4009b8e3330c4cec9aded29e5fb2db9d89f2"
+
+	sigHex := "084401618c78b2e778cba17eb04892331f1f69f860c24f039e1da6b959830ab567efc3fb2403af2c63c65a17648348211ce2fb5251f038d5151dff67152d1f6a"
 	sigBytes, err := hex.DecodeString(sigHex)
 	if err != nil {
 		t.Fatalf("Failed to decode signature: %s", err)
 	}
 	copy(tx.Sig[:], sigBytes)
-
-	// parentTip, err := blockdag.GetCurrentTip()
-	// if err != nil {
-	// 	t.Fatalf("Failed to get current tip: %s", err)
-	// }
 
 	b := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
@@ -318,25 +354,18 @@ func TestAddBlockSuccess(t *testing.T) {
 // This test creates a block from a signature created at runtime, and as such is non-deterministic.
 // Creating a new signature will result in different solutions for the POW puzzle, since the blockhash is dependent on
 // the merklized transaction list, whose hash will change based on the content of tx[0].Sig.
-func TestAddBlockWithDynamicSignature(t *testing.T) {
+func TestDagAddBlockWithDynamicSignature(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
 	// Create a tx with a valid signature.
-	tx := RawTransaction{
-		FromPubkey: [65]byte{},
-		Sig:        [64]byte{},
-		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
-	}
-	wallets := getTestingWallets(t)
-	tx.FromPubkey = wallets[0].PubkeyBytes()
-	sig, err := wallets[0].Sign(tx.Envelope())
+	tx, err := newValidTx(t)
 	if err != nil {
-		t.Fatalf("Failed to sign transaction: %s", err)
+		panic(err)
 	}
+
 	// Log the signature.
-	t.Logf("Signature: %s\n", hex.EncodeToString(sig))
-	copy(tx.Sig[:], sig)
+	t.Logf("Signature: %s\n", hex.EncodeToString(tx.Sig[:]))
 
 	b := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
@@ -370,36 +399,7 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	assert.Equal(nil, err)
 }
 
-func TestGetRawGenesisBlockFromConfig(t *testing.T) {
-	assert := assert.New(t)
-
-	genesis_difficulty := new(big.Int)
-	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-
-	conf := ConsensusConfig{
-		EpochLengthBlocks:       5,
-		TargetEpochLengthMillis: 2000,
-		GenesisDifficulty:       *genesis_difficulty,
-		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
-		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
-		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
-	}
-
-	// Get the genesis block.
-	genesisBlock := GetRawGenesisBlockFromConfig(conf)
-	genesisNonce := Bytes32ToBigInt(genesisBlock.Nonce)
-
-	// Check the genesis block.
-	assert.Equal(HexStringToBytes32("0ed59333a743482efdf0aabb0c62add06e5a3dd21068f458af12832720ff370e"), genesisBlock.Hash())
-	assert.Equal(conf.GenesisParentBlockHash, genesisBlock.ParentHash)
-	assert.Equal(BigIntToBytes32(*big.NewInt(0)), genesisBlock.ParentTotalWork)
-	assert.Equal(uint64(0), genesisBlock.Timestamp)
-	assert.Equal(uint64(0), genesisBlock.NumTransactions)
-	assert.Equal([32]byte{}, genesisBlock.TransactionsMerkleRoot)
-	assert.Equal(big.NewInt(79).String(), genesisNonce.String())
-}
-
-func TestGetBlockByHashGenesis(t *testing.T) {
+func TestDagGetBlockByHashGenesis(t *testing.T) {
 	assert := assert.New(t)
 	dag, conf, _, genesisBlock := newBlockdag()
 
@@ -409,6 +409,7 @@ func TestGetBlockByHashGenesis(t *testing.T) {
 
 	// Check the genesis block.
 	t.Logf("Genesis block: %v\n", block.Hash)
+	t.Logf("Genesis block size: %d\n", block.SizeBytes)
 
 	// RawBlock.
 	genesisNonce := Bytes32ToBigInt(genesisBlock.Nonce)
@@ -416,17 +417,17 @@ func TestGetBlockByHashGenesis(t *testing.T) {
 	assert.Equal(uint64(0), block.Timestamp)
 	assert.Equal(uint64(0), block.NumTransactions)
 	assert.Equal([32]byte{}, block.TransactionsMerkleRoot)
-	assert.Equal(big.NewInt(79).String(), genesisNonce.String())
+	assert.Equal(big.NewInt(21).String(), genesisNonce.String())
 	// Block.
 	assert.Equal(uint64(0), block.Height)
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), block.Epoch)
-	assert.Equal(uint64(176), block.SizeBytes)
-	assert.Equal(HexStringToBytes32("0ed59333a743482efdf0aabb0c62add06e5a3dd21068f458af12832720ff370e"), block.Hash)
+	assert.Equal(uint64(208), block.SizeBytes)
+	assert.Equal(HexStringToBytes32("0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7"), block.Hash)
 	t.Logf("Block: acc_work=%s\n", block.AccumulatedWork.String())
-	assert.Equal(big.NewInt(17).String(), block.AccumulatedWork.String())
+	assert.Equal(big.NewInt(30).String(), block.AccumulatedWork.String())
 }
 
-func TestBlockDAGInitialised(t *testing.T) {
+func TestDagBlockDAGInitialised(t *testing.T) {
 	assert := assert.New(t)
 	_, conf, db, genesisBlock := newBlockdag()
 
@@ -503,7 +504,7 @@ func TestBlockDAGInitialised(t *testing.T) {
 	assert.Equal(uint64(0), block.Timestamp)
 	assert.Equal(uint64(0), block.NumTransactions)
 	assert.Equal([32]byte{}, block.TransactionsMerkleRoot)
-	assert.Equal(big.NewInt(79).String(), genesisNonce.String())
+	assert.Equal(big.NewInt(21).String(), genesisNonce.String())
 	assert.Equal(uint64(0), block.Height)
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), block.Epoch)
 
@@ -530,13 +531,13 @@ func TestBlockDAGInitialised(t *testing.T) {
 	// Check the genesis epoch.
 	t.Logf("Genesis epoch: %v\n", epoch.Id)
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), epoch.Id)
-	assert.Equal(HexStringToBytes32("0ed59333a743482efdf0aabb0c62add06e5a3dd21068f458af12832720ff370e"), epoch.StartBlockHash)
+	assert.Equal(HexStringToBytes32("0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7"), epoch.StartBlockHash)
 	assert.Equal(uint64(0), epoch.StartTime)
 	assert.Equal(uint64(0), epoch.StartHeight)
 	assert.Equal(conf.GenesisDifficulty, epoch.Difficulty)
 }
 
-func TestGetEpochForBlockHashGenesis(t *testing.T) {
+func TestDagGetEpochForBlockHashGenesis(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -546,25 +547,15 @@ func TestGetEpochForBlockHashGenesis(t *testing.T) {
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), epoch.Id)
 }
 
-func TestGetEpochForBlockHashNewBlock(t *testing.T) {
+func TestDagGetEpochForBlockHashNewBlock(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
 	// Create a tx with a valid signature.
-	tx := RawTransaction{
-		FromPubkey: [65]byte{},
-		Sig:        [64]byte{},
-		Data:       []byte{0xCA, 0xFE, 0xBA, 0xBE},
-	}
-	wallets := getTestingWallets(t)
-	tx.FromPubkey = wallets[0].PubkeyBytes()
-	sig, err := wallets[0].Sign(tx.Envelope())
+	tx, err := newValidTx(t)
 	if err != nil {
 		t.Fatalf("Failed to sign transaction: %s", err)
 	}
-	// Log the signature.
-	t.Logf("Signature: %s\n", hex.EncodeToString(sig))
-	copy(tx.Sig[:], sig)
 
 	raw := RawBlock{
 		ParentHash:             genesisBlock.Hash(),
@@ -610,12 +601,12 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	assert.Equal(GetIdForEpoch(raw.ParentHash, 0), block.Epoch)
 }
 
-func TestGetCurrentTips(t *testing.T) {
+func TestDagGetLatestTip(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
 	// The genesis will be the first tip.
-	current_tip, err := blockdag.GetCurrentTip()
+	current_tip, err := blockdag.GetLatestFullTip()
 	assert.Equal(nil, err)
 	assert.Equal(genesisBlock.Hash(), current_tip.Hash)
 
@@ -658,12 +649,12 @@ func TestGetCurrentTips(t *testing.T) {
 	}
 
 	// Check if the block is the latest tip.
-	current_tip, err = blockdag.GetCurrentTip()
+	current_tip, err = blockdag.GetLatestFullTip()
 	assert.Equal(nil, err)
 	assert.Equal(raw.Hash(), current_tip.Hash)
 
 	// Check the in-memory latest tip is updated.
-	assert.Equal(raw.Hash(), blockdag.Tip.Hash)
+	assert.Equal(raw.Hash(), blockdag.FullTip.Hash)
 }
 
 func TestMinerProcedural(t *testing.T) {
@@ -745,4 +736,99 @@ func TestMinerProcedural(t *testing.T) {
 		block, err := dag.GetBlockByHash(raw.Hash())
 		current_tip = block.Hash
 	}
+}
+
+func newBlockdagLongEpoch() (BlockDAG, ConsensusConfig, *sql.DB) {
+	db, err := OpenDB(":memory:")
+	if err != nil {
+		panic(err)
+	}
+	db.SetMaxOpenConns(1) // :memory: only
+	_, err = db.Exec("PRAGMA journal_mode = WAL;")
+	if err != nil {
+		panic(err)
+	}
+
+	stateMachine := newMockStateMachine()
+
+	genesis_difficulty := new(big.Int)
+	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+
+	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
+	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
+	if err != nil {
+		panic(err)
+	}
+	genesisBlockHash := [32]byte{}
+	copy(genesisBlockHash[:], genesisBlockHash_)
+
+	conf := ConsensusConfig{
+		EpochLengthBlocks:       20000,
+		TargetEpochLengthMillis: 1000,
+		GenesisDifficulty:       *genesis_difficulty,
+		GenesisParentBlockHash:  genesisBlockHash,
+		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+	}
+
+	blockdag, err := NewBlockDAGFromDB(db, stateMachine, conf)
+	if err != nil {
+		panic(err)
+	}
+
+	return blockdag, conf, db
+}
+
+// 2s to mine 10,000 blocks.
+func TestDagGetLongestChainHashList(t *testing.T) {
+	assert := assert.New(t)
+	dag, _, _ := newBlockdagLongEpoch()
+
+	// Insert 10,000 blocks.
+	var N_BLOCKS int64 = 300
+	minerWallet, err := core.CreateRandomWallet()
+	if err != nil {
+		t.Fatalf("Failed to create miner wallet: %s", err)
+	}
+
+	expectedHashList := [][32]byte{}
+	miner := NewMiner(dag, minerWallet)
+	miner.OnBlockSolution = func(block RawBlock) {
+		err := dag.IngestBlock(block)
+		if err != nil {
+			t.Fatalf("Failed to ingest block: %s", err)
+		}
+		expectedHashList = append(expectedHashList, block.Hash())
+	}
+	miner.Start(N_BLOCKS)
+
+	// Get the tip.
+	tip, err := dag.GetLatestFullTip()
+	if err != nil {
+		t.Fatalf("Failed to get tip: %s", err)
+	}
+
+	// Assert tip is at height 10,000.
+	assert.Equal(uint64(N_BLOCKS), tip.Height)
+
+	// Now get the longest chain hash list.
+	var depthFromTip uint64 = 100 // get the most recent 1000 of the 10,000
+	hashlist, err := dag.GetLongestChainHashList(tip.Hash, depthFromTip)
+	if err != nil {
+		t.Fatalf("Failed to get longest chain hash list: %s", err)
+	}
+
+	t.Logf("Longest chain - expected - hash list: len=%d\n", len(expectedHashList))
+	t.Logf("Longest chain - actual - hash list: len=%d\n", len(hashlist))
+
+	// Print both hashlists, line by line, with each hash
+	// printed in hex format.
+	for i, hash := range expectedHashList[uint64(len(expectedHashList))-depthFromTip:] {
+		t.Logf("block #%d: expected=%s actual=%s\n", i, Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
+	}
+
+	// assert the two hashlists are the same one-by-one
+	for i, hash := range expectedHashList[uint64(len(expectedHashList))-depthFromTip:] {
+		assert.Equal(Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
+	}
+
 }

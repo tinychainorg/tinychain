@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"time"
 
+	"sync"
+
 	"github.com/liamzebedee/tinychain-go/core"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -11,10 +13,15 @@ import (
 
 var minerLog = NewLogger("miner", "")
 
+// The Miner is responsible for solving the Hashcash proof-of-work puzzle.
 type Miner struct {
-	dag             BlockDAG
-	minerWallet     *core.Wallet
-	IsRunning       bool
+	dag         BlockDAG
+	minerWallet *core.Wallet
+	IsRunning   bool
+
+	// Mutex.
+	mutex sync.Mutex
+
 	OnBlockSolution func(block RawBlock)
 }
 
@@ -22,17 +29,22 @@ func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
 	return &Miner{
 		dag:         dag,
 		minerWallet: minerWallet,
+		IsRunning:   false,
+		mutex:       sync.Mutex{},
 	}
 }
 
 func MakeCoinbaseTx(wallet *core.Wallet) RawTransaction {
 	// Construct coinbase tx.
 	tx := RawTransaction{
+		Version:    1,
 		Sig:        [64]byte{},
-		FromPubkey: [65]byte{},
-		Data:       []byte("coinbase"),
+		FromPubkey: wallet.PubkeyBytes(),
+		ToPubkey:   wallet.PubkeyBytes(),
+		Amount:     1000000000,
+		Fee:        0,
+		Nonce:      0,
 	}
-	tx.FromPubkey = wallet.PubkeyBytes()
 	envelope := tx.Envelope()
 	sig, err := wallet.Sign(envelope)
 	if err != nil {
@@ -54,7 +66,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 	lastHashrateMeasurement := Timestamp()
 	numHashes := 0
 
-	// Measure hashrate.
+	// Routine: Measure hashrate.
 	go (func() {
 		for {
 			// Wait 3s.
@@ -74,6 +86,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 		}
 	})()
 
+	// Routine: Mine.
 	for {
 		var i uint64 = 0
 		minerLog.Println("Waiting for new puzzle")
@@ -83,6 +96,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 		target := puzzle.target
 		minerLog.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
 
+		// Loop: mine 1 hash.
 		for {
 			numHashes++
 			i++
@@ -93,12 +107,12 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 
 			// Hash.
 			h := block.Hash()
-			hash := new(big.Int).SetBytes(h[:])
+			guess := new(big.Int).SetBytes(h[:])
 
 			// minerLog.Printf("hash block=%s i=%d\n", Bytes32ToString(h), i)
 
 			// Check solution: hash < target.
-			if hash.Cmp(&target) == -1 {
+			if guess.Cmp(&target) == -1 {
 				minerLog.Printf("Puzzle solved: iterations=%d\n", i)
 
 				puzzle.solution = nonce
@@ -122,7 +136,7 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 }
 
 func (node *Miner) MakeNewPuzzle() POWPuzzle {
-	current_tip, err := node.dag.GetCurrentTip()
+	current_tip, err := node.dag.GetLatestFullTip()
 	if err != nil {
 		// fmt.Fatalf("Failed to get current tip: %s", err)
 		panic(err)
@@ -170,12 +184,13 @@ func (node *Miner) MakeNewPuzzle() POWPuzzle {
 }
 
 func (node *Miner) Start(mineMaxBlocks int64) {
+	node.mutex.Lock()
 	if node.IsRunning {
-		// TODO: is this best?
-		panic("Miner already running")
+		minerLog.Printf("Miner already running")
+		return
 	}
-
 	node.IsRunning = true
+	node.mutex.Unlock()
 
 	// The next tip channel.
 	// next_tip := make(chan Block)
@@ -211,7 +226,9 @@ func (node *Miner) Start(mineMaxBlocks int64) {
 			blocksMined += 1
 			if mineMaxBlocks != -1 && mineMaxBlocks <= blocksMined {
 				minerLog.Println("Mined max blocks; stopping miner")
+				node.mutex.Lock()
 				node.IsRunning = false
+				node.mutex.Unlock()
 				return
 			}
 

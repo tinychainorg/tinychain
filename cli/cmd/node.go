@@ -26,22 +26,10 @@ func (m *MockStateMachine) VerifyTx(tx nakamoto.RawTransaction) error {
 }
 
 func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *sql.DB) {
-	// See: https://stackoverflow.com/questions/77134000/intermittent-table-missing-error-in-sqlite-memory-database
-	useMemoryDB := false
-	// var connectionString string
-	// if useMemoryDB {
-	// 	connectionString = "file:memdb1?mode=memory"
-	// } else {
-	// 	connectionString = "test.sqlite3"
-	// }
-
 	// TODO validate connection string.
 	db, err := nakamoto.OpenDB(dbPath)
 	if err != nil {
 		panic(err)
-	}
-	if useMemoryDB {
-		db.SetMaxOpenConns(1)
 	}
 	_, err = db.Exec("PRAGMA journal_mode = WAL;")
 	if err != nil {
@@ -81,6 +69,7 @@ func RunNode(cmdCtx *cli.Context) error {
 	port := cmdCtx.String("port")
 	dbPath := cmdCtx.String("db")
 	bootstrapPeers := cmdCtx.String("peers")
+	runMiner := cmdCtx.Bool("miner")
 
 	// DAG.
 	dag, _, _ := newBlockdag(dbPath)
@@ -97,7 +86,7 @@ func RunNode(cmdCtx *cli.Context) error {
 	peer := nakamoto.NewPeerCore(nakamoto.NewPeerConfig("0.0.0.0", port, []string{}))
 
 	// Create the node.
-	node := nakamoto.NewNode(dag, miner, peer)
+	node := nakamoto.NewNode(&dag, miner, peer)
 
 	// Handle process signals.
 	c := make(chan os.Signal, 1)
@@ -126,6 +115,10 @@ func RunNode(cmdCtx *cli.Context) error {
 		}
 
 		node.Peer.Bootstrap(peerAddresses)
+	}
+
+	if runMiner {
+		go node.Miner.Start(-1)
 	}
 
 	node.Start()

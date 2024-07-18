@@ -17,3 +17,5 @@
    - https://bitcoin.stackexchange.com/questions/3165/what-hash-rate-can-a-raspberry-pi-achieve-can-the-gpu-be-used
  - related to state snapshots
    - https://en.wikipedia.org/wiki/Multiversion_concurrency_control
+ - state sync
+   - ethereum erigon client staged sync architecture https://erigon.substack.com/p/erigon-stage-sync-and-control-flows
