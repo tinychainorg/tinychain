@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func TestGetRawGenesisBlockFromConfig(t *testing.T) {
 	assert := assert.New(t)
 

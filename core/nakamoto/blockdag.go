@@ -35,7 +35,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	if rows.Next() {
 		rows.Scan(&databaseVersion)
 	}
-	err = rows.Close() 
+	err = rows.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,13 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		// Create tables.
 
 		// epochs
-		_, err = tx.Exec("create table epochs (id TEXT PRIMARY KEY, start_block_hash blob, start_time integer, start_height integer, difficulty blob)")
+		_, err = tx.Exec(`create table epochs (
+			id TEXT PRIMARY KEY, 
+			start_block_hash blob, 
+			start_time integer, 
+			start_height integer, 
+			difficulty blob
+		)`)
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
@@ -93,7 +99,16 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 
 		// transactions
-		_, err = tx.Exec("create table transactions (hash blob primary key, sig blob, from_pubkey blob, to_pubkey blob, amount integer, fee integer, nonce integer, version integer)")
+		_, err = tx.Exec(`create table transactions (
+			hash blob primary key, 
+			sig blob, 
+			from_pubkey blob, 
+			to_pubkey blob, 
+			amount integer, 
+			fee integer, 
+			nonce integer, 
+			version integer
+		)`)
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
@@ -146,7 +161,7 @@ type BlockDAG struct {
 
 	// OnNewTip handler.
 	OnNewHeadersTip func(tip Block, prevTip Block)
-	OnNewFullTip func(tip Block, prevTip Block)
+	OnNewFullTip    func(tip Block, prevTip Block)
 
 	log *log.Logger
 }
@@ -309,7 +324,7 @@ func (dag *BlockDAG) updateTip() error {
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -385,7 +400,6 @@ func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
 		return fmt.Errorf("Parent total work is incorrect.")
 	}
 
-
 	// 8. Ingest block into database store.
 	tx, err := dag.db.Begin()
 	if err != nil {
@@ -440,7 +454,6 @@ func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) 
 		return fmt.Errorf("Block header missing during body ingestion.")
 	}
 	raw := block.ToRawBlock()
-
 
 	// 2. Verify timestamp is within bounds.
 	// TODO: subjectivity.

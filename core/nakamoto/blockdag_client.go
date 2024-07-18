@@ -58,7 +58,10 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 	block := Block{}
 
 	// Query database.
-	rows, err := dag.db.Query("select hash, parent_hash, difficulty, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1", hash[:])
+	rows, err := dag.db.Query(
+		`select hash, parent_hash, difficulty, parent_total_work, timestamp, num_transactions, transactions_merkle_root, nonce, graffiti, height, epoch, size_bytes, acc_work from blocks where hash = ? limit 1`,
+		hash[:],
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +120,10 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 
 func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error) {
 	// Query database, get transactions count for blockhash.
-	rows, err := dag.db.Query("select count(*) from transactions where block_hash = ?", hash[:])
+	rows, err := dag.db.Query(`
+		select count(*) from transactions where block_hash = ?`,
+		hash[:],
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -184,8 +190,19 @@ func (dag *BlockDAG) GetRawBlockDataByHash(hash [32]byte) ([]byte, error) {
 	return []byte{}, nil
 }
 
+func (dag *BlockDAG) IsSynced(hash [32]byte) bool {
+	// Synchronisation occurs in two phases: headers-only and then full block sync.
+	// We can determine if we have fully synced a block like so:
+	// - if the block has 0 transactions, then we only need the headers, and the block is fully synced.
+	// - if the block has > 0 transactions, then we check if the number of transcations we have downloaded in the transactions_blocks table is equal to the number of transactions in the block. If it is, we have fully synced the block.
+	return true // TODO.
+}
+
 func (dag *BlockDAG) HasBlock(hash [32]byte) bool {
-	rows, err := dag.db.Query("select count(*) from blocks where hash = ?", hash[:])
+	rows, err := dag.db.Query(`
+		select count(*) from blocks where hash = ?`,
+		hash[:],
+	)
 	if err != nil {
 		return false
 	}
@@ -204,7 +221,9 @@ func (dag *BlockDAG) GetLatestHeadersTip() (Block, error) {
 	// Simply put, given a DAG of blocks, where each block has an accumulated work, we want to find the path with the highest accumulated work.
 
 	// Query the highest accumulated work block in the database.
-	rows, err := dag.db.Query("select hash from blocks order by acc_work desc limit 1")
+	rows, err := dag.db.Query(`
+		select hash from blocks order by acc_work desc limit 1
+	`)
 	if err != nil {
 		return Block{}, err
 	}
@@ -236,12 +255,28 @@ func (dag *BlockDAG) GetLatestFullTip() (Block, error) {
 	// Query the highest accumulated work block in the database.
 	rows, err := dag.db.Query(`
 		SELECT hash 
-		FROM blocks 
-		WHERE hash IN (
-			SELECT block_hash 
-			FROM transactions_blocks
-		) 
-		ORDER BY acc_work DESC 
+		FROM (
+			SELECT b.hash, b.acc_work
+			FROM blocks b
+			JOIN (
+				SELECT block_hash, COUNT(*) AS num_transactions
+				FROM transactions_blocks
+				GROUP BY block_hash
+			) tb ON b.hash = tb.block_hash
+			WHERE b.num_transactions = tb.num_transactions
+
+			UNION
+
+			SELECT b.hash, b.acc_work
+			FROM blocks b
+			WHERE b.num_transactions = 0
+			AND NOT EXISTS (
+				SELECT 1 
+				FROM transactions_blocks tb 
+				WHERE tb.block_hash = b.hash
+			)
+		) AS combined
+		ORDER BY acc_work DESC
 		LIMIT 1;
 	`)
 	if err != nil {
@@ -344,7 +379,7 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 		SELECT hash, parent_hash
 		FROM block_path
 		ORDER BY depth DESC;`
-	
+
 	// When iterating forward, find the block with highest accumulated work.
 	queryDirectionForwards := `
 		WITH RECURSIVE block_path AS (
@@ -365,7 +400,7 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 		SELECT hash, parent_hash, acc_work
 		FROM block_path
 		ORDER BY depth ASC;`
-	
+
 	query := ""
 	if direction == 1 {
 		query = queryDirectionForwards

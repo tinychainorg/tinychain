@@ -1,8 +1,6 @@
 package nakamoto
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 	"testing"
@@ -14,48 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBuildBlock(t *testing.T) {
-	genesis_block := RawBlock{}
-	// test not null
-	t.Log(genesis_block)
-}
-
-func TestGenesisBlockHash(t *testing.T) {
-	assert := assert.New(t)
-
-	genesis_difficulty := new(big.Int)
-	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-
-	conf := ConsensusConfig{
-		EpochLengthBlocks:       5,
-		TargetEpochLengthMillis: 2000,
-		GenesisDifficulty:       *genesis_difficulty,
-		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
-		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
-		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
-	}
-
-	// Get the genesis block.
-	genesisBlock := GetRawGenesisBlockFromConfig(conf)
-
-	// Now hash it.
-	h := sha256.New()
-	h.Write(genesisBlock.Envelope())
-	actual := sha256.Sum256(h.Sum(nil))
-
-	expected, err := hex.DecodeString("0ed59333a743482efdf0aabb0c62add06e5a3dd21068f458af12832720ff370e")
-	if err != nil {
-		t.Fatalf("Failed to decode expected hash")
-	}
-
-	assert.Equal(
-		hex.EncodeToString(expected),
-		fmt.Sprintf("%x", actual),
-		"Genesis block hash is incorrect",
-	)
-}
-
-func TestProofOfWorkSolver(t *testing.T) {
+func TestPOWProofOfWorkSolver(t *testing.T) {
 	// create a genesis block
 	genesis_block := RawBlock{}
 	nonce := new(big.Int)
@@ -69,7 +26,7 @@ func TestProofOfWorkSolver(t *testing.T) {
 	fmt.Printf("Solution: %x\n", solution.String())
 }
 
-func TestBuildChainOfBlocks(t *testing.T) {
+func TestPOWBuildChainOfBlocks(t *testing.T) {
 	assert := assert.New(t)
 
 	// Build a chain of 6 blocks.

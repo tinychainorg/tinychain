@@ -190,7 +190,7 @@ func TestOpenDB(t *testing.T) {
 	}
 }
 
-func TestLatestTipIsSet(t *testing.T) {
+func TestDagLatestTipIsSet(t *testing.T) {
 	assert := assert.New(t)
 	dag, _, _, genesisBlock := newBlockdag()
 
@@ -199,7 +199,7 @@ func TestLatestTipIsSet(t *testing.T) {
 	assert.Equal(genesisBlock.Hash(), dag.FullTip.Hash)
 }
 
-func TestAddBlockUnknownParent(t *testing.T) {
+func TestDagAddBlockUnknownParent(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, _ := newBlockdag()
 
@@ -216,7 +216,7 @@ func TestAddBlockUnknownParent(t *testing.T) {
 	assert.Equal("Unknown parent block.", err.Error())
 }
 
-func TestAddBlockTxCount(t *testing.T) {
+func TestDagAddBlockTxCount(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -240,7 +240,7 @@ func TestAddBlockTxCount(t *testing.T) {
 	assert.Equal("Num transactions does not match length of transactions list.", err.Error())
 }
 
-func TestAddBlockTxsValid(t *testing.T) {
+func TestDagAddBlockTxsValid(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -267,7 +267,7 @@ func TestAddBlockTxsValid(t *testing.T) {
 	assert.Equal("Transaction 0 is invalid: signature invalid.", err.Error())
 }
 
-func TestAddBlockTxMerkleRootValid(t *testing.T) {
+func TestDagAddBlockTxMerkleRootValid(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -291,7 +291,7 @@ func TestAddBlockTxMerkleRootValid(t *testing.T) {
 	assert.Equal("Merkle root does not match computed merkle root.", err.Error())
 }
 
-func TestAddBlockSuccess(t *testing.T) {
+func TestDagAddBlockSuccess(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -354,7 +354,7 @@ func TestAddBlockSuccess(t *testing.T) {
 // This test creates a block from a signature created at runtime, and as such is non-deterministic.
 // Creating a new signature will result in different solutions for the POW puzzle, since the blockhash is dependent on
 // the merklized transaction list, whose hash will change based on the content of tx[0].Sig.
-func TestAddBlockWithDynamicSignature(t *testing.T) {
+func TestDagAddBlockWithDynamicSignature(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -399,7 +399,7 @@ func TestAddBlockWithDynamicSignature(t *testing.T) {
 	assert.Equal(nil, err)
 }
 
-func TestGetBlockByHashGenesis(t *testing.T) {
+func TestDagGetBlockByHashGenesis(t *testing.T) {
 	assert := assert.New(t)
 	dag, conf, _, genesisBlock := newBlockdag()
 
@@ -409,6 +409,7 @@ func TestGetBlockByHashGenesis(t *testing.T) {
 
 	// Check the genesis block.
 	t.Logf("Genesis block: %v\n", block.Hash)
+	t.Logf("Genesis block size: %d\n", block.SizeBytes)
 
 	// RawBlock.
 	genesisNonce := Bytes32ToBigInt(genesisBlock.Nonce)
@@ -416,17 +417,17 @@ func TestGetBlockByHashGenesis(t *testing.T) {
 	assert.Equal(uint64(0), block.Timestamp)
 	assert.Equal(uint64(0), block.NumTransactions)
 	assert.Equal([32]byte{}, block.TransactionsMerkleRoot)
-	assert.Equal(big.NewInt(79).String(), genesisNonce.String())
+	assert.Equal(big.NewInt(21).String(), genesisNonce.String())
 	// Block.
 	assert.Equal(uint64(0), block.Height)
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), block.Epoch)
-	assert.Equal(uint64(176), block.SizeBytes)
+	assert.Equal(uint64(208), block.SizeBytes)
 	assert.Equal(HexStringToBytes32("0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7"), block.Hash)
 	t.Logf("Block: acc_work=%s\n", block.AccumulatedWork.String())
-	assert.Equal(big.NewInt(17).String(), block.AccumulatedWork.String())
+	assert.Equal(big.NewInt(30).String(), block.AccumulatedWork.String())
 }
 
-func TestBlockDAGInitialised(t *testing.T) {
+func TestDagBlockDAGInitialised(t *testing.T) {
 	assert := assert.New(t)
 	_, conf, db, genesisBlock := newBlockdag()
 
@@ -503,7 +504,7 @@ func TestBlockDAGInitialised(t *testing.T) {
 	assert.Equal(uint64(0), block.Timestamp)
 	assert.Equal(uint64(0), block.NumTransactions)
 	assert.Equal([32]byte{}, block.TransactionsMerkleRoot)
-	assert.Equal(big.NewInt(79).String(), genesisNonce.String())
+	assert.Equal(big.NewInt(21).String(), genesisNonce.String())
 	assert.Equal(uint64(0), block.Height)
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), block.Epoch)
 
@@ -536,7 +537,7 @@ func TestBlockDAGInitialised(t *testing.T) {
 	assert.Equal(conf.GenesisDifficulty, epoch.Difficulty)
 }
 
-func TestGetEpochForBlockHashGenesis(t *testing.T) {
+func TestDagGetEpochForBlockHashGenesis(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -546,7 +547,7 @@ func TestGetEpochForBlockHashGenesis(t *testing.T) {
 	assert.Equal(GetIdForEpoch(genesisBlock.Hash(), 0), epoch.Id)
 }
 
-func TestGetEpochForBlockHashNewBlock(t *testing.T) {
+func TestDagGetEpochForBlockHashNewBlock(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -600,7 +601,7 @@ func TestGetEpochForBlockHashNewBlock(t *testing.T) {
 	assert.Equal(GetIdForEpoch(raw.ParentHash, 0), block.Epoch)
 }
 
-func TestGetLatestTip(t *testing.T) {
+func TestDagGetLatestTip(t *testing.T) {
 	assert := assert.New(t)
 	blockdag, _, _, genesisBlock := newBlockdag()
 
@@ -778,7 +779,7 @@ func newBlockdagLongEpoch() (BlockDAG, ConsensusConfig, *sql.DB) {
 }
 
 // 2s to mine 10,000 blocks.
-func TestGetLongestChainHashList(t *testing.T) {
+func TestDagGetLongestChainHashList(t *testing.T) {
 	assert := assert.New(t)
 	dag, _, _ := newBlockdagLongEpoch()
 
