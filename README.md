@@ -1,4 +1,6 @@
-# tinychain
+![logo](./docs/assets/logo.png)
+
+[![CI](https://github.com/tinychainorg/tinychain/actions/workflows/go.yml/badge.svg)](https://github.com/tinychainorg/tinychain/actions/workflows/go.yml)
 
 A full blockchain in Go;
 
@@ -31,7 +33,7 @@ Couple philosophies of this project:
  - distilling a blockchain network down to its core primitives at all layers of the stack.
  - building the equivalent of sqlite for blockchains. Reliable, portable primitives.
 
-![database view](./assets/db-view.png)
+![database view](./docs/assets/db-view.png)
 
 ## Progress.
 
