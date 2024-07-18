@@ -539,7 +539,6 @@ func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) 
 		_, err = tx.Exec(
 			"insert into transactions (hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, version) values (?, ?, ?, ?, ?, ?, ?, ?)",
 			txhash[:],
-			blockhash[:],
 			block_tx.Sig[:],
 			block_tx.FromPubkey[:],
 			block_tx.ToPubkey[:],
@@ -749,7 +748,6 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 		_, err = tx.Exec(
 			"insert into transactions (hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, version) values (?, ?, ?, ?, ?, ?, ?, ?)",
 			txhash[:],
-			blockhash[:],
 			block_tx.Sig[:],
 			block_tx.FromPubkey[:],
 			block_tx.ToPubkey[:],

@@ -426,51 +426,21 @@ func TestStateMachineReconstructState(t *testing.T) {
 	}
 
 	for _, blockHash := range longestChainHashList {
-		txs := []RawTransaction{}
-
 		// 1. Get all transactions for block.
 		// ignore: nonce, sig
-		rows, err := dag.db.Query(`select version, from_pubkey, to_pubkey, amount, fee from transactions where block_hash = ? order by txindex`, blockHash[:])
+		txs, err := dag.GetBlockTransactions(blockHash)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		for rows.Next() {
-			version := 0
-			fromPubkeyBuf := []byte{}
-			toPubkeyBuf := []byte{}
-			var amount uint64
-			var fee uint64
-
-			err = rows.Scan(&version, &fromPubkeyBuf, &toPubkeyBuf, &amount, &fee)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			var fromPubkey [65]byte
-			var toPubkey [65]byte
-			copy(fromPubkey[:], fromPubkeyBuf[:])
-			copy(toPubkey[:], toPubkeyBuf[:])
-
-			txs = append(txs, RawTransaction{
-				Version:    byte(version),
-				FromPubkey: fromPubkey,
-				ToPubkey:   toPubkey,
-				Amount:     amount,
-				Fee:        fee,
-				Nonce:      0,
-				Sig:        [64]byte{},
-			})
-		}
-
-		t.Logf("Processing block %x with %d transactions", blockHash, len(txs))
+		t.Logf("Processing block %x with %d transactions", blockHash, len(*txs))
 
 		// 2. Map transactions to state leaves through state machine transition function.
 		var stateMachineInput StateMachineInput
 		var minerPubkey [65]byte
 		isCoinbase := false
 
-		for i, tx := range txs {
+		for i, tx := range *txs {
 			// Special case: coinbase tx is always the first tx in the block.
 			if i == 0 {
 				minerPubkey = tx.FromPubkey
@@ -479,7 +449,7 @@ func TestStateMachineReconstructState(t *testing.T) {
 
 			// Construct the state machine input.
 			stateMachineInput = StateMachineInput{
-				RawTransaction: tx,
+				RawTransaction: tx.ToRawTransaction(),
 				IsCoinbase:     isCoinbase,
 				MinerPubkey:    minerPubkey,
 			}

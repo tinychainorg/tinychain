@@ -142,8 +142,8 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 
 func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error) {
 	// Query database, get transactions count for blockhash.
-	rows, err := dag.db.Query(`
-		select count(*) from transactions where block_hash = ?`,
+	rows, err := dag.db.Query(
+		`SELECT COUNT(*) FROM transactions_blocks WHERE block_hash = ?;`,
 		hash[:],
 	)
 	if err != nil {
@@ -161,11 +161,11 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 
 	// Load the transactions in.
 	rows, err = dag.db.Query(`
-		SELECT t.hash, t.sig, t.from_pubkey, t.to_pubkey, t.amount, t.fee, t.nonce, tb.txindex, t.version
-		FROM transactions t
-		JOIN transactions_blocks tb ON t.hash = tb.transaction_hash
-		WHERE tb.block_hash = ?
-		ORDER BY tb.txindex ASC;
+		SELECT txs.hash, txs.sig, txs.from_pubkey, txs.to_pubkey, txs.amount, txs.fee, txs.nonce, txblocks.txindex, txs.version
+		FROM transactions txs
+		JOIN transactions_blocks txblocks ON txs.hash = txblocks.transaction_hash
+		WHERE txblocks.block_hash = ?
+		ORDER BY txblocks.txindex ASC;
 	`, hash[:])
 	if err != nil {
 		return nil, err
@@ -173,6 +173,7 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 
 	for rows.Next() {
 		tx := Transaction{}
+
 		hash := []byte{}
 		sig := []byte{}
 		fromPubkey := []byte{}
@@ -180,10 +181,10 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 		amount := uint64(0)
 		fee := uint64(0)
 		nonce := uint64(0)
-		var index uint64 = 0
-		version := 0
+		txindex := uint64(0)
+		version := 0 // TODO
 
-		err := rows.Scan(&hash, &sig, &fromPubkey, &toPubkey, &amount, &fee, &nonce, &index, &version)
+		err := rows.Scan(&hash, &sig, &fromPubkey, &toPubkey, &amount, &fee, &nonce, &txindex, &version)
 		if err != nil {
 			return nil, err
 		}
@@ -195,10 +196,10 @@ func (dag *BlockDAG) GetBlockTransactions(hash [32]byte) (*[]Transaction, error)
 		tx.Amount = amount
 		tx.Fee = fee
 		tx.Nonce = nonce
-		tx.TxIndex = index
+		tx.TxIndex = txindex
 		tx.Version = byte(version)
 
-		txs[index] = tx
+		txs[txindex] = tx
 	}
 
 	return &txs, nil
