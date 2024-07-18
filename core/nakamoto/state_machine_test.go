@@ -427,7 +427,7 @@ func TestStateMachineReconstructState(t *testing.T) {
 
 	for _, blockHash := range longestChainHashList {
 		// 1. Get all transactions for block.
-		// ignore: nonce, sig
+		// TODO ignore: nonce, sig
 		txs, err := dag.GetBlockTransactions(blockHash)
 		if err != nil {
 			t.Fatal(err)

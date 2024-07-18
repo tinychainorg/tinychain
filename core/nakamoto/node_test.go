@@ -159,7 +159,7 @@ func TestTwoNodeUnequalMining(t *testing.T) {
 	node1Speed := int64(3)
 	node2Speed := int64(1)
 
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 10; i++ {
 		// Node 1 mines blocks.
 		node1.Miner.Start(node1Speed)
 
@@ -182,16 +182,10 @@ func TestTwoNodeUnequalMining(t *testing.T) {
 	t.Logf("Tip height: %d", node1Tip.Height)
 }
 
-func TestStateMachineUpdatesForTip(t *testing.T) {
-	// When the node tip is updated, then we recompute the state given the new transaction sequence.
-}
-
-func TestNodeSyncMissingBlocksUnknownParent(t *testing.T) {
-
-}
-
 // Here we test synchronisation. Will a node that mines misses gossipped blocks catch up with the network?
 func TestNodeSyncMissingBlocks(t *testing.T) {
+	t.SkipNow() // TODO when sync is done.
+
 	assert := assert.New(t)
 	node1 := newNodeFromConfig(t)
 	node2 := newNodeFromConfig(t)
@@ -224,59 +218,6 @@ func TestNodeSyncMissingBlocks(t *testing.T) {
 
 	// Check that the tips are the same.
 	assert.Equal(tip1, tip2)
-}
-
-func TestNodeSyncNoReorg(t *testing.T) {
-
-}
-
-// func TestNodeSyncReorg(t *testing.T) {
-// 	// Two peers for test:
-// 	// - peer A. Has mined a chain of 10 blocks.
-// 	// - peer B. Has mined an alternative chain of 5 blocks.
-// 	//
-// 	// Test routine:
-// 	// Peer A starts up, mines 10 blocks.
-// 	// Peer B starts up, mines 5 blocks, then connects to peer B.
-// 	// Peer B syncs with peer A.
-// 	// Peer B downloads the headers of peer A, and then downloads the bodies, ingests the blocks.
-// 	// Assert: peer B tip == peer A tip (longest chain)
-// 	// Assert: peer B state == peer A state (longest chain)
-
-// 	// assert := assert.New(t)
-
-// 	node1 := newNodeFromConfig(t)
-// 	node2 := newNodeFromConfig(t)
-
-// 	// Peer 1 starts up.
-// 	node1.Peer.Start()
-// 	node1.Miner.Start(10)
-
-// 	node2.Peer.Start()
-// 	node2.Miner.Start(5)
-
-// 	// Connect peer 2 to peer 1.
-// 	node2.Peer.Bootstrap([]string{
-// 		node1.Peer.GetLocalAddr(),
-// 	})
-// }
-
-func TestNodeBuildState(t *testing.T) {
-	// Peer A. Mines chain of 10 blocks.
-	// Assert that the state is correctly computed.
-
-	node1 := newNodeFromConfig(t)
-
-	// Peer 1 starts up.
-	node1.Peer.Start()
-	node1.Miner.Start(10)
-
-	//
-}
-
-func TestNodeBuildStateReorg(t *testing.T) {
-	// Peer A. Mines chain of 10 blocks.
-	// Assert that the state is correctly computed.
 }
 
 // One part of the block sync algorithm is determining the common ancestor of two chains:

@@ -13,6 +13,7 @@ type Node struct {
 	StateMachine1 *StateMachine
 	log           *log.Logger
 	syncLog       *log.Logger
+	stateLog      *log.Logger
 }
 
 func NewNode(dag *BlockDAG, miner *Miner, peer *PeerCore) *Node {
@@ -28,6 +29,7 @@ func NewNode(dag *BlockDAG, miner *Miner, peer *PeerCore) *Node {
 		StateMachine1: stateMachine,
 		log:           NewLogger("node", ""),
 		syncLog:       NewLogger("node", "sync"),
+		stateLog:      NewLogger("node", "state"),
 	}
 	n.setup()
 	return n
@@ -159,13 +161,17 @@ func (n *Node) setup() {
 		// 1. Rebuild state.
 		// 2. Regenerate current mempool.
 
-		n.log.Printf("rebuild-state\n")
+		n.stateLog.Printf("rebuild-state\n")
 		start := time.Now()
 
-		n.rebuildState()
+		err := n.rebuildState()
+		if err != nil {
+			n.stateLog.Printf("Failed to rebuild state: %s\n", err)
+			return
+		}
 
 		duration := time.Since(start)
-		n.log.Printf("rebuild-state completed duration=%d blocks=%s\n", n.Dag.FullTip.Height, duration.String())
+		n.stateLog.Printf("rebuild-state completed duration=%s n_blocks=%d\n", duration.String(), n.Dag.FullTip.Height)
 	}
 
 	// When we get a tx, add it to the mempool.
@@ -189,20 +195,22 @@ func (n *Node) setup() {
 	}
 }
 
-func (n *Node) rebuildState() {
+func (n *Node) rebuildState() error {
 	longestChainHashList, err := n.Dag.GetLongestChainHashList(n.Dag.FullTip.Hash, n.Dag.FullTip.Height)
 	if err != nil {
-		n.log.Printf("Failed to get longest chain hash list: %s\n", err)
-		return
+		n.stateLog.Printf("Failed to get longest chain hash list: %s\n", err)
+		return err
 	}
 
 	state2, err := RebuildState(n.Dag, *n.StateMachine1, longestChainHashList)
 	if err != nil {
-		n.log.Printf("Failed to rebuild state: %s\n", err)
-		return
+		n.stateLog.Printf("Failed to rebuild state: %s\n", err)
+		return err
 	}
 
 	n.StateMachine1 = state2
+
+	return nil
 }
 
 func (n *Node) Start() {

@@ -165,51 +165,21 @@ func (c *StateMachine) GetStateSnapshot() []StateLeaf {
 // Given a block DAG and a list of block hashes, extracts the transaction sequence, applies each transaction in order, and returns the final state.
 func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList [][32]byte) (*StateMachine, error) {
 	for _, blockHash := range longestChainHashList {
-		txs := []RawTransaction{}
-
 		// 1. Get all transactions for block.
-		// ignore: nonce, sig
-		rows, err := dag.db.Query(`select version, from_pubkey, to_pubkey, amount, fee from transactions where block_hash = ? order by txindex`, blockHash[:])
+		// TODO ignore: nonce, sig
+		txs, err := dag.GetBlockTransactions(blockHash)
 		if err != nil {
 			return nil, err
 		}
 
-		for rows.Next() {
-			version := 0
-			fromPubkeyBuf := []byte{}
-			toPubkeyBuf := []byte{}
-			var amount uint64
-			var fee uint64
-
-			err = rows.Scan(&version, &fromPubkeyBuf, &toPubkeyBuf, &amount, &fee)
-			if err != nil {
-				return nil, err
-			}
-
-			var fromPubkey [65]byte
-			var toPubkey [65]byte
-			copy(fromPubkey[:], fromPubkeyBuf[:])
-			copy(toPubkey[:], toPubkeyBuf[:])
-
-			txs = append(txs, RawTransaction{
-				Version:    byte(version),
-				FromPubkey: fromPubkey,
-				ToPubkey:   toPubkey,
-				Amount:     amount,
-				Fee:        fee,
-				Nonce:      0,
-				Sig:        [64]byte{},
-			})
-		}
-
-		stateMachineLogger.Printf("Processing block %x with %d transactions", blockHash, len(txs))
+		stateMachineLogger.Printf("Processing block %x with %d transactions", blockHash, len(*txs))
 
 		// 2. Map transactions to state leaves through state machine transition function.
 		var stateMachineInput StateMachineInput
 		var minerPubkey [65]byte
 		isCoinbase := false
 
-		for i, tx := range txs {
+		for i, tx := range *txs {
 			// Special case: coinbase tx is always the first tx in the block.
 			if i == 0 {
 				minerPubkey = tx.FromPubkey
@@ -218,7 +188,7 @@ func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList
 
 			// Construct the state machine input.
 			stateMachineInput = StateMachineInput{
-				RawTransaction: tx,
+				RawTransaction: tx.ToRawTransaction(),
 				IsCoinbase:     isCoinbase,
 				MinerPubkey:    minerPubkey,
 			}
