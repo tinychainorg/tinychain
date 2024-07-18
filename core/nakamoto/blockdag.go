@@ -179,12 +179,7 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus
 		panic(err)
 	}
 
-	dag.HeadersTip, err = dag.GetLatestHeadersTip()
-	if err != nil {
-		panic(err)
-	}
-
-	dag.FullTip, err = dag.GetLatestFullTip()
+	err = dag.updateTip()
 	if err != nil {
 		panic(err)
 	}

@@ -4,13 +4,35 @@ import (
 	"fmt"
 )
 
-// GetEpochForBlockhash
-// GetBlockByHash
-// GetBlockTransactions
-// GetRawBlockDataByHash
-// HasBlock
-// GetLatestTip
-// GetLongestChainHashList
+// The methods of the BlockDAG engine:
+//
+// Light sync:
+// - IngestHeader
+// - IngestBlockBodies
+//
+// Full sync:
+// - IngestBlock
+//
+
+// The methods of the BlockDAG client:
+//
+// Difficulty:
+// - GetEpochForBlockhash
+//
+// Blocks:
+// - GetBlockByHash
+// - GetBlockTransactions
+// - GetRawBlockDataByHash
+//
+// Tip:
+// - GetLatestFullTip
+// - GetLatestHeadersTip
+// - GetPath
+// - GetLongestChainHashList
+//
+// Sync:
+// - HasBlock
+//
 
 // Gets the epoch for a given block hash.
 func (dag *BlockDAG) GetEpochForBlockHash(blockhash [32]byte) (*Epoch, error) {
@@ -190,13 +212,13 @@ func (dag *BlockDAG) GetRawBlockDataByHash(hash [32]byte) ([]byte, error) {
 	return []byte{}, nil
 }
 
-func (dag *BlockDAG) IsSynced(hash [32]byte) bool {
-	// Synchronisation occurs in two phases: headers-only and then full block sync.
-	// We can determine if we have fully synced a block like so:
-	// - if the block has 0 transactions, then we only need the headers, and the block is fully synced.
-	// - if the block has > 0 transactions, then we check if the number of transcations we have downloaded in the transactions_blocks table is equal to the number of transactions in the block. If it is, we have fully synced the block.
-	return true // TODO.
-}
+// func (dag *BlockDAG) IsSynced(hash [32]byte) bool {
+// 	// Synchronisation occurs in two phases: headers-only and then full block sync.
+// 	// We can determine if we have fully synced a block like so:
+// 	// - if the block has 0 transactions, then we only need the headers, and the block is fully synced.
+// 	// - if the block has > 0 transactions, then we check if the number of transcations we have downloaded in the transactions_blocks table is equal to the number of transactions in the block. If it is, we have fully synced the block.
+// 	return true // TODO.
+// }
 
 func (dag *BlockDAG) HasBlock(hash [32]byte) bool {
 	rows, err := dag.db.Query(`

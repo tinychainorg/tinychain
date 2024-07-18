@@ -86,7 +86,7 @@ func RunNode(cmdCtx *cli.Context) error {
 	peer := nakamoto.NewPeerCore(nakamoto.NewPeerConfig("0.0.0.0", port, []string{}))
 
 	// Create the node.
-	node := nakamoto.NewNode(dag, miner, peer)
+	node := nakamoto.NewNode(&dag, miner, peer)
 
 	// Handle process signals.
 	c := make(chan os.Signal, 1)
