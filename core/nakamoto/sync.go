@@ -70,7 +70,7 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 	// TODO: queue work items only one per peer. if failure, return work item to queue for another peer to fill.
 	for i, item := range workItems {
 		peer := peers[i%len(peers)]
-		go func() {
+		go func(item ChunkWorkItem) {
 			headers, err := n.Peer.SyncGetBlockHeaders(peer, fromNode, item.heights)
 			if err != nil {
 				// TODO handle error
@@ -78,7 +78,7 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 				return
 			}
 			resultsChan <- headers
-		}()
+		}(item)
 	}
 
 	// Collect the results.
@@ -258,7 +258,7 @@ func (n *Node) sync_getBestTipFromPeers() [32]byte {
 
 	for _, peer := range n.Peer.peers {
 		wg.Add(1)
-		go func() {
+		go func(peer Peer) {
 			defer wg.Done()
 			tip, err := n.Peer.GetTip(peer)
 			if err != nil {
@@ -267,7 +267,7 @@ func (n *Node) sync_getBestTipFromPeers() [32]byte {
 			}
 			syncLog.Printf("Got tip from peer: hash=%s\n", tip.BlockHashStr())
 			tipsChan <- tip
-		}()
+		}(peer)
 	}
 
 	go func() {
