@@ -36,8 +36,8 @@ message BlockBody {
 }
 
 message TipInfo {
-		bytes hash = 1;
-		uint64 height = 2;
+	bytes hash = 1;
+	uint64 height = 2;
 }
 
 // 
@@ -55,6 +55,14 @@ message HeartbeatMessage {
 
 message GossipPeersMessage {
 	repeated string addresses = 1;
+}
+
+message GossipBlockMessage {
+	Block block = 1;
+}
+
+message GossipTransactionMessage {
+	Transaction transaction = 1;
 }
 
 // 
@@ -101,8 +109,8 @@ message SyncGetTipAtDepthResponse {
 service PeerService {
 	rpc Heartbeat(stream HeartbeatMessage) returns (stream HeartbeatMessage);
 	rpc GossipPeers(stream GossipPeersMessage) returns (stream GossipPeersMessage);
-	rpc GossipNewBlock(stream Block) returns (stream Block);
-	rpc GossipNewTransaction(stream Transaction) returns (stream Transaction);
+	rpc GossipNewBlock(stream GossipBlockMessage) returns (stream GossipBlockMessage);
+	rpc GossipNewTransaction(stream GossipTransactionMessage) returns (stream GossipTransactionMessage);
 	
 	rpc GetTip(GetTipRequest) returns (GetTipResponse);
 	rpc HaveBlock(HaveBlockRequest) returns (HaveBlockResponse);
