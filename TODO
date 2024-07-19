@@ -1,0 +1,47 @@
+
+DAG
+
+    test IngestHeader
+    test IngestBody
+    test updates full tip / headers tip
+
+Parallel download
+
+    implement a really basic version which downloads in parallel. basically a dumb bittorrent
+    make sure it can work with peers joining/leaving
+    probably try to do it without channels just to start with (simpler mental model)
+
+Sync / search
+
+    Test sync - tip starts from genesis
+    Test sync - tip starts from another branch
+
+    test sync - 
+        no peers
+    
+    test sync -
+        one peer
+    
+    test sync -
+        two or more peers
+    
+    branches of the chain
+    - genesis
+    - two competing branches, both same amount of work
+    - three competing branches, downloads all headers from peers
+    - two competing branches with different depths (ie. not branches, but fuller paths)
+
+    test sync -
+        get latest tip from peer
+            returns latest tip
+        get_tip_at_depth / getpath
+            test max_depth=2048 and peer has mined 2048 blocks 
+            test max_depth=2048 and peer has mined 30 blocks, returns block 30
+    
+    GetPath
+
+Peer RPC's
+
+    test peer returns blocks from syncgetdata
+    test peer returns block bodies from syncgetdata
+

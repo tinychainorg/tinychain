@@ -417,7 +417,7 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 			INNER JOIN block_path bp 
 			ON bp.hash = b.parent_hash
 			WHERE bp.depth < ?
-			ORDER BY b.acc_work DESC
+			ORDER BY b.acc_work DESC     -- Select block with highest accumulated work.
 			LIMIT 1
 		)
 		SELECT hash, parent_hash, acc_work

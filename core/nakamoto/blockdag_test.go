@@ -832,3 +832,16 @@ func TestDagGetLongestChainHashList(t *testing.T) {
 	}
 
 }
+
+func TestDagIngestHeader(t *testing.T) {
+	// Ingest header.
+	// Updates both full and header tip.
+}
+
+func TestDagIngestBodyMissingHeader(t *testing.T) {}
+
+func TestDagIngestBody(t *testing.T) {
+	// Ingest body.
+	// Updates both full and header tip.
+}
+
