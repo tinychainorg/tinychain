@@ -7,37 +7,37 @@ option go_package = "github.com/tinychainorg/tinychain/core/nakamoto/protobufs";
 // 
 
 message Transaction {
-  bytes sig = 1;
-  bytes from = 2;
-  bytes to = 3;
-  uint64 amount = 4;
-  uint64 fee = 5;
-  uint64 nonce = 6;
+	bytes sig = 1;
+	bytes from = 2;
+	bytes to = 3;
+	uint64 amount = 4;
+	uint64 fee = 5;
+	uint64 nonce = 6;
 }
 
 message Block {
-  BlockHeader header = 1;
-  BlockBody body = 2;
+	BlockHeader header = 1;
+	BlockBody body = 2;
 }
 
 message BlockHeader {
 	bytes parentHash = 1;
 	bytes parentTotalWork = 2;
 	bytes difficulty = 3;
-  uint64 timestamp = 4;
-  uint64 numTransactions = 5;
-  bytes transactionsMerkleRoot = 6;
-  bytes nonce = 7;
-  bytes graffiti = 8;
+	uint64 timestamp = 4;
+	uint64 numTransactions = 5;
+	bytes transactionsMerkleRoot = 6;
+	bytes nonce = 7;
+	bytes graffiti = 8;
 }
 
 message BlockBody {
-  repeated Transaction transactions = 1;
+	repeated Transaction transactions = 1;
 }
 
 message TipInfo {
-    bytes hash = 1;
-    uint64 height = 2;
+		bytes hash = 1;
+		uint64 height = 2;
 }
 
 // 
@@ -45,16 +45,16 @@ message TipInfo {
 // 
 
 message HeartbeatMessage {
-    TipInfo fullTip = 1;
-    TipInfo headersTip = 2;
-    string clientVersion = 3;
-    uint32 wireProtocolVersion = 4;
-    string clientAddress = 5;
-    uint64 time = 6;
+	TipInfo fullTip = 1;
+	TipInfo headersTip = 2;
+	string clientVersion = 3;
+	uint32 wireProtocolVersion = 4;
+	string clientAddress = 5;
+	uint64 time = 6;
 }
 
 message GossipPeersMessage {
-    repeated string addresses = 1;
+	repeated string addresses = 1;
 }
 
 // 
@@ -62,35 +62,35 @@ message GossipPeersMessage {
 // 
 
 message HaveBlockRequest {
-    bytes hash = 1;
+	bytes hash = 1;
 }
 message HaveBlockResponse {
-    bool hasBlock = 1;
+	bool hasBlock = 1;
 }
 
 message GetTipRequest {}
 message GetTipResponse {
-    BlockHeader full = 1;
-    BlockHeader headers = 2;
+	BlockHeader full = 1;
+	BlockHeader headers = 2;
 }
 
 message SyncGetDataRequest {
-  bytes fromBlock = 1;
-  bytes heights = 2;
-  bool headers = 3;
-  bool bodies = 4;
+	bytes fromBlock = 1;
+	bytes heights = 2;
+	bool headers = 3;
+	bool bodies = 4;
 }
 message SyncGetDataResponse {
-  repeated BlockHeader headers = 1;
-  repeated BlockBody bodies = 2;
+	repeated BlockHeader headers = 1;
+	repeated BlockBody bodies = 2;
 }
 
 message SyncGetTipAtDepthRequest {
-  bytes fromBlock = 1;
-  uint64 depth = 2;
+	bytes fromBlock = 1;
+	uint64 depth = 2;
 }
 message SyncGetTipAtDepthResponse {
-  BlockHeader tip = 1;
+	BlockHeader tip = 1;
 }
 
 
@@ -99,14 +99,14 @@ message SyncGetTipAtDepthResponse {
 // 
 
 service PeerService {
-    rpc Heartbeat(stream HeartbeatMessage) returns (stream HeartbeatMessage);
-    rpc GossipPeers(stream GossipPeersMessage) returns (stream GossipPeersMessage);
-    rpc GossipNewBlock(stream Block) returns (stream Block);
-    rpc GossipNewTransaction(stream Transaction) returns (stream Transaction);
-    
-    rpc GetTip(GetTipRequest) returns (GetTipResponse);
-    rpc HaveBlock(HaveBlockRequest) returns (HaveBlockResponse);
+	rpc Heartbeat(stream HeartbeatMessage) returns (stream HeartbeatMessage);
+	rpc GossipPeers(stream GossipPeersMessage) returns (stream GossipPeersMessage);
+	rpc GossipNewBlock(stream Block) returns (stream Block);
+	rpc GossipNewTransaction(stream Transaction) returns (stream Transaction);
+	
+	rpc GetTip(GetTipRequest) returns (GetTipResponse);
+	rpc HaveBlock(HaveBlockRequest) returns (HaveBlockResponse);
 
-    rpc SyncGetData(SyncGetDataRequest) returns (SyncGetDataResponse);
-    rpc SyncGetTipAtDepth(SyncGetTipAtDepthRequest) returns (SyncGetTipAtDepthResponse);
+	rpc SyncGetData(SyncGetDataRequest) returns (SyncGetDataResponse);
+	rpc SyncGetTipAtDepth(SyncGetTipAtDepthRequest) returns (SyncGetTipAtDepthResponse);
 }
