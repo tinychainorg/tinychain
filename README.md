@@ -48,9 +48,9 @@ In progress: state synchronisation, user wallet API's.
 
 ## Install.
 
-Make sure you have Go 1.2.3+ installed.
+Requirements: Go 1.2.3+.
 
 ```sh
-make && cd build/ && ./tinychain node --port 8121 --db testnet.db
+./scripts/build.sh && cd build/ && ./tinychain node --port 8121 --db testnet.db
 ```
 
