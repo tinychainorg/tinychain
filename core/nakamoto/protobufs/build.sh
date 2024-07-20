@@ -1,7 +1,11 @@
 set -ex
 
+
 # protoc -I=. --go_out=. --go_opt=paths=source_relative core/nakamoto/proto/*.proto
 # protoc -I=core/nakamoto/proto/ --go_out=core/nakamoto/proto --go_opt=paths=source_relative core/nakamoto/proto/*.proto
+
+# export PATH=$PATH:$(pwd)
+export PATH="$PATH:$(go env GOPATH)/bin:$(pwd)"
 
 SRCDIR=core/nakamoto/protobufs
 cd $SRCDIR
