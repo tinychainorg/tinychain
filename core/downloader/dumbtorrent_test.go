@@ -7,12 +7,14 @@ import (
 )
 
 func makeMockPeer(fails bool, latency int) Peer {
-	return func(chunkID int64) ([]byte, error) {
-		if fails {
-			return nil, errors.New("can't get chunk")
-		}
-		time.Sleep(time.Duration(latency) * time.Millisecond)
-		return []byte("data"), nil
+	return Peer{
+		DoWork: func(chunkID int64) ([]byte, error) {
+			if fails {
+				return nil, errors.New("can't get chunk")
+			}
+			time.Sleep(time.Duration(latency) * time.Millisecond)
+			return []byte("data"), nil
+		},
 	}
 }
 
