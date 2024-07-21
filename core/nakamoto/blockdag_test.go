@@ -844,4 +844,3 @@ func TestDagIngestBody(t *testing.T) {
 	// Ingest body.
 	// Updates both full and header tip.
 }
-
