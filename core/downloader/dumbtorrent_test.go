@@ -26,9 +26,10 @@ func makeMockPeer(fails bool, latency int) Peer {
 }
 
 func TestDumbTorrent(t *testing.T) {
-	workItems := []int64{1, 2, 3, 4, 5}
+	// workItems := []int64{1, 2, 3, 4, 5}
+	workItems := []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	peers := []Peer{
-		makeMockPeer(false, 100),
+		makeMockPeer(false, 150),
 
 		makeMockPeer(true, 100),
 		// makeMockPeer(true, 100),

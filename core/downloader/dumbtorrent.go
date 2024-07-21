@@ -89,7 +89,7 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 	for _, peer := range peers {
 		onlineWorkers.Add(1)
 		go func() {
-			defer onlineWorkers.Done()
+			defer onlineWorkers.Done() // will get called even if peer.DoWork panics
 			for {
 				// Select work item.
 				workItem, more := <-workItemsChan
@@ -128,27 +128,27 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 		}()
 	}
 
-	workAllDone := make(chan bool)
-	workersAllDone := make(chan bool)
+	workDone := make(chan bool)
+	workersDone := make(chan bool)
 
-	// Close work channel when all items are processed
+	// Close workDone channel when all items are processed
 	go func() {
 		pendingWork.Wait()
-		close(workAllDone)
+		close(workDone)
 	}()
 
-	// Close workers channel when all workers are exited (success or failure).
+	// Close workersDone channel when all workers are exited (success or failure).
 	go func() {
 		onlineWorkers.Wait()
-		close(workersAllDone)
+		close(workersDone)
 	}()
 
 	// Wait for all work to be done or an error to occur
 	select {
-	case <-workAllDone:
+	case <-workDone:
 		dlog.Printf("all work items done")
 		return results, nil
-	case <-workersAllDone:
+	case <-workersDone:
 		dlog.Printf("error: not enough workers to fill jobs")
 		return nil, nil
 	}
