@@ -21,29 +21,6 @@ import (
 // - all of the requests have returned results, or failures.
 // - for failures, we have retried on other peers.
 
-// how do we detect when we have run through all peers?
-// is there a facility to add new peers to the pool? yes.
-// how can we let programmers modify their worker pool logic on their own?
-// can design our own facility ? minimal design, callbacks.
-// -
-
-//
-// algorithm:
-// - create slice of work items
-// loop:
-//  for each open work item
-//    wait on available peer from pool
-//    distribute work to peer
-//      if peer failed:
-//        mark peer as failed
-//        return err
-//      else if peer success
-//        re-add peer into pool
-//
-
-type PeerWorkInfo struct {
-}
-
 func newLogger(prefix string, prefix2 string) *log.Logger {
 	prefixFull := color.HiGreenString(fmt.Sprintf("[%s] ", prefix))
 	if prefix2 != "" {
@@ -101,28 +78,26 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 	dlog.Printf("downloading %d items", len(workItems))
 
 	workItemsChan := make(chan int64, len(workItems))
+	defer close(workItemsChan)
 	for _, item := range workItems {
 		workItemsChan <- item
 		pendingWork.Add(1)
 	}
 
-	availablePeersChan := make(chan *Peer, len(peers))
+	// Setup worker threads.
+	// Start peer worker threads, which take work from the workItems channel.
 	for _, peer := range peers {
-		availablePeersChan <- &peer
 		onlineWorkers.Add(1)
-	}
+		go func() {
+			defer onlineWorkers.Done()
+			for {
+				// Select work item.
+				workItem, more := <-workItemsChan
+				if !more {
+					// work channel closed.
+					return
+				}
 
-	// Distribute work to peers.
-	go func() {
-		for {
-			// Select available peer.
-			peer := <-availablePeersChan
-
-			// Select work item.
-			workItem := <-workItemsChan
-
-			// Try the available peer.
-			go func(peer *Peer, workItem int64) {
 				dlog.Printf("downloading work %d from peer %s", workItem, peer)
 
 				// 2. Call peer.
@@ -131,10 +106,11 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 				// 2a. Handle error.
 				if err != nil {
 					dlog.Printf("downloading work %d from peer %s - peer failed", workItem, peer)
-					onlineWorkers.Done()
 
 					// Re-insert into work items channel.
 					workItemsChan <- workItem
+
+					// Exit from worker pool.
 					return
 				}
 
@@ -146,15 +122,14 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 
 				dlog.Printf("downloading work %d done", workItem)
 
-				// Reinsert into available.
+				// Mark work done.
 				pendingWork.Done()
-				availablePeersChan <- peer
-			}(peer, workItem)
-		}
-	}()
+			}
+		}()
+	}
 
-	workersAllDone := make(chan bool)
 	workAllDone := make(chan bool)
+	workersAllDone := make(chan bool)
 
 	// Close work channel when all items are processed
 	go func() {
