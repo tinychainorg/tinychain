@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/fatih/color"
 )
@@ -56,7 +55,12 @@ func newLogger(prefix string, prefix2 string) *log.Logger {
 var dlog = newLogger("downloader", "")
 
 type Peer struct {
+	id     string
 	DoWork func(chunkID int64) (result []byte, err error)
+}
+
+func (p Peer) String() string {
+	return p.id
 }
 
 // Things to do:
@@ -87,10 +91,8 @@ type Peer struct {
 //
 
 func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
-	workChan := make(chan int64, len(workItems))
 	results := make(map[int64][]byte)
 
-	var workersInfoMutex sync.Mutex
 	var resultsMutex sync.Mutex
 	var pendingWork sync.WaitGroup
 	var onlineWorkers sync.WaitGroup
@@ -98,117 +100,81 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 	dlog.Printf("starting download with %d peers", len(peers))
 	dlog.Printf("downloading %d items", len(workItems))
 
-	type workerInfo struct {
-		working bool
-		failed  bool
-	}
-
-	workersInfo := make(map[*Peer]*workerInfo)
-	for _, peer := range peers {
-		workersInfo[&peer] = &workerInfo{
-			working: false,
-			failed:  false,
-		}
-	}
-
 	workItemsChan := make(chan int64, len(workItems))
 	for _, item := range workItems {
 		workItemsChan <- item
+		pendingWork.Add(1)
 	}
 
-	// Take work items and distribute them to peers.
-	// Peer worker threads - listen to items, work on them, and return result or error.
-	// Wait on all work items done, or all peers done.
-
-	for {
-		// 1. Get next work item.
-		workItem := <-workItemsChan
-
-		// 2. Distribute to peer.
-
-		// Select an available peer.
-		var available *Peer
-		totalPeers := len(peers)
-		failed := 0
-		working := 0
-
-		workersInfoMutex.Lock()
-		for peer, worker := range workersInfo {
-			if worker.failed {
-				failed += 1
-				continue
-			}
-			if worker.working {
-				working += 1
-				continue
-			}
-			available = peer
-		}
-		workersInfoMutex.Unlock()
-
-		if totalPeers == working {
-			dlog.Printf("all peers currently working, waiting")
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-		if totalPeers == failed {
-			dlog.Printf("failed: tried all peers, none left")
-		}
-
-		// Try the available peer.
-		go func(peer *Peer, workItem int64) {
-			// 1. Set working.
-			workersInfoMutex.Lock()
-			workersInfo[peer].working = true
-			workersInfoMutex.Unlock()
-
-			// 2. Call peer.
-			res, err := peer.DoWork(workItem)
-
-			// 2a. Handle error.
-			if err != nil {
-				// Set failed, working=false.
-				workersInfoMutex.Lock()
-				workersInfo[peer].working = false
-				workersInfo[peer].failed = true
-				workersInfoMutex.Unlock()
-
-				// Re-insert into work items channel.
-				workItemsChan <- workItem
-				return
-			}
-
-			// 2b. Handle success.
-			// Set result.
-			resultsMutex.Lock()
-			results[workItem] = res
-			resultsMutex.Unlock()
-
-			// Set working=false.
-			workersInfoMutex.Lock()
-			workersInfo[peer].working = false
-			workersInfoMutex.Unlock()
-		}(available, workItem)
+	availablePeersChan := make(chan *Peer, len(peers))
+	for _, peer := range peers {
+		availablePeersChan <- &peer
+		onlineWorkers.Add(1)
 	}
+
+	// Distribute work to peers.
+	go func() {
+		for {
+			// Select available peer.
+			peer := <-availablePeersChan
+
+			// Select work item.
+			workItem := <-workItemsChan
+
+			// Try the available peer.
+			go func(peer *Peer, workItem int64) {
+				dlog.Printf("downloading work %d from peer %s", workItem, peer)
+
+				// 2. Call peer.
+				res, err := peer.DoWork(workItem)
+
+				// 2a. Handle error.
+				if err != nil {
+					dlog.Printf("downloading work %d from peer %s - peer failed", workItem, peer)
+					onlineWorkers.Done()
+
+					// Re-insert into work items channel.
+					workItemsChan <- workItem
+					return
+				}
+
+				// 2b. Handle success.
+				// Set result.
+				resultsMutex.Lock()
+				results[workItem] = res
+				resultsMutex.Unlock()
+
+				dlog.Printf("downloading work %d done", workItem)
+
+				// Reinsert into available.
+				pendingWork.Done()
+				availablePeersChan <- peer
+			}(peer, workItem)
+		}
+	}()
+
+	workersAllDone := make(chan bool)
+	workAllDone := make(chan bool)
 
 	// Close work channel when all items are processed
 	go func() {
 		pendingWork.Wait()
-		close(workChan)
+		close(workAllDone)
 	}()
 
 	// Close workers channel when all workers are exited (success or failure).
 	go func() {
 		onlineWorkers.Wait()
-		close(workChan)
+		close(workersAllDone)
 	}()
 
 	// Wait for all work to be done or an error to occur
 	select {
-	case <-workChan:
-		// All work is done
+	case <-workAllDone:
+		dlog.Printf("all work items done")
 		return results, nil
-	case err := <-errChan:
-		return nil, err
+	case <-workersAllDone:
+		dlog.Printf("error: not enough workers to fill jobs")
+		return nil, nil
 	}
 }
