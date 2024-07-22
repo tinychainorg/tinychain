@@ -42,14 +42,12 @@ func TestDumbTorrent(t *testing.T) {
 	results, err := dumbBitTorrent(workItems, peers)
 	if err != nil {
 		// Handle error
+		panic(err)
 	}
 
-	// Things to test:
-	// download from
-
-	// Use results
-	for chunkID, data := range results {
-		// Process chunk data
-		t.Logf("Chunk %d: %s", chunkID, string(data))
+	// Print results in order.
+	for _, chunkID := range workItems {
+		res := results[chunkID]
+		t.Logf("Chunk %d: %s", chunkID, string(res))
 	}
 }

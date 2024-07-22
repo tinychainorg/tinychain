@@ -100,14 +100,17 @@ func dumbBitTorrent(workItems []int64, workers []*Peer) (map[int64][]byte, error
 					return
 				}
 
-				itemLog := workItemLog{}
-				itemLog.startTime = time.Now()
-				itemLog.item = &workItem
+				startTime := time.Now()
 
 				dlog.Printf("downloading work %d from peer %s", workItem.i, peer)
 
 				// 2. Call peer.
 				res, err := peer.DoWork(workItem.item)
+
+				// Log the work item.
+				itemLog := workItemLog{}
+				itemLog.startTime = startTime
+				itemLog.item = &workItem
 				itemLog.endTime = time.Now()
 				itemLog.err = err
 				logs = append(logs, itemLog)
@@ -126,7 +129,7 @@ func dumbBitTorrent(workItems []int64, workers []*Peer) (map[int64][]byte, error
 				// 2b. Handle success.
 				// Set result.
 				resultsMutex.Lock()
-				results[int64(workItem.i)] = res
+				results[int64(workItem.item)] = res
 				resultsMutex.Unlock()
 
 				dlog.Printf("downloading work %d done", workItem.i)
@@ -171,6 +174,7 @@ func dumbBitTorrent(workItems []int64, workers []*Peer) (map[int64][]byte, error
 		jobs_done := 0
 		jobs_failed := 0
 		durations := []time.Duration{}
+		ratePerSecond := 0.0
 
 		for _, wlog := range *worklogs {
 			if wlog.err != nil {
@@ -191,7 +195,9 @@ func dumbBitTorrent(workItems []int64, workers []*Peer) (map[int64][]byte, error
 			avg_duration = total_duration / float64(len(durations))
 		}
 
-		dlog.Printf("Peer #%d: jobs=%d success=%d failed=%d avg_duration=%s\n", i, len(*worklogs), jobs_done, jobs_failed, time.Duration(avg_duration))
+		ratePerSecond = float64(jobs_done) / (total_duration / 1000)
+
+		dlog.Printf("Peer #%d: jobs=%d success=%d failed=%d avg_duration=%s rate_per_s=%.2f\n", i, len(*worklogs), jobs_done, jobs_failed, time.Duration(avg_duration), ratePerSecond)
 	}
 
 	return results, nil
