@@ -1,0 +1,79 @@
+This is a simple BitTorrent-like protocol I wrote. It is designed to explore the sync protocol, which downloads block headers/bodies in parallel.
+
+It basically does the following:
+- creates a set of work items
+- distributes to a set of peers (worker threads)
+- each worker thread will work on one work item at a time, process it, and return the result or an error
+- if the worker fails, it exits from the worker pool
+- at the end, the downloader returns the results
+
+It does a couple of useful things:
+- logging for each peer and work item
+- you can dynamically add peers while it's downloading
+- prints a summary table of statistics for each peer
+
+This design evolved over the course of a day or two in 6 versions, each with more features. See the commit 3b53857 for the history.
+
+## Running it.
+
+```sh
+➜  downloader git:(sync) ✗ go test ./... -v -run TestDumbTorrent
+=== RUN   TestDumbTorrent
+2024/07/22 15:44:25 [downloader] starting download with 0 peers
+2024/07/22 15:44:25 [downloader] downloading 15 items
+2024/07/22 15:44:25 [downloader] downloading work 0 from peer 0
+2024/07/22 15:44:26 [downloader] downloading work 0 done
+2024/07/22 15:44:26 [downloader] downloading work 1 from peer 0
+2024/07/22 15:44:26 [downloader] downloading work 1 done
+2024/07/22 15:44:26 [downloader] downloading work 2 from peer 0
+    dumbtorrent_test.go:48: adding dynamic peers
+2024/07/22 15:44:26 [downloader] downloading work 3 from peer 2
+2024/07/22 15:44:26 [downloader] downloading work 4 from peer 1
+    dumbtorrent_test.go:51: more peers added
+2024/07/22 15:44:26 [downloader] downloading work 2 done
+2024/07/22 15:44:26 [downloader] downloading work 5 from peer 0
+2024/07/22 15:44:27 [downloader] downloading work 3 done
+2024/07/22 15:44:27 [downloader] downloading work 6 from peer 2
+2024/07/22 15:44:27 [downloader] downloading work 4 done
+2024/07/22 15:44:27 [downloader] downloading work 7 from peer 1
+2024/07/22 15:44:27 [downloader] downloading work 5 done
+2024/07/22 15:44:27 [downloader] downloading work 7 done
+2024/07/22 15:44:27 [downloader] downloading work 6 done
+2024/07/22 15:44:27 [downloader] downloading work 9 from peer 1
+2024/07/22 15:44:27 [downloader] downloading work 10 from peer 2
+2024/07/22 15:44:27 [downloader] downloading work 8 from peer 0
+2024/07/22 15:44:27 [downloader] downloading work 10 done
+2024/07/22 15:44:27 [downloader] downloading work 11 from peer 2
+2024/07/22 15:44:27 [downloader] downloading work 9 done
+2024/07/22 15:44:27 [downloader] downloading work 12 from peer 1
+2024/07/22 15:44:27 [downloader] downloading work 8 done
+2024/07/22 15:44:27 [downloader] downloading work 13 from peer 0
+2024/07/22 15:44:27 [downloader] downloading work 12 done
+2024/07/22 15:44:27 [downloader] downloading work 14 from peer 1
+2024/07/22 15:44:27 [downloader] downloading work 11 done
+2024/07/22 15:44:28 [downloader] downloading work 13 done
+2024/07/22 15:44:28 [downloader] downloading work 14 done
+2024/07/22 15:44:28 [downloader] all work items done
+2024/07/22 15:44:28 [downloader] Peer summary table
+2024/07/22 15:44:28 [downloader] Peer #0: jobs=6 success=6 failed=0 avg_duration=350ns rate_per_s=2.85
+2024/07/22 15:44:28 [downloader] Peer #1: jobs=5 success=5 failed=0 avg_duration=301ns rate_per_s=3.32
+2024/07/22 15:44:28 [downloader] Peer #2: jobs=4 success=4 failed=0 avg_duration=301ns rate_per_s=3.32
+    dumbtorrent_test.go:62: Chunk 1: data
+    dumbtorrent_test.go:62: Chunk 2: data
+    dumbtorrent_test.go:62: Chunk 3: data
+    dumbtorrent_test.go:62: Chunk 4: data
+    dumbtorrent_test.go:62: Chunk 5: data
+    dumbtorrent_test.go:62: Chunk 6: data
+    dumbtorrent_test.go:62: Chunk 7: data
+    dumbtorrent_test.go:62: Chunk 8: data
+    dumbtorrent_test.go:62: Chunk 9: data
+    dumbtorrent_test.go:62: Chunk 10: data
+    dumbtorrent_test.go:62: Chunk 11: data
+    dumbtorrent_test.go:62: Chunk 12: data
+    dumbtorrent_test.go:62: Chunk 13: data
+    dumbtorrent_test.go:62: Chunk 14: data
+    dumbtorrent_test.go:62: Chunk 15: data
+--- PASS: TestDumbTorrent (2.31s)
+PASS
+ok  	github.com/liamzebedee/tinychain-go/core/downloader	2.607s
+```

@@ -1,4 +1,4 @@
-package downloader
+package dumbtorrent
 
 import (
 	"errors"
@@ -45,11 +45,10 @@ func TestDumbTorrent(t *testing.T) {
 	// wait 200s.
 	// add new peer.
 	time.Sleep(800 * time.Millisecond)
-	t.Logf("doing stuff")
-	go engine.AddWorker(makeMockPeer(false, 300))
+	t.Logf("adding dynamic peers")
 	engine.AddWorker(makeMockPeer(false, 300))
-
-	t.Logf("doing stuff 2")
+	engine.AddWorker(makeMockPeer(false, 300))
+	t.Logf("more peers added")
 
 	results, err := engine.Wait()
 	if err != nil {
