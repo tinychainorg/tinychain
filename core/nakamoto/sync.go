@@ -364,38 +364,3 @@ func (n *Node) sync_computeCommonAncestorWithPeer(peer Peer, local_chainhashes *
 	syncLog.Printf("Found in %d iterations.", n_iterations)
 	return ancestor
 }
-
-// Performance numbers:
-// 850,000 Bitcoin blocks since 2009.
-// 850000*32 = 27.2 MB of a chain hash list
-// Not too bad, we can fit it all in memory.
-// query_size = 32 B, N = 850,000
-// log(850,000) * 32 = 20 * 32 = 640 B
-
-//
-// Simple modelling of the costs:
-//
-// Assumptions:
-// Number of peers : P = 5
-// Download bandwidth : 1MB/s
-// Block rate = 1 block / 10 mins
-// Max block size = 1 MB
-// Block header size = 208 B
-// Transaction size = 155 B
-// Block body max size = 999792 B
-// Maximum transactions per block = 6450
-// Assuming full blocks, 1 block = 1MB
-// Our last sync = 1 week ago = 7*24*60/(1/10) = 1008 blocks
-//
-// Getting tips from all peers. O(P * 208) bytes.
-// Downloading block headers. O(1008 * 208) bytes.
-//   Total download = 1008 * 208 = 209,664 = 209 KB
-//   Download on each peer. O(1008 * 208 / P) bytes per peer.
-//                          O(1008 * 208 / 5) = 41932 = 41 KB
-//   Time to sync headers = 1008 * 208 / 1 MB/s = 1000*208/1000/1000 = 0.2s
-// Downloading block bodies. O(1008 * 999792)
-//   Total download = 1008 * 999792 = 1,007,790,336 = 1.007 GB
-//   Download on each peer. O(1008 * 999792 / P) bytes per peer.
-//                          O(1008 * 999792 / 5) = 201,558,067 = 201 MB
-//   Time to sync bodies = 1008 * 999792 / 1 MB/s = 1000*999792/1000/1000 = 999s = 16.65 mins
-//
