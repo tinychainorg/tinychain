@@ -23,6 +23,9 @@ type Miner struct {
 	mutex sync.Mutex
 
 	OnBlockSolution func(block RawBlock)
+
+	// TODO: for testing, might remove later?
+	GetTipForMining func() Block
 }
 
 func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
@@ -136,10 +139,14 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 }
 
 func (node *Miner) MakeNewPuzzle() POWPuzzle {
+	// Get the current tip.
 	current_tip, err := node.dag.GetLatestFullTip()
 	if err != nil {
 		// fmt.Fatalf("Failed to get current tip: %s", err)
 		panic(err)
+	}
+	if node.GetTipForMining != nil {
+		current_tip = node.GetTipForMining()
 	}
 
 	// Construct coinbase tx.
@@ -164,7 +171,7 @@ func (node *Miner) MakeNewPuzzle() POWPuzzle {
 
 	// First get the right epoch.
 	var difficulty big.Int
-	epoch, err := node.dag.GetEpochForBlockHash(raw.ParentHash)
+	epoch, err := node.dag.GetEpochForBlockHash(current_tip.Hash)
 	if err != nil {
 		// t.Fatalf("Failed to get epoch for block hash: %s", err)
 		panic(err)
@@ -183,11 +190,11 @@ func (node *Miner) MakeNewPuzzle() POWPuzzle {
 	return puzzle
 }
 
-func (node *Miner) Start(mineMaxBlocks int64) {
+func (node *Miner) Start(mineMaxBlocks int64) []RawBlock {
 	node.mutex.Lock()
 	if node.IsRunning {
 		minerLog.Printf("Miner already running")
-		return
+		return []RawBlock{}
 	}
 	node.IsRunning = true
 	node.mutex.Unlock()
@@ -202,6 +209,7 @@ func (node *Miner) Start(mineMaxBlocks int64) {
 	go MineWithStatus(hashrateChannel, solutionChannel, puzzleChannel)
 
 	var blocksMined int64 = 0
+	mined := []RawBlock{}
 
 	puzzleChannel <- node.MakeNewPuzzle()
 	for {
@@ -224,12 +232,14 @@ func (node *Miner) Start(mineMaxBlocks int64) {
 			}
 
 			blocksMined += 1
+			mined = append(mined, *raw)
+
 			if mineMaxBlocks != -1 && mineMaxBlocks <= blocksMined {
 				minerLog.Println("Mined max blocks; stopping miner")
 				node.mutex.Lock()
 				node.IsRunning = false
 				node.mutex.Unlock()
-				return
+				return mined
 			}
 
 			minerLog.Println("Making new puzzle")
