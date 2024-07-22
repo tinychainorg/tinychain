@@ -27,19 +27,31 @@ func makeMockPeer(fails bool, latency int) *Peer {
 
 func TestDumbTorrent(t *testing.T) {
 	// workItems := []int64{1, 2, 3, 4, 5}
-	workItems := []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	workItems := []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	peers := []*Peer{
-		makeMockPeer(false, 150),
+		makeMockPeer(false, 350),
 
-		makeMockPeer(true, 100),
+		// makeMockPeer(true, 100),
 		// makeMockPeer(true, 100),
 		// makeMockPeer(true, 300),
 
-		makeMockPeer(false, 150),
-		makeMockPeer(false, 250),
+		// makeMockPeer(false, 150),
+		// makeMockPeer(false, 250),
 	}
 
-	results, err := dumbBitTorrent(workItems, peers)
+	engine := NewDumbBittorrentEngine()
+	go engine.Start(workItems, peers)
+
+	// wait 200s.
+	// add new peer.
+	time.Sleep(800 * time.Millisecond)
+	t.Logf("doing stuff")
+	go engine.AddWorker(makeMockPeer(false, 300))
+	engine.AddWorker(makeMockPeer(false, 300))
+
+	t.Logf("doing stuff 2")
+
+	results, err := engine.Wait()
 	if err != nil {
 		// Handle error
 		panic(err)
