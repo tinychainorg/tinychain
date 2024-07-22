@@ -57,6 +57,13 @@ type workItemLog struct {
 	endTime   time.Time
 }
 
+// A simple BitTorrent-like protocol in Go.
+//
+// dumbBitTorrent completes a set of work items using a worker pool, where each worker works on one item at a time. If a worker fails, the work item is reingested into the work queue and picked up by another worker. If there are no more workers to fill items, the function returns early with an error.
+//
+// The function returns a map of work item IDs to their results.
+//
+// The function also prints a summary of each worker's performance, including the number of jobs done, failed, and the average duration of each job.
 func dumbBitTorrent(workItems []int64, workers []*Peer) (map[int64][]byte, error) {
 	workerLogs := make(map[*Peer]*[]workItemLog)
 	results := make(map[int64][]byte)
