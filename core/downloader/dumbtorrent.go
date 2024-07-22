@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/fatih/color"
 )
@@ -40,54 +41,48 @@ func (p Peer) String() string {
 	return p.id
 }
 
-// Things to do:
-//
-// Work - a function called on a peer.
-// Peers - a set of peers we have to do work.
-// - can be dynamically changing - we add and remove peers
-// - if a peer fails, they stop doing work for the pool
-// Control loop:
-// Get free worker + distribute work item
-// Get free work item from workPool
-// Send to peer work channel
-// On reply -
-// if error: reinsert work into workPool
-// if success: insert result into results, reinsert worker into workerPool
-// Add new peers to work pool if they don't exist
+type workItemInfo struct {
+	i    int
+	item int64
+}
 
-// continue while work is pending
-// continue while workers are pending
-//
+func (i workItemInfo) String() string {
+	return fmt.Sprintf("%d", i.item)
+}
 
-//
-// wait until all work items are processed?
-// stopping conditions:
-// - all work items completed
-// - all peers are marked failed
-//
-//
+type workItemLog struct {
+	item      *workItemInfo
+	err       error
+	startTime time.Time
+	endTime   time.Time
+}
 
-func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
+func dumbBitTorrent(workItems []int64, workers []*Peer) (map[int64][]byte, error) {
+	workerLogs := make(map[*Peer]*[]workItemLog)
 	results := make(map[int64][]byte)
 
 	var resultsMutex sync.Mutex
 	var pendingWork sync.WaitGroup
 	var onlineWorkers sync.WaitGroup
 
-	dlog.Printf("starting download with %d peers", len(peers))
+	dlog.Printf("starting download with %d peers", len(workers))
 	dlog.Printf("downloading %d items", len(workItems))
 
-	workItemsChan := make(chan int64, len(workItems))
+	workItemsChan := make(chan workItemInfo, len(workItems))
 	defer close(workItemsChan)
-	for _, item := range workItems {
-		workItemsChan <- item
+	for i, item := range workItems {
+		workItemsChan <- workItemInfo{i, item}
 		pendingWork.Add(1)
 	}
 
 	// Setup worker threads.
 	// Start peer worker threads, which take work from the workItems channel.
-	for _, peer := range peers {
+	for _, peer := range workers {
 		onlineWorkers.Add(1)
+
+		logs := []workItemLog{}
+		workerLogs[peer] = &logs
+
 		go func() {
 			defer onlineWorkers.Done() // will get called even if peer.DoWork panics
 			for {
@@ -98,14 +93,21 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 					return
 				}
 
-				dlog.Printf("downloading work %d from peer %s", workItem, peer)
+				itemLog := workItemLog{}
+				itemLog.startTime = time.Now()
+				itemLog.item = &workItem
+
+				dlog.Printf("downloading work %d from peer %s", workItem.i, peer)
 
 				// 2. Call peer.
-				res, err := peer.DoWork(workItem)
+				res, err := peer.DoWork(workItem.item)
+				itemLog.endTime = time.Now()
+				itemLog.err = err
+				logs = append(logs, itemLog)
 
 				// 2a. Handle error.
 				if err != nil {
-					dlog.Printf("downloading work %d from peer %s - peer failed", workItem, peer)
+					dlog.Printf("downloading work %d from peer %s - peer failed", workItem.i, peer)
 
 					// Re-insert into work items channel.
 					workItemsChan <- workItem
@@ -117,10 +119,10 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 				// 2b. Handle success.
 				// Set result.
 				resultsMutex.Lock()
-				results[workItem] = res
+				results[int64(workItem.i)] = res
 				resultsMutex.Unlock()
 
-				dlog.Printf("downloading work %d done", workItem)
+				dlog.Printf("downloading work %d done", workItem.i)
 
 				// Mark work done.
 				pendingWork.Done()
@@ -147,9 +149,43 @@ func dumbBitTorrent(workItems []int64, peers []Peer) (map[int64][]byte, error) {
 	select {
 	case <-workDone:
 		dlog.Printf("all work items done")
-		return results, nil
+		break
 	case <-workersDone:
 		dlog.Printf("error: not enough workers to fill jobs")
-		return nil, nil
+		break
 	}
+
+	// Print the status overview of each peer's logs.
+	dlog.Printf("Peer summary table\n")
+	for i, peer := range workers {
+		// Get the log.
+		worklogs := workerLogs[peer]
+
+		jobs_done := 0
+		jobs_failed := 0
+		durations := []time.Duration{}
+
+		for _, wlog := range *worklogs {
+			if wlog.err != nil {
+				jobs_failed += 1
+			} else {
+				jobs_done += 1
+			}
+
+			durations = append(durations, wlog.endTime.Sub(wlog.startTime))
+		}
+
+		var total_duration float64
+		var avg_duration float64
+		for _, x := range durations {
+			total_duration += float64(x.Milliseconds())
+		}
+		if len(durations) > 0 {
+			avg_duration = total_duration / float64(len(durations))
+		}
+
+		dlog.Printf("Peer #%d: jobs=%d success=%d failed=%d avg_duration=%s\n", i, len(*worklogs), jobs_done, jobs_failed, time.Duration(avg_duration))
+	}
+
+	return results, nil
 }

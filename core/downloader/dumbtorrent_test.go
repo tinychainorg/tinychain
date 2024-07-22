@@ -9,11 +9,11 @@ import (
 
 var peerIdGenerator = 0
 
-func makeMockPeer(fails bool, latency int) Peer {
+func makeMockPeer(fails bool, latency int) *Peer {
 	peerid := peerIdGenerator
 	peerIdGenerator += 1
 
-	return Peer{
+	return &Peer{
 		id: fmt.Sprintf("%d", peerid),
 		DoWork: func(chunkID int64) ([]byte, error) {
 			if fails {
@@ -28,7 +28,7 @@ func makeMockPeer(fails bool, latency int) Peer {
 func TestDumbTorrent(t *testing.T) {
 	// workItems := []int64{1, 2, 3, 4, 5}
 	workItems := []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	peers := []Peer{
+	peers := []*Peer{
 		makeMockPeer(false, 150),
 
 		makeMockPeer(true, 100),
