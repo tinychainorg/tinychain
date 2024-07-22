@@ -358,6 +358,7 @@ func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip ui
 	if err != nil {
 		return list, err
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		hashBuf := []byte{}
@@ -405,24 +406,26 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 
 	// When iterating forward, find the block with highest accumulated work.
 	queryDirectionForwards := `
-		WITH RECURSIVE block_path AS (
-			SELECT hash, parent_hash, acc_work, 1 AS depth
-			FROM blocks
-			WHERE hash = ?
-
-			UNION ALL
-
-			SELECT b.hash, b.parent_hash, b.acc_work, bp.depth + 1
-			FROM blocks b
-			INNER JOIN block_path bp 
-			ON bp.hash = b.parent_hash
-			WHERE bp.depth < ?
-			ORDER BY b.acc_work DESC     -- Select block with highest accumulated work.
-			LIMIT 1
-		)
-		SELECT hash, parent_hash, acc_work
-		FROM block_path
-		ORDER BY depth ASC;`
+WITH RECURSIVE block_path AS (
+    SELECT hash, parent_hash, acc_work, 1 AS depth
+    FROM blocks
+    WHERE hash = ?
+    UNION ALL
+    SELECT b.hash, b.parent_hash, b.acc_work, bp.depth + 1
+    FROM block_path bp
+    JOIN blocks b ON bp.hash = b.parent_hash
+    WHERE bp.depth < ?
+      AND b.acc_work = (
+          SELECT acc_work
+          FROM blocks b2
+          WHERE b2.parent_hash = bp.hash
+          ORDER BY acc_work DESC
+          LIMIT 1
+      )
+)
+SELECT hash, parent_hash
+FROM block_path
+ORDER BY depth ASC;`
 
 	query := ""
 	if direction == 1 {
@@ -439,6 +442,7 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 	if err != nil {
 		return list, err
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		hashBuf := []byte{}
