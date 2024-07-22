@@ -99,11 +99,12 @@ type SyncGetTipAtDepthMessage struct {
 	Type      string   `json:"type"`
 	FromBlock [32]byte `json:"fromBlock"`
 	Depth     uint64   `json:"depth"`
+	Direction int      `json:"direction"`
 }
 
 type SyncGetTipAtDepthReply struct {
-	Type string      `json:"type"`
-	Tip  BlockHeader `json:"tip"`
+	Type string   `json:"type"`
+	Tip  [32]byte `json:"tip"`
 }
 
 // sync_get_data
@@ -148,6 +149,22 @@ func getValidHeaderChain(root [32]byte, headers []BlockHeader) []BlockHeader {
 	return chain
 }
 
+func (n *Node) getPeerTips(baseBlock [32]byte, depth uint64, dir int) (map[[32]byte][]Peer, error) {
+	// NOTE: we only request their tip hash in order to bucket them.
+	peersTips := make(map[[32]byte][]Peer)
+
+	for _, peer := range n.Peer.peers {
+		tip, err := n.Peer.SyncGetTipAtDepth(peer, baseBlock, depth, dir)
+		if err != nil {
+			// Skip. Peer will not be used for downloading.
+			continue
+		}
+		peersTips[tip] = append(peersTips[tip], peer)
+	}
+
+	return peersTips, nil
+}
+
 // Syncs the node with the network.
 //
 // The blockchain sync algorithm is the most complex part of the system. The Nakamoto blockchain is defined simply as a linked list of blocks, where the canonical chain is the one with the most amount of work done on it. A blockchain network is composed of peers who disseminate blocks and transactions, and take turns in being the leader to mine a new block.
@@ -173,17 +190,10 @@ func (n *Node) Sync() {
 	// The depth is referred to as the "window size", and is a constant value of 2048 blocks.
 	search := func(currentTipHash [32]byte) int {
 		// 1. Get the tips from all our peers and bucket them.
-		// NOTE: we only request their tip hash in order to bucket them.
-		peersTips := make(map[[32]byte][]Peer)
-		depth := uint64(WINDOW_SIZE)
-
-		for _, peer := range n.Peer.peers {
-			tip, err := n.Peer.SyncGetTipAtDepth(peer, currentTipHash, depth)
-			if err != nil {
-				// Skip. Peer will not be used for downloading.
-				continue
-			}
-			peersTips[tip.BlockHash()] = append(peersTips[tip.BlockHash()], peer)
+		peersTips, err := n.getPeerTips(currentTipHash, uint64(WINDOW_SIZE), 1)
+		if err != nil {
+			n.log.Printf("Failed to get peer tips: %s\n", err)
+			return 0
 		}
 
 		// 2. For each tip, download a window of headers and ingest them.
@@ -236,10 +246,6 @@ func (n *Node) Sync() {
 			break
 		}
 	}
-}
-
-func (n *Node) rework() {
-
 }
 
 // Contacts all our peers in parallel, gets the block header of their tip, and returns the best tip based on total work.

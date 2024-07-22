@@ -118,7 +118,7 @@ func (s *PeerServer) inboxHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle.
 	res, err := s.messageHandlers[messageType](body)
 	if err != nil {
-		http.Error(w, "Failed to process message", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to process message: %s", err), http.StatusInternalServerError)
 		return
 	}
 

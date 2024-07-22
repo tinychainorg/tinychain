@@ -163,8 +163,8 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 			return nil, err
 		}
 
-		if p.OnSyncGetData == nil {
-			return nil, fmt.Errorf("SyncGetData callback not set")
+		if p.OnSyncGetTipAtDepth == nil {
+			return nil, fmt.Errorf("OnSyncGetTipAtDepth callback not set")
 		}
 
 		reply, err := p.OnSyncGetTipAtDepth(msg)
@@ -339,16 +339,17 @@ func (p *PeerCore) GetTip(peer Peer) (BlockHeader, error) {
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64) (BlockHeader, error) {
+func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64, dir int) ([32]byte, error) {
 	msg := SyncGetTipAtDepthMessage{
-		Type:      "get_tip_at_depth",
+		Type:      "sync_get_tip_at_depth",
 		FromBlock: fromBlock,
 		Depth:     depth,
+		Direction: dir,
 	}
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return BlockHeader{}, err
+		return [32]byte{}, err
 	}
 
 	// Decode reply.
