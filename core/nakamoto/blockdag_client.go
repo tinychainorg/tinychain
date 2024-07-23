@@ -279,6 +279,8 @@ func (dag *BlockDAG) GetLatestFullTip() (Block, error) {
 	rows, err := dag.db.Query(`
 		SELECT hash 
 		FROM (
+			-- Case 1: Blocks with transactions.
+			-- Only blocks with their transactions downloaded are considered for the "full tip".
 			SELECT b.hash, b.acc_work
 			FROM blocks b
 			JOIN (
@@ -290,6 +292,8 @@ func (dag *BlockDAG) GetLatestFullTip() (Block, error) {
 
 			UNION
 
+			-- Case 2: Blocks without transactions.
+			-- If a block has no transactions, then it is fully downloaded and is considered for the "full tip".
 			SELECT b.hash, b.acc_work
 			FROM blocks b
 			WHERE b.num_transactions = 0
@@ -402,7 +406,7 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 		)
 		SELECT hash, parent_hash
 		FROM block_path
-		ORDER BY depth DESC;`
+		ORDER BY depth ASC;`
 
 	// When iterating forward, find the block with highest accumulated work.
 	queryDirectionForwards := `
