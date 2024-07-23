@@ -12,27 +12,26 @@ import (
 // ie. when we have a set of 1000 integers, we can represent it with:
 //   - naively: 1000 * uint32 = 4000 bytes
 //   - with a bitstring: 1000 bits = 125 bytes
-type Bitset struct {
-	buf []byte
-}
+type Bitset []byte
 
 func NewBitset(size int) *Bitset {
-	return &Bitset{buf: make([]byte, (size/8)+1)}
+	buf := make([]byte, (size/8)+1)
+	return (*Bitset)(&buf)
 }
 
 func NewBitsetFromBuffer(buf []byte) *Bitset {
-	return &Bitset{buf: buf}
+	return (*Bitset)(&buf)
 }
 
 // Size returns the number of bits in the bitstring.
 func (b *Bitset) Size() int {
-	return len(b.buf) * 8
+	return len(*b) * 8
 }
 
 // Count returns the number of bits set in the bitstring.
 func (b *Bitset) Count() int {
 	count := 0
-	for _, x := range b.buf {
+	for _, x := range *b {
 		count += bits.OnesCount8(x)
 	}
 	return count
@@ -40,22 +39,22 @@ func (b *Bitset) Count() int {
 
 // SetBit sets the ith bit in the bitstring to 1.
 func (b *Bitset) Insert(i int) {
-	b.buf[i/8] |= 1 << uint(i%8)
+	(*b)[i/8] |= 1 << uint(i%8)
 }
 
 // SetBit sets the ith bit in the bitstring to 0.
 func (b *Bitset) Remove(i int) {
-	b.buf[i/8] &^= 1 << uint(i%8)
+	(*b)[i/8] &^= 1 << uint(i%8)
 }
 
 func (b *Bitset) Contains(i int) bool {
-	return b.buf[i/8]&(1<<uint(i%8)) != 0
+	return (*b)[i/8]&(1<<uint(i%8)) != 0
 }
 
 // Indices returns a list of all the indices where the bitstring is set.
 func (b *Bitset) Indices() []int {
 	var indices []int
-	for i := 0; i < len(b.buf)*8; i++ {
+	for i := 0; i < len(*b)*8; i++ {
 		if b.Contains(i) {
 			indices = append(indices, i)
 		}
