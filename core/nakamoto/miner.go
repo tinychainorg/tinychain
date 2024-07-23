@@ -138,19 +138,19 @@ func MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle
 	}
 }
 
-func (node *Miner) MakeNewPuzzle() POWPuzzle {
+func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 	// Get the current tip.
-	current_tip, err := node.dag.GetLatestFullTip()
+	current_tip, err := miner.dag.GetLatestFullTip()
 	if err != nil {
 		// fmt.Fatalf("Failed to get current tip: %s", err)
 		panic(err)
 	}
-	if node.GetTipForMining != nil {
-		current_tip = node.GetTipForMining()
+	if miner.GetTipForMining != nil {
+		current_tip = miner.GetTipForMining()
 	}
 
 	// Construct coinbase tx.
-	tx := MakeCoinbaseTx(node.minerWallet)
+	tx := MakeCoinbaseTx(miner.minerWallet)
 
 	// Construct block template for mining.
 	raw := RawBlock{
@@ -171,13 +171,13 @@ func (node *Miner) MakeNewPuzzle() POWPuzzle {
 
 	// First get the right epoch.
 	var difficulty big.Int
-	epoch, err := node.dag.GetEpochForBlockHash(current_tip.Hash)
+	epoch, err := miner.dag.GetEpochForBlockHash(current_tip.Hash)
 	if err != nil {
 		// t.Fatalf("Failed to get epoch for block hash: %s", err)
 		panic(err)
 	}
-	if curr_height%node.dag.consensus.EpochLengthBlocks == 0 {
-		difficulty = RecomputeDifficulty(epoch.StartTime, raw.Timestamp, epoch.Difficulty, node.dag.consensus.TargetEpochLengthMillis, node.dag.consensus.EpochLengthBlocks, curr_height)
+	if curr_height%miner.dag.consensus.EpochLengthBlocks == 0 {
+		difficulty = RecomputeDifficulty(epoch.StartTime, raw.Timestamp, epoch.Difficulty, miner.dag.consensus.TargetEpochLengthMillis, miner.dag.consensus.EpochLengthBlocks, curr_height)
 	} else {
 		difficulty = epoch.Difficulty
 	}
@@ -190,14 +190,14 @@ func (node *Miner) MakeNewPuzzle() POWPuzzle {
 	return puzzle
 }
 
-func (node *Miner) Start(mineMaxBlocks int64) []RawBlock {
-	node.mutex.Lock()
-	if node.IsRunning {
+func (miner *Miner) Start(mineMaxBlocks int64) []RawBlock {
+	miner.mutex.Lock()
+	if miner.IsRunning {
 		minerLog.Printf("Miner already running")
 		return []RawBlock{}
 	}
-	node.IsRunning = true
-	node.mutex.Unlock()
+	miner.IsRunning = true
+	miner.mutex.Unlock()
 
 	// The next tip channel.
 	// next_tip := make(chan Block)
@@ -211,7 +211,7 @@ func (node *Miner) Start(mineMaxBlocks int64) []RawBlock {
 	var blocksMined int64 = 0
 	mined := []RawBlock{}
 
-	puzzleChannel <- node.MakeNewPuzzle()
+	puzzleChannel <- miner.MakeNewPuzzle()
 	for {
 		select {
 		case hashrate := <-hashrateChannel:
@@ -227,8 +227,8 @@ func (node *Miner) Start(mineMaxBlocks int64) []RawBlock {
 
 			minerLog.Printf("Solution: hash=%s nonce=%s\n", Bytes32ToString(raw.Hash()), solution.String())
 
-			if node.OnBlockSolution != nil {
-				node.OnBlockSolution(*raw)
+			if miner.OnBlockSolution != nil {
+				miner.OnBlockSolution(*raw)
 			}
 
 			blocksMined += 1
@@ -236,15 +236,15 @@ func (node *Miner) Start(mineMaxBlocks int64) []RawBlock {
 
 			if mineMaxBlocks != -1 && mineMaxBlocks <= blocksMined {
 				minerLog.Println("Mined max blocks; stopping miner")
-				node.mutex.Lock()
-				node.IsRunning = false
-				node.mutex.Unlock()
+				miner.mutex.Lock()
+				miner.IsRunning = false
+				miner.mutex.Unlock()
 				return mined
 			}
 
 			minerLog.Println("Making new puzzle")
 			minerLog.Println("New puzzle ready")
-			puzzleChannel <- node.MakeNewPuzzle()
+			puzzleChannel <- miner.MakeNewPuzzle()
 		}
 	}
 }
