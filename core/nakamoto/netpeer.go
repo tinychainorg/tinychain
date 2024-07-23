@@ -365,7 +365,7 @@ func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.Bitset, inclHeaders bool, inclBodies bool) ([][]RawTransaction, error) {
+func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.Bitset, inclHeaders bool, inclBodies bool) (SyncGetDataReply, error) {
 	msg := SyncGetDataMessage{
 		Type:      "sync_get_data",
 		FromBlock: fromBlock,
@@ -376,16 +376,16 @@ func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return [][]RawTransaction{}, err
+		return SyncGetDataReply{}, err
 	}
 
 	// Decode reply.
 	var reply SyncGetDataReply
 	if err := json.Unmarshal(res, &reply); err != nil {
-		return reply.Bodies, err
+		return reply, err
 	}
 
-	return reply.Bodies, nil
+	return reply, nil
 }
 
 func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (bool, error) {
