@@ -390,6 +390,30 @@ func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip ui
 func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction int) ([][32]byte, error) {
 	list := make([][32]byte, 0, depthFromTip)
 
+	if direction == 1 {
+		// Get the longest chain hash list.
+		// First begin from the current tip, accumulate all hashes back to genesis.
+		currentTip := dag.FullTip
+		longestchain, err := dag.GetLongestChainHashList(currentTip.Hash, depthFromTip)
+		if err != nil {
+			return list, err
+		}
+
+		// Find the start hash.
+		// Slice the list from the start hash to depth.
+		startIndex := 0
+		for i, hash := range longestchain {
+			if hash == startHash {
+				startIndex = i
+				break
+			}
+		}
+
+		// Slice the list.
+		list = longestchain[startIndex:]
+		return list, nil
+	}
+
 	// When iterating backwards, we don't have to worry about accumulated work. Since we're going backwards, we can just follow the parent hash.
 	queryDirectionBackwards := `
 		WITH RECURSIVE block_path AS (
@@ -407,39 +431,8 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 		SELECT hash, parent_hash
 		FROM block_path
 		ORDER BY depth ASC;`
-
-	// When iterating forward, find the block with highest accumulated work.
-	queryDirectionForwards := `
-WITH RECURSIVE block_path AS (
-    SELECT hash, parent_hash, acc_work, 1 AS depth
-    FROM blocks
-    WHERE hash = ?
-    UNION ALL
-    SELECT b.hash, b.parent_hash, b.acc_work, bp.depth + 1
-    FROM block_path bp
-    JOIN blocks b ON bp.hash = b.parent_hash
-    WHERE bp.depth < ?
-      AND b.acc_work = (
-          SELECT acc_work
-          FROM blocks b2
-          WHERE b2.parent_hash = bp.hash
-          ORDER BY acc_work DESC
-          LIMIT 1
-      )
-)
-SELECT hash, parent_hash
-FROM block_path
-ORDER BY depth ASC;`
-
-	query := ""
-	if direction == 1 {
-		query = queryDirectionForwards
-	} else {
-		query = queryDirectionBackwards
-	}
-
 	rows, err := dag.db.Query(
-		query,
+		queryDirectionBackwards,
 		startHash[:],
 		depthFromTip,
 	)
