@@ -159,6 +159,10 @@ func (n *Node) getPeerTips(baseBlock [32]byte, depth uint64, dir int) (map[[32]b
 			// Skip. Peer will not be used for downloading.
 			continue
 		}
+		// check if slice exists
+		if _, ok := peersTips[tip]; !ok {
+			peersTips[tip] = make([]Peer, 0)
+		}
 		peersTips[tip] = append(peersTips[tip], peer)
 	}
 

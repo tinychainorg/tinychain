@@ -830,7 +830,6 @@ func TestDagGetLongestChainHashList(t *testing.T) {
 	for i, hash := range expectedHashList[uint64(len(expectedHashList))-depthFromTip:] {
 		assert.Equal(Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
 	}
-
 }
 
 // Tests get path on a simple chain with no branches. ie. a -> b -> c -> d -> e
@@ -1100,6 +1099,97 @@ func TestDagGetPathComplexChain(t *testing.T) {
 		        	Error:      	Not equal:
 		        	            	expected: "050161bc043a3dece33d5d16b37d7bcbde0872887dcf57b62275f018e64c445e"
 		        	            	actual  : "06e1fe2a52f70b999334f7dfc7a4d95f8b6f979b5f10c1be8c07a96a635b461c"
+	*/
+
+	/*
+		Old code, useful for pure SQL testing:
+
+
+
+		// Print the full chain hash list of node 3.
+		// longestChainHashList, err := node3.Dag.GetLongestChainHashList(tip3.Hash, tip3.Height)
+		// // for i, hash := range longestChainHashList {
+		// // 	t.Logf("#%d: %x", i+1, hash)
+		// // }
+		// // t.Logf("Tip 3 hash: %s", tip3.HashStr())
+		// // assert.Equal(17, len(longestChainHashList))
+		// // assert.Equal(tip3.Hash, longestChainHashList[len(longestChainHashList)-1])
+
+		// path1, err := node3.Dag.GetPath(tip1.Hash, uint64(3), 1)
+
+		// t.Logf("")
+		// t.Logf("inserting fake block history on alternative branch")
+
+		// // Insert a few non descript path entries on the altnerative branch.
+		// tx, err := node3.Dag.db.Begin()
+		// if err != nil {
+		// 	t.Fatalf("Failed to begin transaction: %s", err)
+		// }
+		// blockhash := tip1.Hash
+		// tmpblocks := make([][32]byte, 0)
+		// // "mine" block 1
+		// tmpaccwork := tip1.AccumulatedWork
+		// getAccWork := func(i int64) []byte {
+		// 	buf := BigIntToBytes32(*tmpaccwork.Add(&tmpaccwork, big.NewInt(i*1000000)))
+		// 	return buf[:]
+		// }
+		// blockhash[0] += 1
+		// tmpblocks = append(tmpblocks, tip1.Hash)
+		// _, err = tx.Exec(
+		// 	"INSERT INTO blocks (parent_hash, hash, height, acc_work) VALUES (?, ?, ?, ?)",
+		// 	tmpblocks[len(tmpblocks)-1][:],
+		// 	blockhash[:],
+		// 	tip1.Height+1,
+		// 	getAccWork(1),
+		// )
+		// if err != nil {
+		// 	t.Fatalf("Failed to insert block: %s", err)
+		// }
+		// tmpblocks = append(tmpblocks, blockhash)
+		// // "mine" block 2
+		// blockhash[0] += 1
+		// _, err = tx.Exec(
+		// 	"INSERT INTO blocks (parent_hash, hash, height, acc_work) VALUES (?, ?, ?, ?)",
+		// 	(tmpblocks[len(tmpblocks)-1])[:],
+		// 	blockhash[:],
+		// 	tip1.Height+2,
+		// 	getAccWork(2),
+		// )
+		// if err != nil {
+		// 	t.Fatalf("Failed to insert block: %s", err)
+		// }
+		// tmpblocks = append(tmpblocks, blockhash)
+		// err = tx.Commit()
+		// if err != nil {
+		// 	t.Fatalf("Failed to commit transaction: %s", err)
+		// }
+		// t.Logf("inserted blocks:")
+		// t.Logf("- %x [fork point]", tmpblocks[0])
+		// t.Logf("- %x", tmpblocks[1])
+		// t.Logf("- %x", tmpblocks[2])
+		// t.Logf("")
+
+		// longestChainHashList2, err := node3.Dag.GetLongestChainHashList(node3.Dag.FullTip.Hash, node3.Dag.FullTip.Height)
+		// for i, hash := range longestChainHashList {
+		// 	t.Logf("#%d: %x", i+1, hash)
+		// }
+		// t.Log("")
+		// for i, hash := range longestChainHashList2 {
+		// 	t.Logf("#%d: %x", i+1, hash)
+		// }
+		// path2, err := node3.Dag.GetPath(tip1.Hash, uint64(2), 1)
+
+		// // Path1
+		// t.Logf("heights(15 - 17) path: %x", path1)
+
+		// // Path2
+		// t.Logf("heights(15 - 17) path: %x", path2)
+		// assert.Nil(err)
+
+		// path3, err := node3.Dag.GetPath(tmpblocks[2], uint64(2), -1)
+		// assert.Nil(err)
+		// t.Logf("heights(17_fork - 15) path: %x", path3)
+
 	*/
 }
 
