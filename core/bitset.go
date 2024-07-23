@@ -61,3 +61,34 @@ func (b *Bitset) Indices() []int {
 	}
 	return indices
 }
+
+// Ranges returns a list of ranges where the bitstring is set.
+// Useful for printing.
+func (b *Bitset) Ranges() [][2]int {
+	return findOnesRanges(*b)
+}
+
+func findOnesRanges(data []byte) [][2]int {
+	var ranges [][2]int
+	start := -1
+
+	for i := 0; i < len(data)*8; i++ {
+		bit := data[i/8]&(1<<uint(i%8)) != 0
+		if bit {
+			if start == -1 {
+				start = i
+			}
+		} else {
+			if start != -1 {
+				ranges = append(ranges, [2]int{start, i - 1})
+				start = -1
+			}
+		}
+	}
+
+	if start != -1 {
+		ranges = append(ranges, [2]int{start, len(data)*8 - 1})
+	}
+
+	return ranges
+}
