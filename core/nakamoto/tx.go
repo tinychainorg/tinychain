@@ -94,7 +94,7 @@ func (tx *RawTransaction) Envelope() []byte {
 func (tx *RawTransaction) Hash() [32]byte {
 	// Hash the envelope.
 	h := sha256.New()
-	h.Write(tx.Envelope())
+	h.Write(tx.Bytes())
 	return sha256.Sum256(h.Sum(nil))
 }
 
