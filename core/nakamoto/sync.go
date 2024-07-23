@@ -77,7 +77,7 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 				n.syncLog.Printf("Failed to get headers from peer: %s\n", err)
 				return
 			}
-			resultsChan <- headers
+			resultsChan <- headers.Headers // TODO
 		}(item)
 	}
 
@@ -108,7 +108,7 @@ type SyncGetTipAtDepthReply struct {
 }
 
 // sync_get_data
-type SyncGetDataMessage struct {
+type SyncGetBlockDataMessage struct {
 	Type      string      `json:"type"`
 	FromBlock [32]byte    `json:"fromBlock"`
 	Heights   core.Bitset `json:"heights"`
@@ -116,13 +116,16 @@ type SyncGetDataMessage struct {
 	Bodies    bool        `json:"bodies"`
 }
 
-type SyncGetDataReply struct {
+type SyncGetBlockDataReply struct {
 	Type    string             `json:"type"`
 	Headers []BlockHeader      `json:"headers"`
 	Bodies  [][]RawTransaction `json:"bodies"`
 }
 
-func getValidHeaderChain(root [32]byte, headers []BlockHeader) []BlockHeader {
+// Verify the header chain we have received.
+// ie. A -> B -> C ... -> Z
+// We should have all the headers from A to Z.
+func orderValidateHeaders(root [32]byte, headers []BlockHeader) []BlockHeader {
 	// Verify the header chain we have received.
 	// ie. A -> B -> C ... -> Z
 	// We should have all the headers from A to Z.
@@ -213,11 +216,8 @@ func (n *Node) Sync() {
 			headers := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
 
 			// 2c. Validate headers.
-			// Sanity-check: verify we have all the headers for the heights in order.
-			// Verify the header chain we have received.
-			// ie. A -> B -> C ... -> Z
-			// We should have all the headers from A to Z.
-			headers2 := getValidHeaderChain(currentTipHash, headers)
+			// Sanity-check: verify we have all the headers for the heights in order. TODO.
+			headers2 := orderValidateHeaders(currentTipHash, headers)
 
 			// 2d. Ingest headers.
 			for _, header := range headers2 {

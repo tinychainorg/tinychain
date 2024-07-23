@@ -19,6 +19,7 @@ There are multiple test helpers defined throughout the test files. This document
  - `fullyConnectPeers`. Given a set of peers, builds a fully connected network, where every peer is connected to every other peer.
  - `waitForNodesToSyncSameTip`. Waits for a set of nodes to synchronise to the same block tip, by polling their tip regularly, or else timing out.
  - `setupTestNetwork`. Sets up a fully-connected network of peers.
+ - `logPeerTips`. Log a set of peer tips.
 
 ## Callbacks / events.
 

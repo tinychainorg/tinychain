@@ -439,8 +439,42 @@ func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
 }
 
 // Ingests a block's body, which is linked to a previously ingested block header.
-func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) error {
+func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
+	// Get the merkle root for this body.
+	txMerkleRoot := GetMerkleRootForTxs(body)
+
+	// Lookup the block that has this merkle root.
+	rows, err := dag.db.Query(`select hash from blocks where transactions_merkle_root = ?`, txMerkleRoot[:])
+	if err != nil {
+		return err
+	}
+	blockhashBuf := make([]byte, 32)
+	if rows.Next() {
+		rows.Scan(&blockhashBuf)
+	} else {
+		return fmt.Errorf("Block header not found for txs merkle root.")
+	}
+	rows.Close()
+
+	// Verify we have not already ingested the txs.
+	rows, err = dag.db.Query(`select count(*) from transactions_blocks where block_hash = ?`, blockhashBuf)
+	if err != nil {
+		return err
+	}
+	count := 0
+	if rows.Next() {
+		rows.Scan(&count)
+	}
+	rows.Close()
+	dag.log.Printf("Blocks with merkle root: %d\n", count)
+
+	if count > 0 {
+		return fmt.Errorf("Block already has transactions ingested.")
+	}
+
 	// Lookup block header.
+	blockhash := [32]byte{}
+	copy(blockhash[:], blockhashBuf)
 	block, err := dag.GetBlockByHash(blockhash)
 	if err != nil {
 		return err
@@ -449,6 +483,7 @@ func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) 
 		return fmt.Errorf("Block header missing during body ingestion.")
 	}
 	raw := block.ToRawBlock()
+	raw.Transactions = body
 
 	// 2. Verify timestamp is within bounds.
 	// TODO: subjectivity.
@@ -491,7 +526,6 @@ func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) 
 	}
 
 	// 7. Verify block size is within bounds.
-	raw.Transactions = body
 	if dag.consensus.MaxBlockSizeBytes < raw.SizeBytes() {
 		return fmt.Errorf("Block size exceeds maximum block size.")
 	}

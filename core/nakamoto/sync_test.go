@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,6 +66,18 @@ func setupTestNetwork(t *testing.T) []*Node {
 	return []*Node{node1, node2, node3}
 }
 
+// Print all tips
+func logPeerTips(t *testing.T, label string, tips map[[32]byte][]Peer) {
+	t.Logf("%s peer tips:", label)
+	for hash, peers := range tips {
+		peersStr := ""
+		for _, peer := range peers {
+			peersStr += peer.String() + " "
+		}
+		t.Logf("%x: %s", hash, peersStr)
+	}
+}
+
 func TestSyncGetPeerTips(t *testing.T) {
 	assert := assert.New(t)
 	peers := setupTestNetwork(t)
@@ -119,20 +132,9 @@ func TestSyncGetPeerTips(t *testing.T) {
 	node2_peerTips, _ := node2.getPeerTips(tip1.Hash, uint64(6), 1)
 	node3_peerTips, _ := node3.getPeerTips(tip1.Hash, uint64(1), 1)
 
-	// Print all tips
-	logTips := func(label string, tips map[[32]byte][]Peer) {
-		t.Logf("%s peer tips:", label)
-		for hash, peers := range tips {
-			peersStr := ""
-			for _, peer := range peers {
-				peersStr += peer.String() + " "
-			}
-			t.Logf("%x: %s", hash, peersStr)
-		}
-	}
-	logTips("Node 1", node1_peerTips)
-	logTips("Node 2", node2_peerTips)
-	logTips("Node 3", node3_peerTips)
+	logPeerTips(t, "Node 1", node1_peerTips)
+	logPeerTips(t, "Node 2", node2_peerTips)
+	logPeerTips(t, "Node 3", node3_peerTips)
 
 	// Now we assert the following:
 	// (1) Node 3 should have 2 nodes with the same tip.
@@ -174,8 +176,56 @@ func TestSyncGetPeerTips(t *testing.T) {
 	assert.Equal(1, len(node2_peerTips[tip3.Hash]))
 }
 
+// Now setup a downloader.
+type downloadPeerImpl struct {
+	ourpeer *PeerCore
+	peer    *Peer
+}
+
+func (d downloadPeerImpl) String() string {
+	return d.peer.String()
+}
+func (d downloadPeerImpl) Work(item DownloadWorkItem) (DownloadWorkResult, error) {
+	time.Sleep(1 * time.Millisecond)
+	return d.ourpeer.SyncGetBlockData(*d.peer, item.FromBlock, item.Heights, item.Headers, item.Bodies)
+}
+
 func TestSyncScheduleDownloadWork(t *testing.T) {
 	// After getting the tips, then we need to divide them into work units.
+
+	assert := assert.New(t)
+	peers := setupTestNetwork(t)
+
+	node1 := peers[0]
+	node2 := peers[1]
+	node3 := peers[2]
+
+	// Then we check the tips.
+	tip1 := node1.Dag.FullTip
+	tip2 := node2.Dag.FullTip
+	tip3 := node3.Dag.FullTip
+
+	// Print the height of the tip.
+	t.Logf("Tip 1 height: %d", tip1.Height)
+	t.Logf("Tip 2 height: %d", tip2.Height)
+	t.Logf("Tip 3 height: %d", tip3.Height)
+
+	// Check that the tips are the same.
+	assert.Equal(tip1.HashStr(), tip2.HashStr())
+	assert.Equal(tip1.HashStr(), tip3.HashStr())
+
+	// Now disable block mining on node 3.
+	node3.Peer.OnNewBlock = nil
+
+	// Node 1 mines 15 blocks, gossips with node 2
+	node1.Miner.Start(15)
+
+	// Wait for nodes [1,2] to sync.
+	err := waitForNodesToSyncSameTip([]*Node{node1, node2})
+	assert.Nil(err)
+
+	// Wait some time for other goroutines to process.
+	time.Sleep(400 * time.Millisecond)
 
 	// Basically speaking:
 	// - for one set of tips
@@ -185,9 +235,132 @@ func TestSyncScheduleDownloadWork(t *testing.T) {
 	// --- distribute work to peer workers
 	// wait for download to complete.
 
-	// to modify the dumbtorrent code to do this:
-	// - workItem should basically be the call arguments to the SyncGetData function
-	// - peer is the same NetPeer, though DoWork calls ourpeer.PeerSyncGetData(peer, args)
-	// - the result type is something like SyncGetDataReply.
+	// Get the latest tips.
+	tip1 = node1.Dag.FullTip
+	tip2 = node2.Dag.FullTip
+	tip3 = node3.Dag.FullTip
 
+	// Now we commence syncing for node 3 from nodes [1,2].
+	node3_peerTips, _ := node3.getPeerTips(tip3.Hash, uint64(20), 1)
+	logPeerTips(t, "Node 3", node3_peerTips)
+	// 000292441f3c7a39f44cfaf092bfb6f4399256b50bf23aa27da22da067b937a1
+
+	missingTip := tip1.Hash
+	// print missing tip
+	t.Logf("Missing tip: %x", missingTip)
+	assert.Equal(2, len(node3_peerTips[missingTip]))
+
+	// Setup work items.
+	heights1 := core.NewBitset(2048)
+	heights1.Insert(0)
+	heights1.Insert(1)
+	heights2 := core.NewBitset(2048)
+	heights2.Insert(2)
+	heights2.Insert(3)
+	heights3 := core.NewBitset(2048)
+	heights3.Insert(4)
+	heights3.Insert(5)
+
+	workItems := []DownloadWorkItem{
+		{
+			Type:      "sync_get_data",
+			FromBlock: tip3.Hash,
+			Heights:   *heights1,
+			Headers:   true,
+			Bodies:    false,
+		},
+		{
+			Type:      "sync_get_data",
+			FromBlock: tip3.Hash,
+			Heights:   *heights2,
+			Headers:   true,
+			Bodies:    false,
+		},
+		{
+			Type:      "sync_get_data",
+			FromBlock: tip3.Hash,
+			Heights:   *heights3,
+			Headers:   true,
+			Bodies:    false,
+		},
+	}
+	node3_peers := node3.Peer.GetPeers()
+	dlPeers := []DownloadPeer{
+		downloadPeerImpl{node3.Peer, &node3_peers[0]},
+		downloadPeerImpl{node3.Peer, &node3_peers[1]},
+	}
+
+	torrent := NewDownloadEngine()
+	go torrent.Start(workItems, dlPeers)
+	results, err := torrent.Wait()
+	if err != nil {
+		t.Errorf("Error downloading: %s", err)
+	}
+	for i, result := range results {
+		for j, header := range result.Headers {
+			t.Logf("Header #%d-%d: %x (parent %x)", (i + 1), (j + 1), header.BlockHash(), header.ParentHash)
+		}
+	}
+
+	// TODO: 1-1 ae62302546e1af25711467737a3328a6ff0e82f413623049b8b23d53e300c12c
+
+	// Now we need to order the headers.
+	all_headers := []BlockHeader{}
+	for _, result := range results {
+		all_headers = append(all_headers, result.Headers...)
+	}
+	headers2 := orderValidateHeaders(tip3.Hash, all_headers)
+
+	// Now print header chain.
+	t.Logf("Ordering headers...")
+	for i, header := range headers2 {
+		t.Logf("Header #%d: %x", i+1, header.BlockHash())
+	}
+
+	// Now ingest headers.
+	for _, header := range headers2 {
+		err := node3.Dag.IngestHeader(header)
+		if err != nil {
+			t.Errorf("Error ingesting header: %s", err)
+		}
+	}
+
+	// Now get the new headers tip.
+	tip3 = node3.Dag.HeadersTip
+	t.Logf("New tip height: %x", tip3.Height)
+	t.Logf("New tip: %x", tip3.Hash)
+
+	// Now repeat the same for block bodies.
+	for i, _ := range workItems {
+		workItems[i].Headers = false
+		workItems[i].Bodies = true
+	}
+	torrent = NewDownloadEngine()
+	go torrent.Start(workItems, dlPeers)
+	results, err = torrent.Wait()
+	if err != nil {
+		t.Errorf("Error downloading: %s", err)
+	}
+	for i, result := range results {
+		for j, body := range result.Bodies {
+			merkleRoot := GetMerkleRootForTxs(body)
+			t.Logf("Body #%d-%d: %d (merkle_root=%x)", (i + 1), (j + 1), len(body), merkleRoot)
+		}
+	}
+
+	// We don't need to order bodies.
+	// Now ingest bodies.
+	for _, result := range results {
+		for _, body := range result.Bodies {
+			err := node3.Dag.IngestBlockBody(body)
+			if err != nil {
+				t.Logf("Error ingesting body: %s", err)
+			}
+		}
+	}
+
+	// Now print the new full tip.
+	tip3 = node3.Dag.FullTip
+	t.Logf("New full tip height: %d", tip3.Height)
+	t.Logf("New full tip: %x", tip3.Hash)
 }

@@ -45,7 +45,7 @@ type PeerCore struct {
 	OnGetBlocks         func(msg GetBlocksMessage) ([][]byte, error)
 	OnGetTip            func(msg GetTipMessage) (BlockHeader, error)
 	OnSyncGetTipAtDepth func(msg SyncGetTipAtDepthMessage) (SyncGetTipAtDepthReply, error)
-	OnSyncGetData       func(msg SyncGetDataMessage) (SyncGetDataReply, error)
+	OnSyncGetData       func(msg SyncGetBlockDataMessage) (SyncGetBlockDataReply, error)
 
 	peerLogger log.Logger
 }
@@ -180,7 +180,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 	})
 
 	p.server.RegisterMesageHandler("sync_get_data", func(message []byte) (interface{}, error) {
-		var msg SyncGetDataMessage
+		var msg SyncGetBlockDataMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
 			return nil, err
 		}
@@ -263,6 +263,10 @@ func (p *PeerCore) GetLocalAddr() string {
 
 func (p *PeerCore) GetExternalAddr() string {
 	return fmt.Sprintf("http://%s:%s", p.externalIp, p.externalPort)
+}
+
+func (p *PeerCore) GetPeers() []Peer {
+	return p.peers
 }
 
 func (p *PeerCore) GossipBlock(block RawBlock) {
@@ -365,8 +369,8 @@ func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.Bitset, inclHeaders bool, inclBodies bool) (SyncGetDataReply, error) {
-	msg := SyncGetDataMessage{
+func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.Bitset, inclHeaders bool, inclBodies bool) (SyncGetBlockDataReply, error) {
+	msg := SyncGetBlockDataMessage{
 		Type:      "sync_get_data",
 		FromBlock: fromBlock,
 		Heights:   heights,
@@ -376,11 +380,11 @@ func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return SyncGetDataReply{}, err
+		return SyncGetBlockDataReply{}, err
 	}
 
 	// Decode reply.
-	var reply SyncGetDataReply
+	var reply SyncGetBlockDataReply
 	if err := json.Unmarshal(res, &reply); err != nil {
 		return reply, err
 	}

@@ -126,8 +126,8 @@ func (n *Node) setup() {
 	}
 
 	// Upload blocks to other peers.
-	n.Peer.OnSyncGetData = func(msg SyncGetDataMessage) (SyncGetDataReply, error) {
-		reply := SyncGetDataReply{
+	n.Peer.OnSyncGetData = func(msg SyncGetBlockDataMessage) (SyncGetBlockDataReply, error) {
+		reply := SyncGetBlockDataReply{
 			Headers: make([]BlockHeader, 0),
 			Bodies:  make([][]RawTransaction, 0),
 		}

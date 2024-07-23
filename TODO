@@ -1,15 +1,27 @@
 
 DAG
 
-    test IngestHeader
-    test IngestBody
+    [x] test IngestHeader
+    [x] test IngestBody
     test updates full tip / headers tip
 
 Parallel download
 
-    implement a really basic version which downloads in parallel. basically a dumb bittorrent
-    make sure it can work with peers joining/leaving
-    probably try to do it without channels just to start with (simpler mental model)
+    [x] implement a really basic version which downloads in parallel. basically a dumb bittorrent
+    [x] make sure it can work with peers joining/leaving
+    [x] probably try to do it without channels just to start with (simpler mental model)
+
+
+Currently:
+- rename Sign(msg) to accept a sighash, and then add a sighash method to tx.go
+- why is block body not being matched with block header?
+    2024/07/23 20:59:08 [blockdag] Blocks with merkle root: 0
+    sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
+    sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
+    sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
+
+
+
 
 Sync / search
 

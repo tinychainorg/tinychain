@@ -1,41 +1,35 @@
-package dumbtorrent
+package nakamoto
 
 import (
 	"fmt"
 	"log"
-	"os"
 	"sync"
 	"time"
-
-	"github.com/fatih/color"
 )
 
-func newLogger(prefix string, prefix2 string) *log.Logger {
-	prefixFull := color.HiGreenString(fmt.Sprintf("[%s] ", prefix))
-	if prefix2 != "" {
-		prefixFull += color.HiYellowString(fmt.Sprintf("(%s) ", prefix2))
-	}
-	return log.New(os.Stdout, prefixFull, log.Ldate|log.Ltime|log.Lmsgprefix)
-}
-
-var dlog = newLogger("sync", "downloader")
-
-type Peer struct {
-	id     string
-	DoWork func(chunkID int64) (result []byte, err error)
-}
-
-func (p Peer) String() string {
-	return p.id
+type DownloadWorkItem = SyncGetBlockDataMessage
+type DownloadWorkResult = SyncGetBlockDataReply
+type DownloadPeer interface {
+	String() string
+	Work(item DownloadWorkItem) (result DownloadWorkResult, err error)
 }
 
 type workItemInfo struct {
 	i    int
-	item int64
+	item DownloadWorkItem
 }
 
 func (i workItemInfo) String() string {
-	return fmt.Sprintf("%d", i.item)
+	// Get block heights as a range start-end.
+	heights := i.item.Heights
+	ranges := heights.Ranges()
+	rangesStr := []string{}
+	for _, r := range ranges {
+		rangesStr = append(rangesStr, fmt.Sprintf("%d-%d", r[0], r[1]))
+	}
+	idxStr := fmt.Sprintf("%s", rangesStr)
+
+	return fmt.Sprintf("base_block=%x rel_heights=%s headers=%t bodies=%t", i.item.FromBlock[0:8], idxStr, i.item.Headers, i.item.Bodies)
 }
 
 type workItemLog struct {
@@ -45,13 +39,14 @@ type workItemLog struct {
 	endTime   time.Time
 }
 
-type DumbBittorrentEngine struct {
+type DownloadEngine struct {
 	done    chan bool
-	results map[int64][]byte
+	results map[int]DownloadWorkResult
 	err     error
 
-	newWorkersChan chan *Peer
-	peers          map[*Peer]bool
+	newWorkersChan chan DownloadPeer
+	peers          map[DownloadPeer]bool
+	dlog           *log.Logger
 }
 
 // A simple BitTorrent-like protocol in Go.
@@ -61,21 +56,22 @@ type DumbBittorrentEngine struct {
 // The function returns a map of work item IDs to their results.
 //
 // The function also prints a summary of each worker's performance, including the number of jobs done, failed, and the average duration of each job.
-func NewDumbBittorrentEngine() *DumbBittorrentEngine {
-	return &DumbBittorrentEngine{
+func NewDownloadEngine() *DownloadEngine {
+	return &DownloadEngine{
 		done:           make(chan bool),
-		results:        make(map[int64][]byte),
-		newWorkersChan: make(chan *Peer),
-		peers:          make(map[*Peer]bool),
+		results:        make(map[int]DownloadWorkResult),
+		newWorkersChan: make(chan DownloadPeer),
+		peers:          make(map[DownloadPeer]bool),
+		dlog:           NewLogger("sync", "downloader"),
 	}
 }
 
-func (e *DumbBittorrentEngine) Wait() (map[int64][]byte, error) {
+func (e *DownloadEngine) Wait() (map[int]DownloadWorkResult, error) {
 	<-e.done
 	return e.results, e.err
 }
 
-func (e *DumbBittorrentEngine) AddWorker(peer *Peer) {
+func (e *DownloadEngine) AddWorker(peer DownloadPeer) {
 	if _, ok := e.peers[peer]; ok {
 		fmt.Printf("skipping peer, already have them")
 		return
@@ -85,46 +81,17 @@ func (e *DumbBittorrentEngine) AddWorker(peer *Peer) {
 	e.newWorkersChan <- peer
 }
 
-/*
-
-workItem: type SyncWorkItem struct {
-	fromNode [32]byte
-	heights core.Bitset
-	headers bool
-	bodies bool
-}
-
-workerFunction: Work(WorkItem, Peer) -> {
-	return n.Peer.SyncGetBlockData(peer, fromNode, item.heights, getHeaders, getBodies)
-}
-
-result: type SyncGetBlockDataReply struct {}
-
-
-
-
-
-Peer
-
-headers, err := n.Peer.SyncGetBlockData(peer, fromNode, item.heights, getHeaders, getBodies)
-if err != nil {
-	// TODO handle error
-	n.syncLog.Printf("Failed to get headers from peer: %s\n", err)
-	return
-}
-*/
-
-func (e *DumbBittorrentEngine) Start(workItems []int64, initialWorkers []*Peer) {
-	workerLogs := make(map[*Peer]*[]workItemLog)
-	results := make(map[int64][]byte)
-	workers := []*Peer{}
+func (e *DownloadEngine) Start(workItems []DownloadWorkItem, initialWorkers []DownloadPeer) {
+	workerLogs := make(map[DownloadPeer]*[]workItemLog)
+	results := make(map[int]DownloadWorkResult)
+	workers := []DownloadPeer{}
 
 	var resultsMutex sync.Mutex
 	var pendingWork sync.WaitGroup
 	var onlineWorkers sync.WaitGroup
 
-	dlog.Printf("starting download with %d peers", len(workers))
-	dlog.Printf("downloading %d items", len(workItems))
+	e.dlog.Printf("starting download with %d peers", len(workers))
+	e.dlog.Printf("downloading %d items", len(workItems))
 
 	workItemsChan := make(chan workItemInfo, len(workItems))
 	defer close(workItemsChan)
@@ -135,7 +102,7 @@ func (e *DumbBittorrentEngine) Start(workItems []int64, initialWorkers []*Peer) 
 
 	// Setup worker threads.
 	// Start peer worker threads, which take work from the workItems channel.
-	workerThread := func(peer *Peer) {
+	workerThread := func(peer DownloadPeer) {
 		onlineWorkers.Add(1)
 
 		logs := []workItemLog{}
@@ -145,7 +112,7 @@ func (e *DumbBittorrentEngine) Start(workItems []int64, initialWorkers []*Peer) 
 			defer onlineWorkers.Done() // will get called even if peer.DoWork panics
 			for {
 				// Select work item.
-				workItem, more := <-workItemsChan
+				workItemInfo, more := <-workItemsChan
 				if !more {
 					// work channel closed.
 					return
@@ -153,25 +120,25 @@ func (e *DumbBittorrentEngine) Start(workItems []int64, initialWorkers []*Peer) 
 
 				startTime := time.Now()
 
-				dlog.Printf("downloading work %d from peer %s", workItem.i, peer)
+				e.dlog.Printf("downloading work %s from peer %s", workItemInfo.String(), peer.String())
 
 				// 2. Call peer.
-				res, err := peer.DoWork(workItem.item)
+				res, err := peer.Work(workItemInfo.item)
 
 				// Log the work item.
 				itemLog := workItemLog{}
 				itemLog.startTime = startTime
-				itemLog.item = &workItem
+				itemLog.item = &workItemInfo
 				itemLog.endTime = time.Now()
 				itemLog.err = err
 				logs = append(logs, itemLog)
 
 				// 2a. Handle error.
 				if err != nil {
-					dlog.Printf("downloading work %d from peer %s - peer failed", workItem.i, peer)
+					e.dlog.Printf("downloading work %d from peer %s - peer failed", workItemInfo.i, peer)
 
 					// Re-insert into work items channel.
-					workItemsChan <- workItem
+					workItemsChan <- workItemInfo
 
 					// Exit from worker pool.
 					return
@@ -180,10 +147,10 @@ func (e *DumbBittorrentEngine) Start(workItems []int64, initialWorkers []*Peer) 
 				// 2b. Handle success.
 				// Set result.
 				resultsMutex.Lock()
-				results[int64(workItem.item)] = res
+				results[workItemInfo.i] = res
 				resultsMutex.Unlock()
 
-				dlog.Printf("downloading work %d done", workItem.i)
+				e.dlog.Printf("downloading work %d done", workItemInfo.i)
 
 				// Mark work done.
 				pendingWork.Done()
@@ -228,16 +195,16 @@ func (e *DumbBittorrentEngine) Start(workItems []int64, initialWorkers []*Peer) 
 	var err error
 	select {
 	case <-workDone:
-		dlog.Printf("all work items done")
+		e.dlog.Printf("all work items done")
 		break
 	case <-workersDone:
-		dlog.Printf("error: not enough workers to fill jobs")
+		e.dlog.Printf("error: not enough workers to fill jobs")
 		err = fmt.Errorf("not enough workers to fill jobs")
 		break
 	}
 
 	// Print the status overview of each peer's logs.
-	dlog.Printf("Peer summary table\n")
+	e.dlog.Printf("Peer summary table\n")
 	for i, peer := range workers {
 		// Get the log.
 		worklogs := workerLogs[peer]
@@ -268,7 +235,7 @@ func (e *DumbBittorrentEngine) Start(workItems []int64, initialWorkers []*Peer) 
 
 		ratePerSecond = float64(jobs_done) / (total_duration / 1000)
 
-		dlog.Printf("Peer #%d: jobs=%d success=%d failed=%d avg_duration=%s rate_per_s=%.2f\n", i, len(*worklogs), jobs_done, jobs_failed, time.Duration(avg_duration), ratePerSecond)
+		e.dlog.Printf("Peer #%d: jobs=%d success=%d failed=%d avg_duration=%.2f ms rate_per_s=%.2f\n", i, len(*worklogs), jobs_done, jobs_failed, avg_duration, ratePerSecond)
 	}
 
 	close(e.newWorkersChan)
