@@ -116,3 +116,11 @@ func MakeTransferTx(from [65]byte, to [65]byte, amount uint64, wallet *core.Wall
 	copy(tx.Sig[:], sig)
 	return tx
 }
+
+func GetMerkleRootForTxs(txs []RawTransaction) [32]byte {
+	envs := make([][]byte, 0)
+	for _, tx := range txs {
+		envs = append(envs, tx.Bytes())
+	}
+	return core.ComputeMerkleHash(envs)
+}
