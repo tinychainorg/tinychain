@@ -82,7 +82,6 @@ func (c *StateMachine) transitionTransfer(input StateMachineInput) ([]*StateLeaf
 	// 2. minerBalance += fee
 	// 3. amount + fee
 	// Check if the `to` balance will overflow.
-	// The Add64 function adds two 64-bit unsigned integers along with an optional carry-in value. It returns the result of the addition and the carry-out value. The carry-out is set to 1 if the addition results in an overflow (i.e., the sum is greater than what can be represented in 64 bits), and 0 otherwise.
 	if _, carry := bits.Add64(toBalance, amount, 0); carry != 0 {
 		return nil, ErrToBalanceOverflow
 	}
@@ -134,7 +133,6 @@ func (c *StateMachine) transitionCoinbase(input StateMachineInput) ([]*StateLeaf
 	amount := input.RawTransaction.Amount
 
 	// Check if the `to` balance will overflow.
-	// The Add64 function adds two 64-bit unsigned integers along with an optional carry-in value. It returns the result of the addition and the carry-out value. The carry-out is set to 1 if the addition results in an overflow (i.e., the sum is greater than what can be represented in 64 bits), and 0 otherwise.
 	if _, carry := bits.Add64(toBalance, amount, 0); carry != 0 {
 		return nil, ErrToBalanceOverflow
 	}
