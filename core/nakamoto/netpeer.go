@@ -58,6 +58,10 @@ type Peer struct {
 	clientVersion string
 }
 
+func (peer *Peer) String() string {
+	return peer.url // TODO url not always available.
+}
+
 func NewPeerCore(config PeerConfig) *PeerCore {
 	p := &PeerCore{
 		peers:                      []Peer{},
