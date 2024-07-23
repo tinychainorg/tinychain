@@ -7,7 +7,7 @@ import (
 	"github.com/liamzebedee/tinychain-go/core"
 )
 
-// Downloads block headers in parallel from a set of peers for a set of heights, relative to a base blockhash and height.
+// Downloads block headers/bodies in parallel from a set of peers for a set of heights, relative to a base blockhash and height.
 //
 // The total number of headers we are downloading is represented by the count of items inside the heightMap.
 // The header size is estimated as 200 B. So for 2048 headers, we are downloading 409 KB.
@@ -71,7 +71,7 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 	for i, item := range workItems {
 		peer := peers[i%len(peers)]
 		go func(item ChunkWorkItem) {
-			headers, err := n.Peer.SyncGetBlockHeaders(peer, fromNode, item.heights)
+			headers, err := n.Peer.SyncGetBlockData(peer, fromNode, item.heights, getHeaders, getBodies)
 			if err != nil {
 				// TODO handle error
 				n.syncLog.Printf("Failed to get headers from peer: %s\n", err)

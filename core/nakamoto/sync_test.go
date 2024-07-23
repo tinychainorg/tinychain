@@ -172,5 +172,22 @@ func TestSyncGetPeerTips(t *testing.T) {
 	// tip1 has 1 peer, tip3 has 1 peer.
 	assert.Equal(1, len(node2_peerTips[tip1.Hash]))
 	assert.Equal(1, len(node2_peerTips[tip3.Hash]))
+}
+
+func TestSyncScheduleDownloadWork(t *testing.T) {
+	// After getting the tips, then we need to divide them into work units.
+
+	// Basically speaking:
+	// - for one set of tips
+	// -- for each tip
+	// --- divide the work into chunks: work / chunk_size
+	// --- setup peer worker threads
+	// --- distribute work to peer workers
+	// wait for download to complete.
+
+	// to modify the dumbtorrent code to do this:
+	// - workItem should basically be the call arguments to the SyncGetData function
+	// - peer is the same NetPeer, though DoWork calls ourpeer.PeerSyncGetData(peer, args)
+	// - the result type is something like SyncGetDataReply.
 
 }

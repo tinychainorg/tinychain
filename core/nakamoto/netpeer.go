@@ -365,36 +365,13 @@ func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights core.Bitset) ([]BlockHeader, error) {
+func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.Bitset, inclHeaders bool, inclBodies bool) ([][]RawTransaction, error) {
 	msg := SyncGetDataMessage{
-		Type:      "get_block_headers",
+		Type:      "sync_get_data",
 		FromBlock: fromBlock,
 		Heights:   heights,
-		Headers:   true,
-		Bodies:    false,
-	}
-	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
-	if err != nil {
-		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return []BlockHeader{}, err
-	}
-
-	// Decode reply.
-	var reply SyncGetDataReply
-	if err := json.Unmarshal(res, &reply); err != nil {
-		return reply.Headers, err
-	}
-
-	return reply.Headers, nil
-}
-
-func (p *PeerCore) SyncGetBlockTransactions(peer Peer, fromBlock [32]byte, heights core.Bitset) ([][]RawTransaction, error) {
-	msg := SyncGetDataMessage{
-		Type:      "get_block_txs",
-		FromBlock: fromBlock,
-		Heights:   heights,
-		Headers:   false,
-		Bodies:    true,
+		Headers:   inclHeaders,
+		Bodies:    inclBodies,
 	}
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
