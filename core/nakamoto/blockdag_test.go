@@ -333,7 +333,7 @@ func TestDagAddBlockSuccess(t *testing.T) {
 			tx,
 		},
 	}
-	b.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	b.TransactionsMerkleRoot = GetMerkleRootForTxs(b.Transactions)
 
 	// Mine the POW solution.
 	epoch, err := blockdag.GetEpochForBlockHash(b.ParentHash)
@@ -378,7 +378,7 @@ func TestDagAddBlockWithDynamicSignature(t *testing.T) {
 			tx,
 		},
 	}
-	b.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	b.TransactionsMerkleRoot = GetMerkleRootForTxs(b.Transactions)
 
 	// Mine the POW solution.
 	epoch, err := blockdag.GetEpochForBlockHash(b.ParentHash)
@@ -568,7 +568,7 @@ func TestDagGetEpochForBlockHashNewBlock(t *testing.T) {
 			tx,
 		},
 	}
-	raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 
 	// Mine the POW solution.
 	epoch, err := blockdag.GetEpochForBlockHash(raw.ParentHash)
@@ -628,7 +628,7 @@ func TestDagGetLatestTip(t *testing.T) {
 			tx,
 		},
 	}
-	raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 
 	// Mine the POW solution.
 	epoch, err := blockdag.GetEpochForBlockHash(raw.ParentHash)
@@ -694,7 +694,7 @@ func TestMinerProcedural(t *testing.T) {
 				tx,
 			},
 		}
-		raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+		raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 
 		t.Logf("Mining block height=%d parentTotalWork=%s\n", current_height, acc_work.String())
 

@@ -3,12 +3,17 @@ package nakamoto
 import (
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	_ "github.com/mattn/go-sqlite3"
+)
+
+var (
+	ErrBlockNotFound = fmt.Errorf("Block not found.")
 )
 
 func OpenDB(dbPath string) (*sql.DB, error) {
@@ -597,11 +602,13 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// 1. Verify parent is known.
 	parentBlock, err := dag.GetBlockByHash(raw.ParentHash)
+
+	// Check if block not found error.
+	if errors.Is(err, ErrBlockNotFound) {
+		return fmt.Errorf("Unknown parent block.")
+	}
 	if err != nil {
 		return err
-	}
-	if parentBlock == nil {
-		return fmt.Errorf("Unknown parent block.")
 	}
 
 	// 2. Verify timestamp is within bounds.

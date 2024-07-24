@@ -6,3 +6,4 @@
 tinychain
 build
 website/
+*.log
