@@ -38,6 +38,8 @@ type PeerCore struct {
 	externalIp   string
 	externalPort string
 
+	peerId string
+
 	GossipPeersIntervalSeconds int
 
 	OnNewBlock          func(block RawBlock)
@@ -63,11 +65,17 @@ func (peer *Peer) String() string {
 }
 
 func NewPeerCore(config PeerConfig) *PeerCore {
+	wallet, err := core.CreateRandomWallet()
+	if err != nil {
+		log.Fatalf("Failed to create internal peer keypair: %v", err)
+	}
+
 	p := &PeerCore{
 		peers:                      []Peer{},
 		server:                     nil,
 		config:                     config,
 		GossipPeersIntervalSeconds: 30,
+		peerId:                     wallet.PubkeyStr(),
 		peerLogger:                 *NewLogger("peer", fmt.Sprintf(":%s", config.port)),
 	}
 
@@ -90,7 +98,10 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 			return nil, err
 		}
 
-		return nil, nil
+		// Send a heartbeat back.
+		heartbeatReply := p.makeHeartbeat()
+
+		return heartbeatReply, nil
 	})
 
 	p.server.RegisterMesageHandler("new_block", func(message []byte) (interface{}, error) {
@@ -437,6 +448,20 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
 	p.peerLogger.Println("Bootstrapping complete.")
 }
 
+func (p *PeerCore) makeHeartbeat() HeartbeatMesage {
+	heartbeatMsg := HeartbeatMesage{
+		Type:                "heartbeat",
+		TipHash:             "",
+		TipHeight:           0,
+		ClientVersion:       CLIENT_VERSION,
+		WireProtocolVersion: WIRE_PROTOCOL_VERSION,
+		ClientAddress:       p.GetExternalAddr(),
+		Time:                time.Now(),
+		PeerId:              p.peerId,
+	}
+	return heartbeatMsg
+}
+
 func (p *PeerCore) AddPeer(peerInfo string) {
 	// Check URL valid.
 	_, err := url.Parse(peerInfo)
@@ -453,15 +478,7 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 		clientVersion: "",
 	}
 
-	heartbeatMsg := HeartbeatMesage{
-		Type:                "heartbeat",
-		TipHash:             "",
-		TipHeight:           0,
-		ClientVersion:       CLIENT_VERSION,
-		WireProtocolVersion: WIRE_PROTOCOL_VERSION,
-		ClientAddress:       p.GetExternalAddr(),
-		Time:                time.Now(),
-	}
+	heartbeatMsg := p.makeHeartbeat()
 
 	if peer.url == p.GetExternalAddr() || peer.url == p.GetLocalAddr() {
 		// Skip self.
@@ -470,13 +487,26 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 	}
 
 	// Send heartbeat message to peer.
-	_, err = SendMessageToPeer(peer.url, heartbeatMsg, &p.peerLogger)
+	res, err := SendMessageToPeer(peer.url, heartbeatMsg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
 		return
 	}
 
-	p.peerLogger.Println("Peer is alive, adding to peer list")
+	// Decode response.
+	var heartbeatReply HeartbeatMesage
+	if err := json.Unmarshal(res, &heartbeatReply); err != nil {
+		p.peerLogger.Printf("Failed to unmarshal heartbeat reply: %v", err)
+		return
+	}
+
+	p.peerLogger.Println("Peer is alive")
+
+	// Now we check if this is our peer.
+	if heartbeatReply.PeerId == p.peerId {
+		p.peerLogger.Printf("AddPeer found peerInfo corresponding to our peer. Skipping.\n")
+		return
+	}
 
 	// Add peer to list.
 	p.peers = append(p.peers, peer)
