@@ -21,6 +21,8 @@ type BlockHeader struct {
 	Graffiti               [32]byte
 }
 
+type BlockBody = []RawTransaction
+
 type Block struct {
 	// Block header.
 	ParentHash             [32]byte
@@ -33,7 +35,7 @@ type Block struct {
 	Graffiti               [32]byte
 
 	// Block body.
-	Transactions []RawTransaction
+	Transactions BlockBody
 
 	// Metadata.
 	Height          uint64
