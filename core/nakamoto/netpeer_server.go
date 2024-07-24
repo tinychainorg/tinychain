@@ -67,8 +67,8 @@ func (s *PeerServer) Start() error {
 		return handlers
 	}())
 
+	s.log.Printf("Peer server listening on http://%s\n", s.server.Addr)
 	if err := s.server.ListenAndServe(); err != nil {
-		s.log.Printf("Peer server listening on http://%s\n", s.server.Addr)
 		s.log.Println("Error starting server:", err)
 		return err
 	}
