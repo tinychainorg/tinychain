@@ -92,7 +92,7 @@ func (b *Block) ToBlockHeader() BlockHeader {
 	return BlockHeader{
 		ParentHash:             b.ParentHash,
 		ParentTotalWork:        BigIntToBytes32(b.ParentTotalWork),
-		Difficulty:             BigIntToBytes32(b.Work),
+		Difficulty:             b.Difficulty,
 		Timestamp:              b.Timestamp,
 		NumTransactions:        b.NumTransactions,
 		TransactionsMerkleRoot: b.TransactionsMerkleRoot,
