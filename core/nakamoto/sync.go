@@ -1,11 +1,25 @@
 package nakamoto
 
 import (
+	"fmt"
 	"math/big"
 	"sync"
 
 	"github.com/liamzebedee/tinychain-go/core"
 )
+
+// Now setup a downloader.
+type downloadPeerImpl struct {
+	ourpeer *PeerCore
+	peer    *Peer
+}
+
+func (d downloadPeerImpl) String() string {
+	return d.peer.String()
+}
+func (d downloadPeerImpl) Work(item DownloadWorkItem) (DownloadWorkResult, error) {
+	return d.ourpeer.SyncGetBlockData(*d.peer, item.FromBlock, item.Heights, item.Headers, item.Bodies)
+}
 
 // Downloads block headers/bodies in parallel from a set of peers for a set of heights, relative to a base blockhash and height.
 //
@@ -16,7 +30,7 @@ import (
 //
 // This function supports downloading as few as 1 header, which will download from a single peer, or 2048 headers, which
 // will download from as many as 9 peers in parallel.
-func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers []Peer, getHeaders bool, getBodies bool) []BlockHeader {
+func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers []Peer, getHeaders bool, getBodies bool) ([]BlockHeader, []BlockBody, error) {
 	// Size of a block header is 200 B.
 	HEADER_SIZE := 200
 
@@ -40,11 +54,7 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 	// num_chunks = (2048 * 200 / 50,000) + 1 = 9 chunks
 
 	// Then we distribute these work items to our peers.
-	type ChunkWorkItem struct {
-		heights core.Bitset
-	}
-	resultsChan := make(chan []BlockHeader, NUM_CHUNKS)
-	workItems := make([]ChunkWorkItem, NUM_CHUNKS)
+	workItems := make([]DownloadWorkItem, NUM_CHUNKS)
 
 	// Distribute the work:
 	// ...
@@ -63,36 +73,46 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 		for j := startHeight; j < endHeight; j++ {
 			heights.Insert(j)
 		}
-		workItems[i] = ChunkWorkItem{heights: *heights}
+
+		workItems[i] = DownloadWorkItem{
+			Type:      "sync_get_data",
+			FromBlock: fromNode,
+			Heights:   *heights,
+			Headers:   true,
+			Bodies:    false,
+		}
+
+		// print work item
+		n.syncLog.Printf("Work item %d: %v\n", i, workItems[i])
 	}
 
 	// Distribute the work items to our peers.
-	// TODO: queue work items only one per peer. if failure, return work item to queue for another peer to fill.
-	for i, item := range workItems {
-		peer := peers[i%len(peers)]
-		go func(item ChunkWorkItem) {
-			headers, err := n.Peer.SyncGetBlockData(peer, fromNode, item.heights, getHeaders, getBodies)
-			if err != nil {
-				// TODO handle error
-				n.syncLog.Printf("Failed to get headers from peer: %s\n", err)
-				return
-			}
-			resultsChan <- headers.Headers // TODO
-		}(item)
+	dlPeers := []DownloadPeer{}
+	for _, peer := range peers {
+		dlPeers = append(dlPeers, downloadPeerImpl{n.Peer, &peer})
 	}
 
-	// Collect the results.
-	headers := make([]BlockHeader, 0)
-	for i := 0; i < NUM_CHUNKS; i++ {
-		headers = append(headers, <-resultsChan...)
+	torrent := NewDownloadEngine()
+	go torrent.Start(workItems, dlPeers)
+	results, err := torrent.Wait()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error downloading: %s", err)
 	}
 
-	return headers
+	// Print headers received.
+	n.syncLog.Printf("Received %d headers\n", len(results[0].Headers))
+
+	headers := []BlockHeader{}
+	for _, result := range results {
+		headers = append(headers, result.Headers...)
+	}
+	bodies := []BlockBody{}
+	for _, result := range results {
+		bodies = append(bodies, result.Bodies...)
+	}
+
+	return headers, bodies, nil
 }
-
-// get_tip_at_height(dag_node_hash, depth) -> BlockHeader
-// get_headers(base_node, base_height, height_set) -> []BlockHeader
-// get_blocks(base_node, base_height, height_set) - > [][]Transaction
 
 // sync_get_tip_at_depth
 type SyncGetTipAtDepthMessage struct {
@@ -213,7 +233,11 @@ func (n *Node) Sync() {
 			}
 
 			// 2b. Download headers.
-			headers := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
+			headers, _, err := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
+			if err != nil {
+				n.log.Printf("Failed to download headers: %s\n", err)
+				continue
+			}
 
 			// 2c. Validate headers.
 			// Sanity-check: verify we have all the headers for the heights in order. TODO.

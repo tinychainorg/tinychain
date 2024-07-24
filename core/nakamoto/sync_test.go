@@ -176,20 +176,6 @@ func TestSyncGetPeerTips(t *testing.T) {
 	assert.Equal(1, len(node2_peerTips[tip3.Hash]))
 }
 
-// Now setup a downloader.
-type downloadPeerImpl struct {
-	ourpeer *PeerCore
-	peer    *Peer
-}
-
-func (d downloadPeerImpl) String() string {
-	return d.peer.String()
-}
-func (d downloadPeerImpl) Work(item DownloadWorkItem) (DownloadWorkResult, error) {
-	time.Sleep(1 * time.Millisecond)
-	return d.ourpeer.SyncGetBlockData(*d.peer, item.FromBlock, item.Heights, item.Headers, item.Bodies)
-}
-
 func TestSyncScheduleDownloadWork1(t *testing.T) {
 	// After getting the tips, then we need to divide them into work units.
 
@@ -383,7 +369,7 @@ func TestSyncScheduleDownloadWork1(t *testing.T) {
 
 }
 
-func TestSyncScheduleDownloadWork2(t *testing.T) {
+func TestSyncSyncDownloadDataHeaders(t *testing.T) {
 	// After getting the tips, then we need to divide them into work units.
 
 	assert := assert.New(t)
@@ -455,78 +441,29 @@ func TestSyncScheduleDownloadWork2(t *testing.T) {
 	t.Logf("Missing tip: %x", missingTip)
 	assert.Equal(2, len(node3_peerTips[missingTip]))
 
-	i := 0
-	for node3.Dag.HeadersTip.Hash != node1.Dag.HeadersTip.Hash {
-		t.Logf("============================")
-		t.Logf("Iteration #%d", i+1)
-		i += 1
-		tipHash := node3.Dag.HeadersTip.Hash
-
-		// Setup work items.
-		heights1 := core.NewBitset(2048)
-		heights1.Insert(0)
-		heights1.Insert(1)
-		heights2 := core.NewBitset(2048)
-		heights2.Insert(2)
-		heights2.Insert(3)
-		heights3 := core.NewBitset(2048)
-		heights3.Insert(4)
-		heights3.Insert(5)
-
-		workItems := []DownloadWorkItem{
-			{
-				Type:      "sync_get_data",
-				FromBlock: tipHash,
-				Heights:   *heights1,
-				Headers:   true,
-				Bodies:    false,
-			},
-			{
-				Type:      "sync_get_data",
-				FromBlock: tipHash,
-				Heights:   *heights2,
-				Headers:   true,
-				Bodies:    false,
-			},
-			{
-				Type:      "sync_get_data",
-				FromBlock: tipHash,
-				Heights:   *heights3,
-				Headers:   true,
-				Bodies:    false,
-			},
-		}
-
-		node3_peers := node3.Peer.GetPeers()
-		dlPeers := []DownloadPeer{
-			downloadPeerImpl{node3.Peer, &node3_peers[0]},
-			downloadPeerImpl{node3.Peer, &node3_peers[1]},
-		}
-
-		torrent := NewDownloadEngine()
-		go torrent.Start(workItems, dlPeers)
-		results, err := torrent.Wait()
-		if err != nil {
-			t.Errorf("Error downloading: %s", err)
-		}
-
-		all_headers := []BlockHeader{}
-		for _, result := range results {
-			all_headers = append(all_headers, result.Headers...)
-		}
-		headers2 := orderValidateHeaders(tip3.Hash, all_headers)
-
-		for _, header := range headers2 {
-			err := node3.Dag.IngestHeader(header)
-			if err != nil {
-				t.Errorf("Error ingesting header: %s", err)
-			}
-		}
-
-		// Now get the new headers tip.
-		tip3 = node3.Dag.HeadersTip
-		t.Logf("New tip height: %d", tip3.Height)
-		t.Logf("New tip: %x", tip3.Hash)
+	heights := core.NewBitset(2048)
+	for i := 0; i < 20; i++ {
+		heights.Insert(i)
 	}
 
+	headers, _, err := node3.SyncDownloadData(node3.Dag.HeadersTip.Hash, *heights, node3.Peer.GetPeers(), true, false)
+	if err != nil {
+		t.Errorf("Error downloading headers: %s", err)
+	}
+
+	headers2 := orderValidateHeaders(node3.Dag.HeadersTip.Hash, headers)
+	t.Logf("Ordered headers length: %d", len(headers2))
+	for _, header := range headers2 {
+		err := node3.Dag.IngestHeader(header)
+		if err != nil {
+			t.Errorf("Error ingesting header: %s", err)
+		}
+	}
+
+	// Now get the new headers tip.
+	tip3 = node3.Dag.HeadersTip
+	t.Logf("New tip height: %d", tip3.Height)
+	t.Logf("New tip: %x", tip3.Hash)
+
+	assert.Equal(node3.Dag.HeadersTip.HashStr(), node1.Dag.HeadersTip.HashStr())
 }
