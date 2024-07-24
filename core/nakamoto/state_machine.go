@@ -11,6 +11,7 @@ var ErrInsufficientBalance = errors.New("insufficient balance")
 var ErrToBalanceOverflow = errors.New("\"to\" balance overflow")
 var ErrMinerBalanceOverflow = errors.New("\"miner\" balance overflow")
 var ErrAmountPlusFeeOverflow = errors.New("(amount + fee) overflow")
+var ErrTxAlreadySequenced = errors.New("transaction already sequenced")
 
 var stateMachineLogger = NewLogger("state-machine", "")
 
