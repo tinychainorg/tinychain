@@ -467,3 +467,63 @@ func TestSyncSyncDownloadDataHeaders(t *testing.T) {
 
 	assert.Equal(node3.Dag.HeadersTip.HashStr(), node1.Dag.HeadersTip.HashStr())
 }
+
+func TestSyncSync(t *testing.T) {
+	// After getting the tips, then we need to divide them into work units.
+
+	assert := assert.New(t)
+	peers := setupTestNetwork(t)
+
+	node1 := peers[0]
+	node2 := peers[1]
+	node3 := peers[2]
+
+	// Then we check the tips.
+	tip1 := node1.Dag.FullTip
+	tip2 := node2.Dag.FullTip
+	tip3 := node3.Dag.FullTip
+
+	// Print the height of the tip.
+	t.Logf("Tip 1 height: %d", tip1.Height)
+	t.Logf("Tip 2 height: %d", tip2.Height)
+	t.Logf("Tip 3 height: %d", tip3.Height)
+
+	// Check that the tips are the same.
+	assert.Equal(tip1.HashStr(), tip2.HashStr())
+	assert.Equal(tip1.HashStr(), tip3.HashStr())
+
+	// Now disable block mining on node 3.
+	node3.Peer.OnNewBlock = nil
+
+	// Node 1 mines 15 blocks, gossips with node 2
+	node1.Miner.Start(15)
+
+	// Wait for nodes [1,2] to sync.
+	err := waitForNodesToSyncSameTip([]*Node{node1, node2})
+	assert.Nil(err)
+
+	// Print the entire hash chain according to node1.
+	hashlist, err := node1.Dag.GetLongestChainHashList(node1.Dag.FullTip.Hash, node1.Dag.FullTip.Height+10)
+	if err != nil {
+		t.Fatalf("Error getting longest chain: %s", err)
+	}
+	t.Logf("")
+	t.Logf("Longest chain according to node 1:")
+	for i, hash := range hashlist {
+		t.Logf("Block #%d: %x", i+1, hash)
+	}
+	t.Logf("")
+
+	// Wait some time for other goroutines to process.
+	time.Sleep(400 * time.Millisecond)
+
+	// Now we sync the node.
+	//
+
+	missingTip := node1.Dag.FullTip.Hash
+	t.Logf("Missing tip: %x", missingTip)
+
+	node3.Sync()
+
+	assert.Equal(node3.Dag.HeadersTip.HashStr(), node1.Dag.HeadersTip.HashStr())
+}

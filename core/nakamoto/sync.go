@@ -271,6 +271,7 @@ func (n *Node) Sync() {
 
 		// Exit when there are no more headers to download.
 		if downloaded == 0 {
+			n.syncLog.Printf("synchronisation done\n")
 			break
 		}
 	}
