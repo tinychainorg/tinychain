@@ -59,8 +59,9 @@ type HeartbeatMesage struct {
 	ClientVersion       string `json:"clientVersion"`
 	WireProtocolVersion uint   `json:"wireProtocolVersion"`
 	ClientAddress       string `json:"clientAddress"`
+	PeerId              string `json:"peerId"` // TODO temporary fix.
 	// TODO add chain/network ID.
-	Time time.Time
+	Time time.Time `json:"time"`
 }
 
 // get_tip
