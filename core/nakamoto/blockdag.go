@@ -516,11 +516,7 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	}
 
 	// 5. Verify transaction merkle root is valid.
-	txlist := make([][]byte, len(raw.Transactions))
-	for i, block_tx := range raw.Transactions {
-		txlist[i] = block_tx.Envelope()
-	}
-	expectedMerkleRoot := core.ComputeMerkleHash(txlist)
+	expectedMerkleRoot := GetMerkleRootForTxs(raw.Transactions)
 	if expectedMerkleRoot != raw.TransactionsMerkleRoot {
 		return fmt.Errorf("Merkle root does not match computed merkle root.")
 	}
@@ -639,11 +635,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 5. Verify transaction merkle root is valid.
-	txlist := make([][]byte, len(raw.Transactions))
-	for i, block_tx := range raw.Transactions {
-		txlist[i] = block_tx.Envelope()
-	}
-	expectedMerkleRoot := core.ComputeMerkleHash(txlist)
+	expectedMerkleRoot := GetMerkleRootForTxs(raw.Transactions)
 	if expectedMerkleRoot != raw.TransactionsMerkleRoot {
 		return fmt.Errorf("Merkle root does not match computed merkle root.")
 	}
