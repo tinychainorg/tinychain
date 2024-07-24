@@ -14,9 +14,9 @@ import (
 
 // The Miner is responsible for solving the Hashcash proof-of-work puzzle.
 type Miner struct {
-	dag         BlockDAG
-	minerWallet *core.Wallet
-	IsRunning   bool
+	dag            BlockDAG
+	CoinbaseWallet *core.Wallet
+	IsRunning      bool
 
 	// Mutex.
 	mutex sync.Mutex
@@ -34,13 +34,13 @@ type Miner struct {
 	log *log.Logger
 }
 
-func NewMiner(dag BlockDAG, minerWallet *core.Wallet) *Miner {
+func NewMiner(dag BlockDAG, coinbaseWallet *core.Wallet) *Miner {
 	return &Miner{
-		dag:         dag,
-		minerWallet: minerWallet,
-		IsRunning:   false,
-		mutex:       sync.Mutex{},
-		log:         NewLogger("miner", ""),
+		dag:            dag,
+		CoinbaseWallet: coinbaseWallet,
+		IsRunning:      false,
+		mutex:          sync.Mutex{},
+		log:            NewLogger("miner", ""),
 	}
 }
 
@@ -148,7 +148,7 @@ func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel
 // Creates a new block template for mining.
 func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 	// Construct coinbase tx.
-	coinbaseTx := MakeCoinbaseTx(miner.minerWallet)
+	coinbaseTx := MakeCoinbaseTx(miner.CoinbaseWallet)
 
 	// Get the current tip.
 	current_tip, err := miner.dag.GetLatestFullTip()
