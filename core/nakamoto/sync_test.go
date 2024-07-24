@@ -523,7 +523,12 @@ func TestSyncSync(t *testing.T) {
 	missingTip := node1.Dag.FullTip.Hash
 	t.Logf("Missing tip: %x", missingTip)
 
-	node3.Sync()
-
+	downloaded1 := node3.Sync()
 	assert.Equal(node3.Dag.HeadersTip.HashStr(), node1.Dag.HeadersTip.HashStr())
+	assertIntEqual(t, 15, downloaded1)
+	downloaded2 := node3.Sync()
+	assertIntEqual(t, 0, downloaded2)
+	downloaded3 := node3.Sync()
+	assertIntEqual(t, 0, downloaded3)
+
 }

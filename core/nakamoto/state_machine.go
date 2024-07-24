@@ -176,7 +176,7 @@ func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList
 			return nil, err
 		}
 
-		stateMachineLogger.Printf("Processing block %x with %d transactions", blockHash, len(*txs))
+		// stateMachineLogger.Printf("Processing block %x with %d transactions", blockHash, len(*txs))
 
 		// 2. Map transactions to state leaves through state machine transition function.
 		var stateMachineInput StateMachineInput

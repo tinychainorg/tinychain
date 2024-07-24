@@ -8,7 +8,7 @@ import (
 	"github.com/liamzebedee/tinychain-go/core"
 )
 
-// Now setup a downloader.
+// downloadPeerImpl is a wrapper around a Peer that implements the DownloadPeer interface.
 type downloadPeerImpl struct {
 	ourpeer *PeerCore
 	peer    *Peer
@@ -17,6 +17,8 @@ type downloadPeerImpl struct {
 func (d downloadPeerImpl) String() string {
 	return d.peer.String()
 }
+
+// DownloadPeerImpl performs one type of work: SyncGetBlockData.
 func (d downloadPeerImpl) Work(item DownloadWorkItem) (DownloadWorkResult, error) {
 	return d.ourpeer.SyncGetBlockData(*d.peer, item.FromBlock, item.Heights, item.Headers, item.Bodies)
 }
@@ -83,7 +85,7 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 		}
 
 		// print work item
-		n.syncLog.Printf("Work item %d: %v\n", i, workItems[i])
+		// n.syncLog.Printf("Work item %d: %v\n", i, workItems[i])
 	}
 
 	// Distribute the work items to our peers.
@@ -204,8 +206,8 @@ func (n *Node) getPeerTips(baseBlock [32]byte, depth uint64, dir int) (map[[32]b
 // Parallel downloads are done BitTorrent-style, where we divide the total download work into fixed-size work items of 50KB each, and distribute them to all our peers in a round-robin fashion. So for 2048 block headers at 200 B each, this is 409 KB of download work, divided into 9 chunks of 50 KB each. If our peer set includes 3 peers, then 9/3 = 3 chunks are downloaded from each peer. The parallel download algorithm scales automatically with the number of peers we have and the amount of work to download, so if peers drop out, the algorithm will still continue to download from the remaining peers. The download also represents its download request compactly using a bitstring - a request for 2048 block headers is represented as a bitstring of 2048 bits, where a bit at index i represents a want for a header at height start_height + i. This data format is compact, allowing peers to specify download requests for N blocks in N bits, as opposed to N uint32 integers O(4N), while also remaining flexible - peers can indicate as few as 1 header to download.
 //
 // The sync algorithm is designed so it can be called at any time.
-func (n *Node) Sync() {
-	n.log.Printf("Performing sync...\n")
+func (n *Node) Sync() int {
+	n.syncLog.Printf("Performing sync...\n")
 
 	// The sync algorithm is a greedy iterative search.
 	// We continue downloading block headers from a peer until we reach their tip.
@@ -219,7 +221,7 @@ func (n *Node) Sync() {
 		// 1. Get the tips from all our peers and bucket them.
 		peersTips, err := n.getPeerTips(currentTipHash, uint64(WINDOW_SIZE), 1)
 		if err != nil {
-			n.log.Printf("Failed to get peer tips: %s\n", err)
+			n.syncLog.Printf("Failed to get peer tips: %s\n", err)
 			return 0
 		}
 
@@ -235,7 +237,7 @@ func (n *Node) Sync() {
 			// 2b. Download headers.
 			headers, _, err := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
 			if err != nil {
-				n.log.Printf("Failed to download headers: %s\n", err)
+				n.syncLog.Printf("Failed to download headers: %s\n", err)
 				continue
 			}
 
@@ -253,6 +255,8 @@ func (n *Node) Sync() {
 
 				downloaded += 1
 			}
+
+			n.syncLog.Printf("Downloaded %d headers\n", downloaded)
 		}
 
 		// 3. Return the number of headers downloaded.
@@ -261,13 +265,16 @@ func (n *Node) Sync() {
 
 	currentTip, err := n.Dag.GetLatestHeadersTip()
 	if err != nil {
-		n.log.Printf("Failed to get latest tip: %s\n", err)
-		return
+		n.syncLog.Printf("Failed to get latest tip: %s\n", err)
+		return 0
 	}
+
+	totalSynced := 0
 
 	for {
 		// Search for headers from current tip.
 		downloaded := search(currentTip.Hash)
+		totalSynced += downloaded
 
 		// Exit when there are no more headers to download.
 		if downloaded == 0 {
@@ -275,6 +282,10 @@ func (n *Node) Sync() {
 			break
 		}
 	}
+
+	n.syncLog.Printf("Total headers downloaded: %d\n", totalSynced)
+
+	return totalSynced
 }
 
 // Contacts all our peers in parallel, gets the block header of their tip, and returns the best tip based on total work.
