@@ -186,11 +186,11 @@ func (n *Node) setup() {
 		n.stateLog.Printf("rebuild-state\n")
 		start := time.Now()
 
-		err := n.rebuildState()
-		if err != nil {
-			n.stateLog.Printf("Failed to rebuild state: %s\n", err)
-			return
-		}
+		// err := n.rebuildState()
+		// if err != nil {
+		// 	n.stateLog.Printf("Failed to rebuild state: %s\n", err)
+		// 	return
+		// }
 
 		duration := time.Since(start)
 		n.stateLog.Printf("rebuild-state completed duration=%s n_blocks=%d\n", duration.String(), n.Dag.FullTip.Height)
