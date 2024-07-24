@@ -136,7 +136,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 
 		return &block, nil
 	} else {
-		return nil, err
+		return nil, fmt.Errorf("Block not found.")
 	}
 }
 
@@ -333,6 +333,7 @@ func (dag *BlockDAG) GetLatestFullTip() (Block, error) {
 }
 
 // Gets the list of hashes for the longest chain, traversing backwards from startHash and accumulating depthFromTip items.
+// This returns the list in chronological order. list[0] is genesis.
 func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip uint64) ([][32]byte, error) {
 	list := make([][32]byte, 0, depthFromTip)
 
@@ -394,13 +395,12 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 		// Get the longest chain hash list.
 		// First begin from the current tip, accumulate all hashes back to genesis.
 		currentTip := dag.FullTip
-		longestchain, err := dag.GetLongestChainHashList(currentTip.Hash, depthFromTip)
+		longestchain, err := dag.GetLongestChainHashList(currentTip.Hash, currentTip.Height+1) // TODO off-by-one error here.
 		if err != nil {
 			return list, err
 		}
 
 		// Find the start hash.
-		// Slice the list from the start hash to depth.
 		startIndex := 0
 		for i, hash := range longestchain {
 			if hash == startHash {
@@ -409,8 +409,14 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 			}
 		}
 
-		// Slice the list.
+		// Slice the list from startIndex.
 		list = longestchain[startIndex:]
+
+		// Cap the list at depthFromTip.
+		if uint64(len(list)) > depthFromTip {
+			list = list[:depthFromTip]
+		}
+
 		return list, nil
 	}
 

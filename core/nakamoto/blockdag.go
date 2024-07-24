@@ -244,7 +244,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
 		genesisBlock.ParentTotalWork[:],
-		dag.consensus.GenesisDifficulty.Bytes(),
+		genesisBlock.Difficulty[:],
 		genesisBlock.Timestamp,
 		genesisBlock.NumTransactions,
 		genesisBlock.TransactionsMerkleRoot[:],

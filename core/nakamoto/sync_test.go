@@ -224,6 +224,18 @@ func TestSyncScheduleDownloadWork(t *testing.T) {
 	err := waitForNodesToSyncSameTip([]*Node{node1, node2})
 	assert.Nil(err)
 
+	// Print the entire hash chain according to node1.
+	hashlist, err := node1.Dag.GetLongestChainHashList(node1.Dag.FullTip.Hash, node1.Dag.FullTip.Height+10)
+	if err != nil {
+		t.Fatalf("Error getting longest chain: %s", err)
+	}
+	t.Logf("")
+	t.Logf("Longest chain according to node 1:")
+	for i, hash := range hashlist {
+		t.Logf("Block #%d: %x", i+1, hash)
+	}
+	t.Logf("")
+
 	// Wait some time for other goroutines to process.
 	time.Sleep(400 * time.Millisecond)
 
@@ -284,6 +296,11 @@ func TestSyncScheduleDownloadWork(t *testing.T) {
 			Bodies:    false,
 		},
 	}
+	// Print each work item.
+	for i, item := range workItems {
+		t.Logf("Work item #%d: heights=%d", i, item.Heights.Count())
+	}
+
 	node3_peers := node3.Peer.GetPeers()
 	dlPeers := []DownloadPeer{
 		downloadPeerImpl{node3.Peer, &node3_peers[0]},
@@ -298,11 +315,25 @@ func TestSyncScheduleDownloadWork(t *testing.T) {
 	}
 	for i, result := range results {
 		for j, header := range result.Headers {
-			t.Logf("Header #%d-%d: %x (parent %x)", (i + 1), (j + 1), header.BlockHash(), header.ParentHash)
+			if header.BlockHashStr() == "ae62302546e1af25711467737a3328a6ff0e82f413623049b8b23d53e300c12c" {
+				// print full header each field ine by line
+				t.Logf("Header #%d-%d: %x", (i + 1), (j + 1), header.BlockHash())
+				t.Logf("ParentHash: %x", header.ParentHash)
+				t.Logf("ParentTotalWork: %x", header.ParentTotalWork)
+				t.Logf("Difficulty: %x", header.Difficulty)
+				t.Logf("Timestamp: %x", header.Timestamp)
+				t.Logf("NumTransactions: %d", header.NumTransactions)
+				t.Logf("TransactionsMerkleRoot: %x", header.TransactionsMerkleRoot)
+				t.Logf("Nonce: %x", header.Nonce)
+				t.Logf("Graffiti: %x", header.Graffiti)
+				t.Logf("")
+				// log the genesis block
+			}
+			t.Logf("Header #%d-%d: %x (parent %x, nonce %x)", (i + 1), (j + 1), header.BlockHash(), header.ParentHash, header.Nonce)
 		}
 	}
 
-	// TODO: 1-1 ae62302546e1af25711467737a3328a6ff0e82f413623049b8b23d53e300c12c
+	// Verify the headers we get back are the right ones.
 
 	// Now we need to order the headers.
 	all_headers := []BlockHeader{}
@@ -363,4 +394,5 @@ func TestSyncScheduleDownloadWork(t *testing.T) {
 	tip3 = node3.Dag.FullTip
 	t.Logf("New full tip height: %d", tip3.Height)
 	t.Logf("New full tip: %x", tip3.Hash)
+
 }

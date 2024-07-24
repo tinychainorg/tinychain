@@ -128,11 +128,11 @@ func (n *Node) setup() {
 	// Upload blocks to other peers.
 	n.Peer.OnSyncGetData = func(msg SyncGetBlockDataMessage) (SyncGetBlockDataReply, error) {
 		reply := SyncGetBlockDataReply{
-			Headers: make([]BlockHeader, 0),
-			Bodies:  make([][]RawTransaction, 0),
+			Headers: []BlockHeader{},
+			Bodies:  [][]RawTransaction{},
 		}
 
-		// 1. Get the path forward from baseNode -> baseNode.height + WINDOW_SIZE
+		// 1. Get the full path forward from baseNode -> baseNode.height + WINDOW_SIZE
 		nodes1, err := n.Dag.GetPath(msg.FromBlock, uint64(msg.Heights.Size()), 1)
 		if err != nil {
 			return reply, err
