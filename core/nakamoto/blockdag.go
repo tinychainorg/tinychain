@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	_ "github.com/mattn/go-sqlite3"
@@ -32,7 +33,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
 	// Check the database version.
-	rows, err := tx.Query("select version from tinychain_version limit 1")
+	rows, err := tx.Query("select version from tinychain_version order by version asc limit 1")
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
@@ -119,7 +120,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 
 		// Create indexes.
-		_, err = tx.Exec("create index blocks_parent_hash on blocks (parent_hash)")
+		_, err = tx.Exec(`create index blocks_parent_hash on blocks (parent_hash)`)
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks_parent_hash' index: %s", err)
 		}
@@ -130,6 +131,27 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			return nil, fmt.Errorf("error updating database version: %s", err)
 		}
 
+		logger.Printf("Database upgraded to: %d\n", dbVersion)
+	}
+	if databaseVersion < 1 {
+		_, err = tx.Exec(
+			`CREATE INDEX idx_blocks_parent_hash ON blocks (parent_hash);
+			CREATE INDEX idx_blocks_hash ON blocks (hash);
+			CREATE INDEX idx_blocks_acc_work ON blocks (acc_work);
+			CREATE INDEX idx_transactions_blocks_block_hash ON transactions_blocks (block_hash);
+			CREATE INDEX idx_transactions_blocks_transaction_hash ON transactions_blocks (transaction_hash);
+			CREATE INDEX idx_transactions_blocks_txindex ON transactions_blocks (txindex);
+		`)
+		if err != nil {
+			return nil, fmt.Errorf("error creating indexes: %s", err)
+		}
+
+		// Update version.
+		dbVersion := 2
+		_, err = tx.Exec("insert into tinychain_version (version) values (?)", dbVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error updating database version: %s", err)
+		}
 		logger.Printf("Database upgraded to: %d\n", dbVersion)
 	}
 
@@ -158,6 +180,9 @@ type BlockDAG struct {
 	// Consensus settings.
 	consensus ConsensusConfig
 
+	// Tips mutex.
+	tipsMutex *sync.Mutex
+
 	// The "light client" tip. This is the tip of the heaviest chain of block headers.
 	HeadersTip Block
 
@@ -177,6 +202,7 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus
 		stateMachine: stateMachine,
 		consensus:    consensus,
 		log:          NewLogger("blockdag", ""),
+		tipsMutex:    &sync.Mutex{},
 	}
 
 	err := dag.initialiseBlockDAG()
@@ -315,6 +341,9 @@ func (dag *BlockDAG) updateFullTip() error {
 }
 
 func (dag *BlockDAG) updateTip() error {
+	dag.tipsMutex.Lock()
+	defer dag.tipsMutex.Unlock()
+
 	err := dag.updateHeadersTip()
 	if err != nil {
 		return err
@@ -471,7 +500,8 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 		rows.Scan(&count)
 	}
 	rows.Close()
-	dag.log.Printf("Blocks with merkle root: %d\n", count)
+	// dag.log.Printf("Blocks with merkle root: %d\n", count)
+	// TODO later.
 
 	if count > 0 {
 		return fmt.Errorf("Block already has transactions ingested.")

@@ -80,8 +80,8 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 			Type:      "sync_get_data",
 			FromBlock: fromNode,
 			Heights:   *heights,
-			Headers:   true,
-			Bodies:    false,
+			Headers:   getHeaders,
+			Bodies:    getBodies,
 		}
 
 		// print work item
@@ -257,6 +257,31 @@ func (n *Node) Sync() int {
 			}
 
 			n.syncLog.Printf("Downloaded %d headers\n", downloaded)
+
+			// Now get the bodies.
+			// Filter through missing bodies for headers.
+			heights2 := core.NewBitset(WINDOW_SIZE)
+			for i, _ := range headers2 {
+				heights2.Insert(i)
+			}
+			_, bodies, err := n.SyncDownloadData(currentTipHash, *heights2, peers, false, true)
+			if err != nil {
+				n.syncLog.Printf("Failed to download bodies: %s\n", err)
+				continue
+			}
+
+			// Print the bdoeis and exit.
+			n.syncLog.Printf("Downloaded bodies n=%d\n", len(bodies))
+
+			// 2d. Ingest bodies.
+			for i, body := range bodies {
+				err := n.Dag.IngestBlockBody(body)
+				if err != nil {
+					// Skip. We will not be able to download the bodies.
+					n.syncLog.Printf("Failed to ingest body %d: %s\n", i, err)
+					continue
+				}
+			}
 		}
 
 		// 3. Return the number of headers downloaded.

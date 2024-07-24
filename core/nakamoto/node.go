@@ -240,7 +240,6 @@ func (n *Node) Start() {
 
 	go n.Peer.Start()
 	go n.syncRoutine()
-	// go n.Miner.Start(-1)
 
 	<-done
 }
