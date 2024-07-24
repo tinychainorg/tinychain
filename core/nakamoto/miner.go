@@ -51,7 +51,7 @@ func MakeCoinbaseTx(wallet *core.Wallet) RawTransaction {
 		Sig:        [64]byte{},
 		FromPubkey: wallet.PubkeyBytes(),
 		ToPubkey:   wallet.PubkeyBytes(),
-		Amount:     1000000000,
+		Amount:     50,
 		Fee:        0,
 		Nonce:      0,
 	}
@@ -173,7 +173,7 @@ func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 		ParentHash:             current_tip.Hash,
 		ParentTotalWork:        BigIntToBytes32(current_tip.AccumulatedWork),
 		Timestamp:              Timestamp(),
-		NumTransactions:        1,
+		NumTransactions:        uint64(len(blockBody)),
 		TransactionsMerkleRoot: [32]byte{},
 		Nonce:                  [32]byte{},
 		Transactions:           blockBody,
