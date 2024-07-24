@@ -190,7 +190,7 @@ func (d downloadPeerImpl) Work(item DownloadWorkItem) (DownloadWorkResult, error
 	return d.ourpeer.SyncGetBlockData(*d.peer, item.FromBlock, item.Heights, item.Headers, item.Bodies)
 }
 
-func TestSyncScheduleDownloadWork(t *testing.T) {
+func TestSyncScheduleDownloadWork1(t *testing.T) {
 	// After getting the tips, then we need to divide them into work units.
 
 	assert := assert.New(t)
@@ -315,20 +315,6 @@ func TestSyncScheduleDownloadWork(t *testing.T) {
 	}
 	for i, result := range results {
 		for j, header := range result.Headers {
-			if header.BlockHashStr() == "ae62302546e1af25711467737a3328a6ff0e82f413623049b8b23d53e300c12c" {
-				// print full header each field ine by line
-				t.Logf("Header #%d-%d: %x", (i + 1), (j + 1), header.BlockHash())
-				t.Logf("ParentHash: %x", header.ParentHash)
-				t.Logf("ParentTotalWork: %x", header.ParentTotalWork)
-				t.Logf("Difficulty: %x", header.Difficulty)
-				t.Logf("Timestamp: %x", header.Timestamp)
-				t.Logf("NumTransactions: %d", header.NumTransactions)
-				t.Logf("TransactionsMerkleRoot: %x", header.TransactionsMerkleRoot)
-				t.Logf("Nonce: %x", header.Nonce)
-				t.Logf("Graffiti: %x", header.Graffiti)
-				t.Logf("")
-				// log the genesis block
-			}
 			t.Logf("Header #%d-%d: %x (parent %x, nonce %x)", (i + 1), (j + 1), header.BlockHash(), header.ParentHash, header.Nonce)
 		}
 	}
@@ -394,5 +380,153 @@ func TestSyncScheduleDownloadWork(t *testing.T) {
 	tip3 = node3.Dag.FullTip
 	t.Logf("New full tip height: %d", tip3.Height)
 	t.Logf("New full tip: %x", tip3.Hash)
+
+}
+
+func TestSyncScheduleDownloadWork2(t *testing.T) {
+	// After getting the tips, then we need to divide them into work units.
+
+	assert := assert.New(t)
+	peers := setupTestNetwork(t)
+
+	node1 := peers[0]
+	node2 := peers[1]
+	node3 := peers[2]
+
+	// Then we check the tips.
+	tip1 := node1.Dag.FullTip
+	tip2 := node2.Dag.FullTip
+	tip3 := node3.Dag.FullTip
+
+	// Print the height of the tip.
+	t.Logf("Tip 1 height: %d", tip1.Height)
+	t.Logf("Tip 2 height: %d", tip2.Height)
+	t.Logf("Tip 3 height: %d", tip3.Height)
+
+	// Check that the tips are the same.
+	assert.Equal(tip1.HashStr(), tip2.HashStr())
+	assert.Equal(tip1.HashStr(), tip3.HashStr())
+
+	// Now disable block mining on node 3.
+	node3.Peer.OnNewBlock = nil
+
+	// Node 1 mines 15 blocks, gossips with node 2
+	node1.Miner.Start(15)
+
+	// Wait for nodes [1,2] to sync.
+	err := waitForNodesToSyncSameTip([]*Node{node1, node2})
+	assert.Nil(err)
+
+	// Print the entire hash chain according to node1.
+	hashlist, err := node1.Dag.GetLongestChainHashList(node1.Dag.FullTip.Hash, node1.Dag.FullTip.Height+10)
+	if err != nil {
+		t.Fatalf("Error getting longest chain: %s", err)
+	}
+	t.Logf("")
+	t.Logf("Longest chain according to node 1:")
+	for i, hash := range hashlist {
+		t.Logf("Block #%d: %x", i+1, hash)
+	}
+	t.Logf("")
+
+	// Wait some time for other goroutines to process.
+	time.Sleep(400 * time.Millisecond)
+
+	// Basically speaking:
+	// - for one set of tips
+	// -- for each tip
+	// --- divide the work into chunks: work / chunk_size
+	// --- setup peer worker threads
+	// --- distribute work to peer workers
+	// wait for download to complete.
+
+	// Get the latest tips.
+	tip1 = node1.Dag.FullTip
+	tip2 = node2.Dag.FullTip
+	tip3 = node3.Dag.FullTip
+
+	// Now we commence syncing for node 3 from nodes [1,2].
+	node3_peerTips, _ := node3.getPeerTips(tip3.Hash, uint64(20), 1)
+	logPeerTips(t, "Node 3", node3_peerTips)
+	// 000292441f3c7a39f44cfaf092bfb6f4399256b50bf23aa27da22da067b937a1
+
+	missingTip := tip1.Hash
+	// print missing tip
+	t.Logf("Missing tip: %x", missingTip)
+	assert.Equal(2, len(node3_peerTips[missingTip]))
+
+	i := 0
+	for node3.Dag.HeadersTip.Hash != node1.Dag.HeadersTip.Hash {
+		t.Logf("============================")
+		t.Logf("Iteration #%d", i+1)
+		i += 1
+		tipHash := node3.Dag.HeadersTip.Hash
+
+		// Setup work items.
+		heights1 := core.NewBitset(2048)
+		heights1.Insert(0)
+		heights1.Insert(1)
+		heights2 := core.NewBitset(2048)
+		heights2.Insert(2)
+		heights2.Insert(3)
+		heights3 := core.NewBitset(2048)
+		heights3.Insert(4)
+		heights3.Insert(5)
+
+		workItems := []DownloadWorkItem{
+			{
+				Type:      "sync_get_data",
+				FromBlock: tipHash,
+				Heights:   *heights1,
+				Headers:   true,
+				Bodies:    false,
+			},
+			{
+				Type:      "sync_get_data",
+				FromBlock: tipHash,
+				Heights:   *heights2,
+				Headers:   true,
+				Bodies:    false,
+			},
+			{
+				Type:      "sync_get_data",
+				FromBlock: tipHash,
+				Heights:   *heights3,
+				Headers:   true,
+				Bodies:    false,
+			},
+		}
+
+		node3_peers := node3.Peer.GetPeers()
+		dlPeers := []DownloadPeer{
+			downloadPeerImpl{node3.Peer, &node3_peers[0]},
+			downloadPeerImpl{node3.Peer, &node3_peers[1]},
+		}
+
+		torrent := NewDownloadEngine()
+		go torrent.Start(workItems, dlPeers)
+		results, err := torrent.Wait()
+		if err != nil {
+			t.Errorf("Error downloading: %s", err)
+		}
+
+		all_headers := []BlockHeader{}
+		for _, result := range results {
+			all_headers = append(all_headers, result.Headers...)
+		}
+		headers2 := orderValidateHeaders(tip3.Hash, all_headers)
+
+		for _, header := range headers2 {
+			err := node3.Dag.IngestHeader(header)
+			if err != nil {
+				t.Errorf("Error ingesting header: %s", err)
+			}
+		}
+
+		// Now get the new headers tip.
+		tip3 = node3.Dag.HeadersTip
+		t.Logf("New tip height: %d", tip3.Height)
+		t.Logf("New tip: %x", tip3.Hash)
+	}
 
 }

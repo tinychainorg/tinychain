@@ -5,6 +5,7 @@ import (
 )
 
 // GetBlockReward returns the block reward for a given block height.
+// It uses the standard Bitcoin inflation curve.
 func GetBlockReward(blockHeight int) float64 {
 	initialReward := 50.0
 	halvingInterval := 210000
