@@ -510,4 +510,7 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 
 	// Add peer to list.
 	p.peers = append(p.peers, peer)
+
+	// Print.
+	p.peerLogger.Printf("Added peer url=%s\n", peer.url)
 }
