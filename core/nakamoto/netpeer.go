@@ -98,6 +98,10 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 			return nil, err
 		}
 
+		// Check if this peer is contactable, try to add it to our peers cache.
+		// TODO engineer this better.
+		p.AddPeer(msg.ClientAddress)
+
 		// Send a heartbeat back.
 		heartbeatReply := p.makeHeartbeat()
 
