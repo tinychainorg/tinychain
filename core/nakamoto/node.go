@@ -239,6 +239,13 @@ func (n *Node) Start() {
 	done := make(chan bool)
 
 	go n.Peer.Start()
+
+	for {
+		n.log.Println("Syncing...")
+		downloaded := n.Sync()
+		n.log.Printf("Sync complete downloaded=%d\n", downloaded)
+		time.Sleep(5 * time.Second)
+	}
 	// go n.Miner.Start(-1)
 
 	<-done

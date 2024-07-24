@@ -27,6 +27,7 @@ func (m *MockStateMachine) VerifyTx(tx nakamoto.RawTransaction) error {
 
 func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *sql.DB) {
 	// TODO validate connection string.
+	fmt.Println("database path: ", dbPath)
 	db, err := nakamoto.OpenDB(dbPath)
 	if err != nil {
 		panic(err)
