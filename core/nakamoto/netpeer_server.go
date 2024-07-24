@@ -107,7 +107,7 @@ func (s *PeerServer) inboxHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Log the message type.
 	messageType := payload["type"].(string)
-	s.log.Printf("Received '%s' message\n", messageType)
+	s.log.Printf("Received '%s' message from %s\n", messageType, r.RemoteAddr)
 
 	// Check we have a message handler.
 	if _, ok := s.messageHandlers[messageType]; !ok {
