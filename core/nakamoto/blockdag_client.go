@@ -136,7 +136,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 
 		return &block, nil
 	} else {
-		return nil, fmt.Errorf("Block not found.")
+		return nil, ErrBlockNotFound
 	}
 }
 
