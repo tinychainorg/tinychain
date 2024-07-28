@@ -11,6 +11,7 @@ var ErrInsufficientBalance = errors.New("insufficient balance")
 var ErrToBalanceOverflow = errors.New("\"to\" balance overflow")
 var ErrMinerBalanceOverflow = errors.New("\"miner\" balance overflow")
 var ErrAmountPlusFeeOverflow = errors.New("(amount + fee) overflow")
+var ErrTxAlreadySequenced = errors.New("transaction already sequenced")
 
 var stateMachineLogger = NewLogger("state-machine", "")
 
@@ -71,61 +72,65 @@ func (c *StateMachine) Transition(input StateMachineInput) ([]*StateLeaf, error)
 }
 
 func (c *StateMachine) transitionTransfer(input StateMachineInput) ([]*StateLeaf, error) {
-	fromBalance := c.GetBalance(input.RawTransaction.FromPubkey)
-	toBalance := c.GetBalance(input.RawTransaction.ToPubkey)
-	minerBalance := c.GetBalance(input.MinerPubkey)
+	fromAcc := input.RawTransaction.FromPubkey
+	toAcc := input.RawTransaction.ToPubkey
+	minerAcc := input.MinerPubkey
+
+	fromBalance := c.GetBalance(fromAcc)
+	toBalance := c.GetBalance(toAcc)
+	minerBalance := c.GetBalance(minerAcc)
+
 	amount := input.RawTransaction.Amount
 	fee := input.RawTransaction.Fee
 
-	// Check for overflow on 3 operations:
-	// 1. toBalance += amount
-	// 2. minerBalance += fee
-	// 3. amount + fee
-	// Check if the `to` balance will overflow.
-	// The Add64 function adds two 64-bit unsigned integers along with an optional carry-in value. It returns the result of the addition and the carry-out value. The carry-out is set to 1 if the addition results in an overflow (i.e., the sum is greater than what can be represented in 64 bits), and 0 otherwise.
-	if _, carry := bits.Add64(toBalance, amount, 0); carry != 0 {
-		return nil, ErrToBalanceOverflow
-	}
-	if _, carry := bits.Add64(minerBalance, fee, 0); carry != 0 {
-		return nil, ErrMinerBalanceOverflow
-	}
+	tmpState := make(map[[65]byte]uint64)
+	tmpState[fromAcc] = fromBalance
+	tmpState[toAcc] = toBalance
+	tmpState[minerAcc] = minerBalance
+
+	// (1) from account.
+	// Check if the amount + fee will overflow.
 	if _, carry := bits.Add64(amount, fee, 0); carry != 0 {
 		return nil, ErrAmountPlusFeeOverflow
 	}
-
 	// Check if the `from` account has enough balance.
-	if fromBalance < (amount + fee) {
-		// return nil, fmt.Errorf("insufficient balance. balance=%d, amount=%d", fromBalance, amount)
+	if tmpState[fromAcc] < (amount + fee) {
 		return nil, ErrInsufficientBalance
 	}
-
 	// Deduct the coins from the `from` account balance.
-	fromBalance -= amount
+	tmpState[fromAcc] -= amount
+	tmpState[fromAcc] -= fee
 
+	// (2) to account.
+	// Check if the `to` account will overflow.
+	if _, carry := bits.Add64(tmpState[toAcc], amount, 0); carry != 0 {
+		return nil, ErrToBalanceOverflow
+	}
 	// Add the coins to the `to` account balance.
-	toBalance += amount
+	tmpState[toAcc] += amount
 
-	// Add the fee to the `miner` account balance.
-	minerBalance += fee
+	// (3) miner account.
+	// Check if the `miner` account will overflow.
+	if _, carry := bits.Add64(tmpState[minerAcc], fee, 0); carry != 0 {
+		return nil, ErrMinerBalanceOverflow
+	}
+	// Add the fee to the miner account balance.
+	tmpState[minerAcc] += fee
+
+	stateMachineLogger.Printf("Transitioning transfer: from=%x to=%x miner=%x amount=%d fee=%d", input.RawTransaction.FromPubkey, input.RawTransaction.ToPubkey, input.MinerPubkey, amount, fee)
+
+	stateMachineLogger.Printf("New balances: from=%d to=%d miner=%d", tmpState[fromAcc], tmpState[toAcc], tmpState[minerAcc])
 
 	// Create the new state leaves.
-	fromLeaf := &StateLeaf{
-		PubKey:  input.RawTransaction.FromPubkey,
-		Balance: fromBalance,
+	leaves := []*StateLeaf{}
+	for acc, balance := range tmpState {
+		leaves = append(leaves, &StateLeaf{
+			PubKey:  acc,
+			Balance: balance,
+		})
 	}
-	toLeaf := &StateLeaf{
-		PubKey:  input.RawTransaction.ToPubkey,
-		Balance: toBalance,
-	}
-	minerLeaf := &StateLeaf{
-		PubKey:  input.MinerPubkey,
-		Balance: minerBalance,
-	}
-	leaves := []*StateLeaf{
-		fromLeaf,
-		toLeaf,
-		minerLeaf,
-	}
+	stateMachineLogger.Printf("New leaves: %d leaves", len(leaves))
+
 	return leaves, nil
 }
 
@@ -134,7 +139,6 @@ func (c *StateMachine) transitionCoinbase(input StateMachineInput) ([]*StateLeaf
 	amount := input.RawTransaction.Amount
 
 	// Check if the `to` balance will overflow.
-	// The Add64 function adds two 64-bit unsigned integers along with an optional carry-in value. It returns the result of the addition and the carry-out value. The carry-out is set to 1 if the addition results in an overflow (i.e., the sum is greater than what can be represented in 64 bits), and 0 otherwise.
 	if _, carry := bits.Add64(toBalance, amount, 0); carry != 0 {
 		return nil, ErrToBalanceOverflow
 	}
@@ -172,7 +176,7 @@ func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList
 			return nil, err
 		}
 
-		stateMachineLogger.Printf("Processing block %x with %d transactions", blockHash, len(*txs))
+		// stateMachineLogger.Printf("Processing block %x with %d transactions", blockHash, len(*txs))
 
 		// 2. Map transactions to state leaves through state machine transition function.
 		var stateMachineInput StateMachineInput

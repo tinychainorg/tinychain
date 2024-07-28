@@ -333,7 +333,7 @@ func TestDagAddBlockSuccess(t *testing.T) {
 			tx,
 		},
 	}
-	b.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	b.TransactionsMerkleRoot = GetMerkleRootForTxs(b.Transactions)
 
 	// Mine the POW solution.
 	epoch, err := blockdag.GetEpochForBlockHash(b.ParentHash)
@@ -378,7 +378,7 @@ func TestDagAddBlockWithDynamicSignature(t *testing.T) {
 			tx,
 		},
 	}
-	b.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	b.TransactionsMerkleRoot = GetMerkleRootForTxs(b.Transactions)
 
 	// Mine the POW solution.
 	epoch, err := blockdag.GetEpochForBlockHash(b.ParentHash)
@@ -568,7 +568,7 @@ func TestDagGetEpochForBlockHashNewBlock(t *testing.T) {
 			tx,
 		},
 	}
-	raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 
 	// Mine the POW solution.
 	epoch, err := blockdag.GetEpochForBlockHash(raw.ParentHash)
@@ -628,7 +628,7 @@ func TestDagGetLatestTip(t *testing.T) {
 			tx,
 		},
 	}
-	raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+	raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 
 	// Mine the POW solution.
 	epoch, err := blockdag.GetEpochForBlockHash(raw.ParentHash)
@@ -694,7 +694,7 @@ func TestMinerProcedural(t *testing.T) {
 				tx,
 			},
 		}
-		raw.TransactionsMerkleRoot = core.ComputeMerkleHash([][]byte{tx.Envelope()})
+		raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 
 		t.Logf("Mining block height=%d parentTotalWork=%s\n", current_height, acc_work.String())
 
@@ -830,5 +830,377 @@ func TestDagGetLongestChainHashList(t *testing.T) {
 	for i, hash := range expectedHashList[uint64(len(expectedHashList))-depthFromTip:] {
 		assert.Equal(Bytes32ToString(hash), Bytes32ToString(hashlist[i]))
 	}
+}
 
+// Tests get path on a simple chain with no branches. ie. a -> b -> c -> d -> e
+func TestDagGetPathSingleChain(t *testing.T) {
+	// Testing the GetPath function is done differently to the other tests.
+	// It is a bit of a hack for the time being.
+	// Basically to setup the test state:
+	// - we mine a few blocks
+	// - we test we can get the path from any point forwards and reverse in that path
+	// - then we mine a couple blocks on height-1 (ie. an alternative branch)
+	// - and we test the getpath function here too.
+	assert := assert.New(t)
+	dag, _, _, genesisBlock := newBlockdag()
+	wallet := getTestingWallets(t)[0]
+	miner := NewMiner(dag, &wallet)
+	miner.OnBlockSolution = func(block RawBlock) {
+		err := dag.IngestBlock(block)
+		if err != nil {
+			t.Fatalf("Failed to ingest block: %s", err)
+		}
+	}
+
+	// Mine 3 blocks.
+	blocksMined := miner.Start(3)
+	if len(blocksMined) != 3 {
+		t.Fatalf("Failed to mine 3 blocks.")
+	}
+
+	// Log the mined blocks.
+	fullChain := []RawBlock{}
+	t.Logf("Blockchain:\n")
+	fullChain = append(fullChain, genesisBlock)
+	fullChain = append(fullChain, blocksMined...)
+	for i, block := range fullChain {
+		t.Logf("block #%d: %s\n", i+1, block.HashStr())
+	}
+
+	// Get path.
+	tip, err := dag.GetLatestFullTip()
+	if err != nil {
+		t.Fatalf("Failed to get tip: %s", err)
+	}
+
+	// (1) Get the path from the tip to the genesis (backwards traversal).
+	path, err := dag.GetPath(tip.Hash, 4, -1)
+	if err != nil {
+		t.Fatalf("Failed to get path: %s", err)
+	}
+
+	// 1a. Check the path is of correct length.
+	assert.Equal(4, len(path))
+
+	// 1b. Check the path is correct and is in traversal order.
+	for i, blockHash := range path {
+		t.Logf("Path block #%d: %x\n", i+1, blockHash)
+		// We asked for the path from tip to genesis, so the path should be in reverse order.
+		assert.Equal(fullChain[len(fullChain)-1-i].HashStr(), Bytes32ToHexString(blockHash))
+	}
+
+	// (2) Get the path from the genesis to the tip (forwards traversal).
+	path, err = dag.GetPath(genesisBlock.Hash(), 4, 1)
+	if err != nil {
+		t.Fatalf("Failed to get path: %s", err)
+	}
+
+	// 2a. Check the path is of correct length.
+	assert.Equal(4, len(path))
+
+	// 2b. Check the path is correct and is in traversal order.
+	for i, blockHash := range path {
+		t.Logf("Path block #%d: %x\n", i+1, blockHash)
+		// We asked for the path from tip to genesis, so the path should be in reverse order.
+		assert.Equal(fullChain[i].HashStr(), Bytes32ToHexString(blockHash))
+	}
+}
+
+// Tests get path on a complex chain with one branch.
+func TestDagGetPathComplexChain(t *testing.T) {
+	// Testing the GetPath function is done differently to the other tests.
+	// It is a bit of a hack for the time being.
+	// Basically to setup the test state:
+	// - we mine a few blocks
+	// - we test we can get the path from any point forwards and reverse in that path
+	// - then we mine a couple blocks on height-1 (ie. an alternative branch)
+	// - and we test the getpath function here too.
+	assert := assert.New(t)
+	dag, _, _, genesisBlock := newBlockdag()
+	wallet := getTestingWallets(t)[0]
+	miner := NewMiner(dag, &wallet)
+	miner.OnBlockSolution = func(block RawBlock) {
+		err := dag.IngestBlock(block)
+		if err != nil {
+			t.Fatalf("Failed to ingest block: %s", err)
+		}
+	}
+
+	// Mine 3 blocks.
+	blocksMined := miner.Start(3)
+	if len(blocksMined) != 3 {
+		t.Fatalf("Failed to mine 3 blocks.")
+	}
+
+	// Log the mined blocks.
+	fullChain := []RawBlock{}
+	t.Logf("Blockchain:\n")
+	fullChain = append(fullChain, genesisBlock)
+	fullChain = append(fullChain, blocksMined...)
+	for i, block := range fullChain {
+		t.Logf("block #%d: %s\n", i+1, block.HashStr())
+	}
+
+	// Get path.
+	tip, err := dag.GetLatestFullTip()
+	if err != nil {
+		t.Fatalf("Failed to get tip: %s", err)
+	}
+
+	// (1) Get the path from the tip to the genesis (backwards traversal).
+	path, err := dag.GetPath(tip.Hash, 4, -1)
+	if err != nil {
+		t.Fatalf("Failed to get path: %s", err)
+	}
+
+	// 1a. Check the path is of correct length.
+	assert.Equal(4, len(path))
+
+	// (2) Insert a new branch.
+	altBranchBaseBlock, err := dag.GetBlockByHash(blocksMined[0].Hash())
+	if err != nil {
+		t.Fatalf("Failed to get block: %s", err)
+	}
+	var alternativeTipForMining Block = *altBranchBaseBlock
+	miner.GetTipForMining = func() Block {
+		return alternativeTipForMining
+	}
+	miner.OnBlockSolution = func(block RawBlock) {
+		err := dag.IngestBlock(block)
+		if err != nil {
+			t.Fatalf("Failed to ingest block: %s", err)
+		}
+		blk, err := dag.GetBlockByHash(block.Hash())
+		if err != nil {
+			t.Fatalf("Failed to get block: %s", err)
+		}
+		alternativeTipForMining = *blk
+	}
+	altBranchBlocks := miner.Start(15)
+
+	// (3) Log the two chains.
+	t.Logf("First branch:\n")
+	for i, block := range fullChain {
+		t.Logf("block #%d: %s\n", i+1, block.HashStr())
+	}
+	t.Log()
+
+	altBranch := []RawBlock{}
+	t.Logf("Alternative branch:\n")
+	altBranch = append(altBranch, genesisBlock)
+	altBranch = append(altBranch, blocksMined[0])
+	altBranch = append(altBranch, altBranchBlocks...)
+	for i, block := range altBranch {
+		t.Logf("block #%d: %s\n", i+1, block.HashStr())
+	}
+
+	// Log the accumulated work on the tips of both branches.
+	firstBranchTip, _ := dag.GetBlockByHash(fullChain[len(fullChain)-1].Hash())
+	secondBranchTip, _ := dag.GetBlockByHash(altBranch[len(altBranch)-1].Hash())
+	t.Logf("First branch tip acc work: %s\n", firstBranchTip.AccumulatedWork.String())
+	t.Logf("Second branch tip acc work: %s\n", secondBranchTip.AccumulatedWork.String())
+
+	// Check the current tip.
+	tip, err = dag.GetLatestFullTip()
+	if err != nil {
+		t.Fatalf("Failed to get tip: %s", err)
+	}
+	t.Logf("Current tip: %s\n", tip.HashStr())
+
+	// Assert that the second branch has more work.
+	assert.True(secondBranchTip.AccumulatedWork.Cmp(&firstBranchTip.AccumulatedWork) > 0)
+
+	//
+	// TESTS BEGIN HERE.
+	//
+
+	// We will be testing these things:
+	// - traverse forward from genesis to first branch tip
+	// - traverse backwards from first branch tip to genesis
+	// - traverse forward from genesis to second branch tip
+	// - traverse backwards from second branch tip to genesis
+	//
+
+	// (4) Get the path from the tip to the genesis (backwards traversal).
+	path, err = dag.GetPath(genesisBlock.Hash(), 17, 1)
+	if err != nil {
+		t.Fatalf("Failed to get path: %s", err)
+	}
+	// 1a. Check the path is of correct length.
+	assert.Equal(17, len(path))
+
+	// 1b. Check the path is correct and is in traversal order.
+	for i, blockHash := range path {
+		t.Logf("Path block #%d: %x\n", i+1, blockHash)
+		assert.Equal(altBranch[i].HashStr(), Bytes32ToHexString(blockHash))
+	}
+
+	/*
+				It was at this point I learnt, there is no way to implement forwards iteration for the GetPath function.
+
+				Why? Because you cannot know in the middle of a chain whether you are on the heaviest chain. Because the accumulated work may be low for the (n+1)th block, but then peak in the (n+2)th block.
+
+				And here's the test log to prove it:
+
+				The second branch tip may be the heaviest chain, but while getting the path from genesis, we inadvertently select the block in the first branch because it beats the accumulated work of the block from the alternative branch.
+
+				    blockdag_test.go:983: First branch:
+		    blockdag_test.go:985: block #1: 0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7
+		    blockdag_test.go:985: block #2: 0abb5a235c89d9ab6c3578917b116958174601d0f0e873ccf0356430a5e68731
+		    blockdag_test.go:985: block #3: 01790765a25dad409399744cc320c05080f21b2b503987871ebc4627285e86e9
+		    blockdag_test.go:985: block #4: 06e1fe2a52f70b999334f7dfc7a4d95f8b6f979b5f10c1be8c07a96a635b461c
+		    blockdag_test.go:987:
+		    blockdag_test.go:990: Alternative branch:
+		    blockdag_test.go:995: block #1: 0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7
+		    blockdag_test.go:995: block #2: 0abb5a235c89d9ab6c3578917b116958174601d0f0e873ccf0356430a5e68731
+		    blockdag_test.go:995: block #3: 0e8d5a512bb727f808e5e33e461046edad272884d4c03709813ccafbf790d30c
+		    blockdag_test.go:995: block #4: 050161bc043a3dece33d5d16b37d7bcbde0872887dcf57b62275f018e64c445e
+		    blockdag_test.go:995: block #5: 0ca13067fc288169b89115ae19c0ffa6d64dca8bd4adf72fb1c65fce21d434dc
+		    blockdag_test.go:995: block #6: 1fceb631662fc8d251804e0ae3cef5a6626f8828fca9d7c685f918fed4d082a4
+		    blockdag_test.go:995: block #7: 3850a3aee99233174618ceb3927e444742525ce1a1985b3fbcf875b8ce041315
+		    blockdag_test.go:995: block #8: 27e832f88d76774e26a7b1c8b188c1008930bbfc15b0593232f9a703db97cda5
+		    blockdag_test.go:995: block #9: 1aad930ee0224ea91af3d78421b3afa95b67df99cc77af8bc9ec6df17419efd3
+		    blockdag_test.go:995: block #10: 49d4ddc7c3e2fc851ed723e69a974bab9ed0005bc2e961924fa433237127e076
+		    blockdag_test.go:995: block #11: 000a7ca20fcae413dd9ce197ca3a719cae485566023eae3edae0f4a3615ba4e9
+		    blockdag_test.go:995: block #12: 086e57e38868b4ac11c496c4bd76fa95f7c649cce7de01a0710e06ef8b612ed4
+		    blockdag_test.go:995: block #13: 0a7bea10ae6133411fbee14ffa9a306f31ae96caaf2a7358000addc265033c93
+		    blockdag_test.go:995: block #14: 0046b9e8d2c4f7a93bec4b28dd179512be54d25907956033a1067d99d3557cfb
+		    blockdag_test.go:995: block #15: 084716aa877141a09bedd5d25bb3c299773a7eb021b1dbbe182aba641faf18f4
+		    blockdag_test.go:995: block #16: 0001365b9aaa6dc24c392d18f5b223d5d7f4d9b3b370b26b9531feab4e157356
+		    blockdag_test.go:995: block #17: 00c305ed264e014eeedadc5a74a22271402398f589a6e21ef52e206c1073c6dc
+		    blockdag_test.go:1001: First branch tip acc work: 263
+		    blockdag_test.go:1002: Second branch tip acc work: 61823
+		    blockdag_test.go:1009: Current tip: 00c305ed264e014eeedadc5a74a22271402398f589a6e21ef52e206c1073c6dc
+		    blockdag_test.go:1031:
+		        	Error Trace:	/Users/liamz/tinychain-go/core/nakamoto/blockdag_test.go:1031
+		        	Error:      	Not equal:
+		        	            	expected: 17
+		        	            	actual  : 4
+		        	Test:       	TestDagGetPathComplexChain
+		    blockdag_test.go:1035: Path block #1: 0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7
+		    blockdag_test.go:1035: Path block #2: 0abb5a235c89d9ab6c3578917b116958174601d0f0e873ccf0356430a5e68731
+		    blockdag_test.go:1035: Path block #3: 01790765a25dad409399744cc320c05080f21b2b503987871ebc4627285e86e9
+		    blockdag_test.go:1036:
+		        	Error Trace:	/Users/liamz/tinychain-go/core/nakamoto/blockdag_test.go:1036
+		        	Error:      	Not equal:
+		        	            	expected: "0e8d5a512bb727f808e5e33e461046edad272884d4c03709813ccafbf790d30c"
+		        	            	actual  : "01790765a25dad409399744cc320c05080f21b2b503987871ebc4627285e86e9"
+
+		        	            	Diff:
+		        	            	--- Expected
+		        	            	+++ Actual
+		        	            	@@ -1 +1 @@
+		        	            	-0e8d5a512bb727f808e5e33e461046edad272884d4c03709813ccafbf790d30c
+		        	            	+01790765a25dad409399744cc320c05080f21b2b503987871ebc4627285e86e9
+		        	Test:       	TestDagGetPathComplexChain
+		    blockdag_test.go:1035: Path block #4: 06e1fe2a52f70b999334f7dfc7a4d95f8b6f979b5f10c1be8c07a96a635b461c
+		    blockdag_test.go:1036:
+		        	Error Trace:	/Users/liamz/tinychain-go/core/nakamoto/blockdag_test.go:1036
+		        	Error:      	Not equal:
+		        	            	expected: "050161bc043a3dece33d5d16b37d7bcbde0872887dcf57b62275f018e64c445e"
+		        	            	actual  : "06e1fe2a52f70b999334f7dfc7a4d95f8b6f979b5f10c1be8c07a96a635b461c"
+	*/
+
+	/*
+		Old code, useful for pure SQL testing:
+
+
+
+		// Print the full chain hash list of node 3.
+		// longestChainHashList, err := node3.Dag.GetLongestChainHashList(tip3.Hash, tip3.Height)
+		// // for i, hash := range longestChainHashList {
+		// // 	t.Logf("#%d: %x", i+1, hash)
+		// // }
+		// // t.Logf("Tip 3 hash: %s", tip3.HashStr())
+		// // assert.Equal(17, len(longestChainHashList))
+		// // assert.Equal(tip3.Hash, longestChainHashList[len(longestChainHashList)-1])
+
+		// path1, err := node3.Dag.GetPath(tip1.Hash, uint64(3), 1)
+
+		// t.Logf("")
+		// t.Logf("inserting fake block history on alternative branch")
+
+		// // Insert a few non descript path entries on the altnerative branch.
+		// tx, err := node3.Dag.db.Begin()
+		// if err != nil {
+		// 	t.Fatalf("Failed to begin transaction: %s", err)
+		// }
+		// blockhash := tip1.Hash
+		// tmpblocks := make([][32]byte, 0)
+		// // "mine" block 1
+		// tmpaccwork := tip1.AccumulatedWork
+		// getAccWork := func(i int64) []byte {
+		// 	buf := BigIntToBytes32(*tmpaccwork.Add(&tmpaccwork, big.NewInt(i*1000000)))
+		// 	return buf[:]
+		// }
+		// blockhash[0] += 1
+		// tmpblocks = append(tmpblocks, tip1.Hash)
+		// _, err = tx.Exec(
+		// 	"INSERT INTO blocks (parent_hash, hash, height, acc_work) VALUES (?, ?, ?, ?)",
+		// 	tmpblocks[len(tmpblocks)-1][:],
+		// 	blockhash[:],
+		// 	tip1.Height+1,
+		// 	getAccWork(1),
+		// )
+		// if err != nil {
+		// 	t.Fatalf("Failed to insert block: %s", err)
+		// }
+		// tmpblocks = append(tmpblocks, blockhash)
+		// // "mine" block 2
+		// blockhash[0] += 1
+		// _, err = tx.Exec(
+		// 	"INSERT INTO blocks (parent_hash, hash, height, acc_work) VALUES (?, ?, ?, ?)",
+		// 	(tmpblocks[len(tmpblocks)-1])[:],
+		// 	blockhash[:],
+		// 	tip1.Height+2,
+		// 	getAccWork(2),
+		// )
+		// if err != nil {
+		// 	t.Fatalf("Failed to insert block: %s", err)
+		// }
+		// tmpblocks = append(tmpblocks, blockhash)
+		// err = tx.Commit()
+		// if err != nil {
+		// 	t.Fatalf("Failed to commit transaction: %s", err)
+		// }
+		// t.Logf("inserted blocks:")
+		// t.Logf("- %x [fork point]", tmpblocks[0])
+		// t.Logf("- %x", tmpblocks[1])
+		// t.Logf("- %x", tmpblocks[2])
+		// t.Logf("")
+
+		// longestChainHashList2, err := node3.Dag.GetLongestChainHashList(node3.Dag.FullTip.Hash, node3.Dag.FullTip.Height)
+		// for i, hash := range longestChainHashList {
+		// 	t.Logf("#%d: %x", i+1, hash)
+		// }
+		// t.Log("")
+		// for i, hash := range longestChainHashList2 {
+		// 	t.Logf("#%d: %x", i+1, hash)
+		// }
+		// path2, err := node3.Dag.GetPath(tip1.Hash, uint64(2), 1)
+
+		// // Path1
+		// t.Logf("heights(15 - 17) path: %x", path1)
+
+		// // Path2
+		// t.Logf("heights(15 - 17) path: %x", path2)
+		// assert.Nil(err)
+
+		// path3, err := node3.Dag.GetPath(tmpblocks[2], uint64(2), -1)
+		// assert.Nil(err)
+		// t.Logf("heights(17_fork - 15) path: %x", path3)
+
+	*/
+}
+
+func TestDagIngestHeader(t *testing.T) {
+	// Ingest header.
+	// Updates both full and header tip.
+}
+
+func TestDagIngestBodyMissingHeader(t *testing.T) {}
+
+func TestDagIngestBody(t *testing.T) {
+	// Ingest body.
+	// Updates both full and header tip.
 }

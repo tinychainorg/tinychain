@@ -51,6 +51,15 @@ In progress: state synchronisation, user wallet API's.
 Requirements: Go 1.2.3+.
 
 ```sh
-./scripts/build.sh && cd build/ && ./tinychain node --port 8121 --db testnet.db
+make && cd build/ && ./tinychain node --port 8000 --db testnet.db -mine
+```
+
+## Running a tiny Nakamoto network.
+
+```sh
+# Terminal 1:
+./e2e/node1.sh
+# Terminal 2:
+./e2e/node2.sh
 ```
 

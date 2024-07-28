@@ -103,14 +103,36 @@ func (n *Node) setup() {
 		return n.Dag.FullTip.ToBlockHeader(), nil
 	}
 
-	// Upload blocks to other peers.
-	n.Peer.OnSyncGetData = func(msg SyncGetDataMessage) (SyncGetDataReply, error) {
-		reply := SyncGetDataReply{
-			Headers: make([]BlockHeader, 0),
-			Bodies:  make([][]RawTransaction, 0),
+	n.Peer.OnSyncGetTipAtDepth = func(msg SyncGetTipAtDepthMessage) (SyncGetTipAtDepthReply, error) {
+		direction := msg.Direction
+		if direction != 1 && direction != -1 {
+			return SyncGetTipAtDepthReply{}, fmt.Errorf("Invalid direction: %d", direction)
 		}
 
-		// 1. Get the path forward from baseNode -> baseNode.height + WINDOW_SIZE
+		// Get the tip at the depth.
+		path, err := n.Dag.GetPath(msg.FromBlock, uint64(msg.Depth), msg.Direction)
+		if err != nil {
+			return SyncGetTipAtDepthReply{}, err
+		}
+
+		if len(path) == 0 {
+			return SyncGetTipAtDepthReply{}, fmt.Errorf("No tip found at depth %d", msg.Depth)
+		}
+
+		return SyncGetTipAtDepthReply{
+			Tip: path[len(path)-1],
+		}, nil
+
+	}
+
+	// Upload blocks to other peers.
+	n.Peer.OnSyncGetData = func(msg SyncGetBlockDataMessage) (SyncGetBlockDataReply, error) {
+		reply := SyncGetBlockDataReply{
+			Headers: []BlockHeader{},
+			Bodies:  [][]RawTransaction{},
+		}
+
+		// 1. Get the full path forward from baseNode -> baseNode.height + WINDOW_SIZE
 		nodes1, err := n.Dag.GetPath(msg.FromBlock, uint64(msg.Heights.Size()), 1)
 		if err != nil {
 			return reply, err
@@ -217,9 +239,18 @@ func (n *Node) Start() {
 	done := make(chan bool)
 
 	go n.Peer.Start()
-	// go n.Miner.Start(-1)
+	go n.syncRoutine()
 
 	<-done
+}
+
+func (n *Node) syncRoutine() {
+	for {
+		n.log.Println("Syncing...")
+		downloaded := n.Sync()
+		n.log.Printf("Sync complete downloaded=%d\n", downloaded)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func (n *Node) Shutdown() {

@@ -1,0 +1,59 @@
+
+DAG
+
+    [x] test IngestHeader
+    [x] test IngestBody
+    test updates full tip / headers tip
+
+Parallel download
+
+    [x] implement a really basic version which downloads in parallel. basically a dumb bittorrent
+    [x] make sure it can work with peers joining/leaving
+    [x] probably try to do it without channels just to start with (simpler mental model)
+
+
+Currently:
+- rename Sign(msg) to accept a sighash, and then add a sighash method to tx.go
+- why is block body not being matched with block header?
+    2024/07/23 20:59:08 [blockdag] Blocks with merkle root: 0
+    sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
+    sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
+    sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
+
+
+
+
+Sync / search
+
+    Test sync - tip starts from genesis
+    Test sync - tip starts from another branch
+
+    test sync - 
+        no peers
+    
+    test sync -
+        one peer
+    
+    test sync -
+        two or more peers
+    
+    branches of the chain
+    - genesis
+    - two competing branches, both same amount of work
+    - three competing branches, downloads all headers from peers
+    - two competing branches with different depths (ie. not branches, but fuller paths)
+
+    test sync -
+        get latest tip from peer
+            returns latest tip
+        get_tip_at_depth / getpath
+            test max_depth=2048 and peer has mined 2048 blocks 
+            test max_depth=2048 and peer has mined 30 blocks, returns block 30
+    
+    GetPath
+
+Peer RPC's
+
+    test peer returns blocks from syncgetdata
+    test peer returns block bodies from syncgetdata
+

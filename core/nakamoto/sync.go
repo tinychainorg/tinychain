@@ -1,13 +1,29 @@
 package nakamoto
 
 import (
+	"fmt"
 	"math/big"
 	"sync"
 
 	"github.com/liamzebedee/tinychain-go/core"
 )
 
-// Downloads block headers in parallel from a set of peers for a set of heights, relative to a base blockhash and height.
+// downloadPeerImpl is a wrapper around a Peer that implements the DownloadPeer interface.
+type downloadPeerImpl struct {
+	ourpeer *PeerCore
+	peer    *Peer
+}
+
+func (d downloadPeerImpl) String() string {
+	return d.peer.String()
+}
+
+// DownloadPeerImpl performs one type of work: SyncGetBlockData.
+func (d downloadPeerImpl) Work(item DownloadWorkItem) (DownloadWorkResult, error) {
+	return d.ourpeer.SyncGetBlockData(*d.peer, item.FromBlock, item.Heights, item.Headers, item.Bodies)
+}
+
+// Downloads block headers/bodies in parallel from a set of peers for a set of heights, relative to a base blockhash and height.
 //
 // The total number of headers we are downloading is represented by the count of items inside the heightMap.
 // The header size is estimated as 200 B. So for 2048 headers, we are downloading 409 KB.
@@ -16,7 +32,7 @@ import (
 //
 // This function supports downloading as few as 1 header, which will download from a single peer, or 2048 headers, which
 // will download from as many as 9 peers in parallel.
-func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers []Peer, getHeaders bool, getBodies bool) []BlockHeader {
+func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers []Peer, getHeaders bool, getBodies bool) ([]BlockHeader, []BlockBody, error) {
 	// Size of a block header is 200 B.
 	HEADER_SIZE := 200
 
@@ -40,11 +56,7 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 	// num_chunks = (2048 * 200 / 50,000) + 1 = 9 chunks
 
 	// Then we distribute these work items to our peers.
-	type ChunkWorkItem struct {
-		heights core.Bitset
-	}
-	resultsChan := make(chan []BlockHeader, NUM_CHUNKS)
-	workItems := make([]ChunkWorkItem, NUM_CHUNKS)
+	workItems := make([]DownloadWorkItem, NUM_CHUNKS)
 
 	// Distribute the work:
 	// ...
@@ -63,51 +75,62 @@ func (n *Node) SyncDownloadData(fromNode [32]byte, heightMap core.Bitset, peers 
 		for j := startHeight; j < endHeight; j++ {
 			heights.Insert(j)
 		}
-		workItems[i] = ChunkWorkItem{heights: *heights}
+
+		workItems[i] = DownloadWorkItem{
+			Type:      "sync_get_data",
+			FromBlock: fromNode,
+			Heights:   *heights,
+			Headers:   getHeaders,
+			Bodies:    getBodies,
+		}
+
+		// print work item
+		// n.syncLog.Printf("Work item %d: %v\n", i, workItems[i])
 	}
 
 	// Distribute the work items to our peers.
-	// TODO: queue work items only one per peer. if failure, return work item to queue for another peer to fill.
-	for i, item := range workItems {
-		peer := peers[i%len(peers)]
-		go func(item ChunkWorkItem) {
-			headers, err := n.Peer.SyncGetBlockHeaders(peer, fromNode, item.heights)
-			if err != nil {
-				// TODO handle error
-				n.syncLog.Printf("Failed to get headers from peer: %s\n", err)
-				return
-			}
-			resultsChan <- headers
-		}(item)
+	dlPeers := []DownloadPeer{}
+	for _, peer := range peers {
+		dlPeers = append(dlPeers, downloadPeerImpl{n.Peer, &peer})
 	}
 
-	// Collect the results.
-	headers := make([]BlockHeader, 0)
-	for i := 0; i < NUM_CHUNKS; i++ {
-		headers = append(headers, <-resultsChan...)
+	torrent := NewDownloadEngine()
+	go torrent.Start(workItems, dlPeers)
+	results, err := torrent.Wait()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error downloading: %s", err)
 	}
 
-	return headers
+	// Print headers received.
+	n.syncLog.Printf("Received %d headers\n", len(results[0].Headers))
+
+	headers := []BlockHeader{}
+	for _, result := range results {
+		headers = append(headers, result.Headers...)
+	}
+	bodies := []BlockBody{}
+	for _, result := range results {
+		bodies = append(bodies, result.Bodies...)
+	}
+
+	return headers, bodies, nil
 }
-
-// get_tip_at_height(dag_node_hash, depth) -> BlockHeader
-// get_headers(base_node, base_height, height_set) -> []BlockHeader
-// get_blocks(base_node, base_height, height_set) - > [][]Transaction
 
 // sync_get_tip_at_depth
 type SyncGetTipAtDepthMessage struct {
 	Type      string   `json:"type"`
 	FromBlock [32]byte `json:"fromBlock"`
 	Depth     uint64   `json:"depth"`
+	Direction int      `json:"direction"`
 }
 
 type SyncGetTipAtDepthReply struct {
-	Type string      `json:"type"`
-	Tip  BlockHeader `json:"tip"`
+	Type string   `json:"type"`
+	Tip  [32]byte `json:"tip"`
 }
 
 // sync_get_data
-type SyncGetDataMessage struct {
+type SyncGetBlockDataMessage struct {
 	Type      string      `json:"type"`
 	FromBlock [32]byte    `json:"fromBlock"`
 	Heights   core.Bitset `json:"heights"`
@@ -115,13 +138,16 @@ type SyncGetDataMessage struct {
 	Bodies    bool        `json:"bodies"`
 }
 
-type SyncGetDataReply struct {
+type SyncGetBlockDataReply struct {
 	Type    string             `json:"type"`
 	Headers []BlockHeader      `json:"headers"`
 	Bodies  [][]RawTransaction `json:"bodies"`
 }
 
-func getValidHeaderChain(root [32]byte, headers []BlockHeader) []BlockHeader {
+// Verify the header chain we have received.
+// ie. A -> B -> C ... -> Z
+// We should have all the headers from A to Z.
+func orderValidateHeaders(root [32]byte, headers []BlockHeader) []BlockHeader {
 	// Verify the header chain we have received.
 	// ie. A -> B -> C ... -> Z
 	// We should have all the headers from A to Z.
@@ -148,6 +174,26 @@ func getValidHeaderChain(root [32]byte, headers []BlockHeader) []BlockHeader {
 	return chain
 }
 
+func (n *Node) getPeerTips(baseBlock [32]byte, depth uint64, dir int) (map[[32]byte][]Peer, error) {
+	// NOTE: we only request their tip hash in order to bucket them.
+	peersTips := make(map[[32]byte][]Peer)
+
+	for _, peer := range n.Peer.peers {
+		tip, err := n.Peer.SyncGetTipAtDepth(peer, baseBlock, depth, dir)
+		if err != nil {
+			// Skip. Peer will not be used for downloading.
+			continue
+		}
+		// check if slice exists
+		if _, ok := peersTips[tip]; !ok {
+			peersTips[tip] = make([]Peer, 0)
+		}
+		peersTips[tip] = append(peersTips[tip], peer)
+	}
+
+	return peersTips, nil
+}
+
 // Syncs the node with the network.
 //
 // The blockchain sync algorithm is the most complex part of the system. The Nakamoto blockchain is defined simply as a linked list of blocks, where the canonical chain is the one with the most amount of work done on it. A blockchain network is composed of peers who disseminate blocks and transactions, and take turns in being the leader to mine a new block.
@@ -160,8 +206,8 @@ func getValidHeaderChain(root [32]byte, headers []BlockHeader) []BlockHeader {
 // Parallel downloads are done BitTorrent-style, where we divide the total download work into fixed-size work items of 50KB each, and distribute them to all our peers in a round-robin fashion. So for 2048 block headers at 200 B each, this is 409 KB of download work, divided into 9 chunks of 50 KB each. If our peer set includes 3 peers, then 9/3 = 3 chunks are downloaded from each peer. The parallel download algorithm scales automatically with the number of peers we have and the amount of work to download, so if peers drop out, the algorithm will still continue to download from the remaining peers. The download also represents its download request compactly using a bitstring - a request for 2048 block headers is represented as a bitstring of 2048 bits, where a bit at index i represents a want for a header at height start_height + i. This data format is compact, allowing peers to specify download requests for N blocks in N bits, as opposed to N uint32 integers O(4N), while also remaining flexible - peers can indicate as few as 1 header to download.
 //
 // The sync algorithm is designed so it can be called at any time.
-func (n *Node) Sync() {
-	n.log.Printf("Performing sync...\n")
+func (n *Node) Sync() int {
+	n.syncLog.Printf("Performing sync...\n")
 
 	// The sync algorithm is a greedy iterative search.
 	// We continue downloading block headers from a peer until we reach their tip.
@@ -173,17 +219,10 @@ func (n *Node) Sync() {
 	// The depth is referred to as the "window size", and is a constant value of 2048 blocks.
 	search := func(currentTipHash [32]byte) int {
 		// 1. Get the tips from all our peers and bucket them.
-		// NOTE: we only request their tip hash in order to bucket them.
-		peersTips := make(map[[32]byte][]Peer)
-		depth := uint64(WINDOW_SIZE)
-
-		for _, peer := range n.Peer.peers {
-			tip, err := n.Peer.SyncGetTipAtDepth(peer, currentTipHash, depth)
-			if err != nil {
-				// Skip. Peer will not be used for downloading.
-				continue
-			}
-			peersTips[tip.BlockHash()] = append(peersTips[tip.BlockHash()], peer)
+		peersTips, err := n.getPeerTips(currentTipHash, uint64(WINDOW_SIZE), 1)
+		if err != nil {
+			n.syncLog.Printf("Failed to get peer tips: %s\n", err)
+			return 0
 		}
 
 		// 2. For each tip, download a window of headers and ingest them.
@@ -196,14 +235,15 @@ func (n *Node) Sync() {
 			}
 
 			// 2b. Download headers.
-			headers := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
+			headers, _, err := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
+			if err != nil {
+				n.syncLog.Printf("Failed to download headers: %s\n", err)
+				continue
+			}
 
 			// 2c. Validate headers.
-			// Sanity-check: verify we have all the headers for the heights in order.
-			// Verify the header chain we have received.
-			// ie. A -> B -> C ... -> Z
-			// We should have all the headers from A to Z.
-			headers2 := getValidHeaderChain(currentTipHash, headers)
+			// Sanity-check: verify we have all the headers for the heights in order. TODO.
+			headers2 := orderValidateHeaders(currentTipHash, headers)
 
 			// 2d. Ingest headers.
 			for _, header := range headers2 {
@@ -215,6 +255,33 @@ func (n *Node) Sync() {
 
 				downloaded += 1
 			}
+
+			n.syncLog.Printf("Downloaded %d headers\n", downloaded)
+
+			// Now get the bodies.
+			// Filter through missing bodies for headers.
+			heights2 := core.NewBitset(WINDOW_SIZE)
+			for i, _ := range headers2 {
+				heights2.Insert(i)
+			}
+			_, bodies, err := n.SyncDownloadData(currentTipHash, *heights2, peers, false, true)
+			if err != nil {
+				n.syncLog.Printf("Failed to download bodies: %s\n", err)
+				continue
+			}
+
+			// Print the bdoeis and exit.
+			n.syncLog.Printf("Downloaded bodies n=%d\n", len(bodies))
+
+			// 2d. Ingest bodies.
+			for i, body := range bodies {
+				err := n.Dag.IngestBlockBody(body)
+				if err != nil {
+					// Skip. We will not be able to download the bodies.
+					n.syncLog.Printf("Failed to ingest body %d: %s\n", i, err)
+					continue
+				}
+			}
 		}
 
 		// 3. Return the number of headers downloaded.
@@ -223,23 +290,27 @@ func (n *Node) Sync() {
 
 	currentTip, err := n.Dag.GetLatestHeadersTip()
 	if err != nil {
-		n.log.Printf("Failed to get latest tip: %s\n", err)
-		return
+		n.syncLog.Printf("Failed to get latest tip: %s\n", err)
+		return 0
 	}
+
+	totalSynced := 0
 
 	for {
 		// Search for headers from current tip.
 		downloaded := search(currentTip.Hash)
+		totalSynced += downloaded
 
 		// Exit when there are no more headers to download.
 		if downloaded == 0 {
+			n.syncLog.Printf("synchronisation done\n")
 			break
 		}
 	}
-}
 
-func (n *Node) rework() {
+	n.syncLog.Printf("Total headers downloaded: %d\n", totalSynced)
 
+	return totalSynced
 }
 
 // Contacts all our peers in parallel, gets the block header of their tip, and returns the best tip based on total work.
@@ -364,38 +435,3 @@ func (n *Node) sync_computeCommonAncestorWithPeer(peer Peer, local_chainhashes *
 	syncLog.Printf("Found in %d iterations.", n_iterations)
 	return ancestor
 }
-
-// Performance numbers:
-// 850,000 Bitcoin blocks since 2009.
-// 850000*32 = 27.2 MB of a chain hash list
-// Not too bad, we can fit it all in memory.
-// query_size = 32 B, N = 850,000
-// log(850,000) * 32 = 20 * 32 = 640 B
-
-//
-// Simple modelling of the costs:
-//
-// Assumptions:
-// Number of peers : P = 5
-// Download bandwidth : 1MB/s
-// Block rate = 1 block / 10 mins
-// Max block size = 1 MB
-// Block header size = 208 B
-// Transaction size = 155 B
-// Block body max size = 999792 B
-// Maximum transactions per block = 6450
-// Assuming full blocks, 1 block = 1MB
-// Our last sync = 1 week ago = 7*24*60/(1/10) = 1008 blocks
-//
-// Getting tips from all peers. O(P * 208) bytes.
-// Downloading block headers. O(1008 * 208) bytes.
-//   Total download = 1008 * 208 = 209,664 = 209 KB
-//   Download on each peer. O(1008 * 208 / P) bytes per peer.
-//                          O(1008 * 208 / 5) = 41932 = 41 KB
-//   Time to sync headers = 1008 * 208 / 1 MB/s = 1000*208/1000/1000 = 0.2s
-// Downloading block bodies. O(1008 * 999792)
-//   Total download = 1008 * 999792 = 1,007,790,336 = 1.007 GB
-//   Download on each peer. O(1008 * 999792 / P) bytes per peer.
-//                          O(1008 * 999792 / 5) = 201,558,067 = 201 MB
-//   Time to sync bodies = 1008 * 999792 / 1 MB/s = 1000*999792/1000/1000 = 999s = 16.65 mins
-//

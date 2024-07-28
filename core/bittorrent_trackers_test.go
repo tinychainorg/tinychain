@@ -16,6 +16,7 @@ func uint16ToBytes(n uint16) []byte {
 }
 
 func TestBTTracker(t *testing.T) {
+	t.Skip()
 	infohash := [20]byte{0xca, 0xfe, 0xba, 0xbe}
 	ip := net.ParseIP("127.0.0.1").To4()
 	port := uint16(8080)

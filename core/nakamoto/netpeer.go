@@ -38,6 +38,8 @@ type PeerCore struct {
 	externalIp   string
 	externalPort string
 
+	peerId string
+
 	GossipPeersIntervalSeconds int
 
 	OnNewBlock          func(block RawBlock)
@@ -45,7 +47,7 @@ type PeerCore struct {
 	OnGetBlocks         func(msg GetBlocksMessage) ([][]byte, error)
 	OnGetTip            func(msg GetTipMessage) (BlockHeader, error)
 	OnSyncGetTipAtDepth func(msg SyncGetTipAtDepthMessage) (SyncGetTipAtDepthReply, error)
-	OnSyncGetData       func(msg SyncGetDataMessage) (SyncGetDataReply, error)
+	OnSyncGetData       func(msg SyncGetBlockDataMessage) (SyncGetBlockDataReply, error)
 
 	peerLogger log.Logger
 }
@@ -58,12 +60,22 @@ type Peer struct {
 	clientVersion string
 }
 
+func (peer *Peer) String() string {
+	return peer.url // TODO url not always available.
+}
+
 func NewPeerCore(config PeerConfig) *PeerCore {
+	wallet, err := core.CreateRandomWallet()
+	if err != nil {
+		log.Fatalf("Failed to create internal peer keypair: %v", err)
+	}
+
 	p := &PeerCore{
 		peers:                      []Peer{},
 		server:                     nil,
 		config:                     config,
 		GossipPeersIntervalSeconds: 30,
+		peerId:                     wallet.PubkeyStr(),
 		peerLogger:                 *NewLogger("peer", fmt.Sprintf(":%s", config.port)),
 	}
 
@@ -86,7 +98,14 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 			return nil, err
 		}
 
-		return nil, nil
+		// Check if this peer is contactable, try to add it to our peers cache.
+		// TODO engineer this better.
+		go p.AddPeer(msg.ClientAddress)
+
+		// Send a heartbeat back.
+		heartbeatReply := p.makeHeartbeat()
+
+		return heartbeatReply, nil
 	})
 
 	p.server.RegisterMesageHandler("new_block", func(message []byte) (interface{}, error) {
@@ -163,8 +182,8 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 			return nil, err
 		}
 
-		if p.OnSyncGetData == nil {
-			return nil, fmt.Errorf("SyncGetData callback not set")
+		if p.OnSyncGetTipAtDepth == nil {
+			return nil, fmt.Errorf("OnSyncGetTipAtDepth callback not set")
 		}
 
 		reply, err := p.OnSyncGetTipAtDepth(msg)
@@ -176,7 +195,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 	})
 
 	p.server.RegisterMesageHandler("sync_get_data", func(message []byte) (interface{}, error) {
-		var msg SyncGetDataMessage
+		var msg SyncGetBlockDataMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
 			return nil, err
 		}
@@ -261,6 +280,10 @@ func (p *PeerCore) GetExternalAddr() string {
 	return fmt.Sprintf("http://%s:%s", p.externalIp, p.externalPort)
 }
 
+func (p *PeerCore) GetPeers() []Peer {
+	return p.peers
+}
+
 func (p *PeerCore) GossipBlock(block RawBlock) {
 	p.peerLogger.Printf("Gossiping block %s to %d peers\n", block.HashStr(), len(p.peers))
 
@@ -339,16 +362,17 @@ func (p *PeerCore) GetTip(peer Peer) (BlockHeader, error) {
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64) (BlockHeader, error) {
+func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64, dir int) ([32]byte, error) {
 	msg := SyncGetTipAtDepthMessage{
-		Type:      "get_tip_at_depth",
+		Type:      "sync_get_tip_at_depth",
 		FromBlock: fromBlock,
 		Depth:     depth,
+		Direction: dir,
 	}
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return BlockHeader{}, err
+		return [32]byte{}, err
 	}
 
 	// Decode reply.
@@ -360,50 +384,27 @@ func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64
 	return reply.Tip, nil
 }
 
-func (p *PeerCore) SyncGetBlockHeaders(peer Peer, fromBlock [32]byte, heights core.Bitset) ([]BlockHeader, error) {
-	msg := SyncGetDataMessage{
-		Type:      "get_block_headers",
+func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.Bitset, inclHeaders bool, inclBodies bool) (SyncGetBlockDataReply, error) {
+	msg := SyncGetBlockDataMessage{
+		Type:      "sync_get_data",
 		FromBlock: fromBlock,
 		Heights:   heights,
-		Headers:   true,
-		Bodies:    false,
+		Headers:   inclHeaders,
+		Bodies:    inclBodies,
 	}
 	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return []BlockHeader{}, err
+		return SyncGetBlockDataReply{}, err
 	}
 
 	// Decode reply.
-	var reply SyncGetDataReply
+	var reply SyncGetBlockDataReply
 	if err := json.Unmarshal(res, &reply); err != nil {
-		return reply.Headers, err
+		return reply, err
 	}
 
-	return reply.Headers, nil
-}
-
-func (p *PeerCore) SyncGetBlockTransactions(peer Peer, fromBlock [32]byte, heights core.Bitset) ([][]RawTransaction, error) {
-	msg := SyncGetDataMessage{
-		Type:      "get_block_txs",
-		FromBlock: fromBlock,
-		Heights:   heights,
-		Headers:   false,
-		Bodies:    true,
-	}
-	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
-	if err != nil {
-		p.peerLogger.Printf("Failed to send message to peer: %v", err)
-		return [][]RawTransaction{}, err
-	}
-
-	// Decode reply.
-	var reply SyncGetDataReply
-	if err := json.Unmarshal(res, &reply); err != nil {
-		return reply.Bodies, err
-	}
-
-	return reply.Bodies, nil
+	return reply, nil
 }
 
 func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (bool, error) {
@@ -451,6 +452,20 @@ func (p *PeerCore) Bootstrap(peerInfos []string) {
 	p.peerLogger.Println("Bootstrapping complete.")
 }
 
+func (p *PeerCore) makeHeartbeat() HeartbeatMesage {
+	heartbeatMsg := HeartbeatMesage{
+		Type:                "heartbeat",
+		TipHash:             "",
+		TipHeight:           0,
+		ClientVersion:       CLIENT_VERSION,
+		WireProtocolVersion: WIRE_PROTOCOL_VERSION,
+		ClientAddress:       p.GetExternalAddr(),
+		Time:                time.Now(),
+		PeerId:              p.peerId,
+	}
+	return heartbeatMsg
+}
+
 func (p *PeerCore) AddPeer(peerInfo string) {
 	// Check URL valid.
 	_, err := url.Parse(peerInfo)
@@ -467,15 +482,7 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 		clientVersion: "",
 	}
 
-	heartbeatMsg := HeartbeatMesage{
-		Type:                "heartbeat",
-		TipHash:             "",
-		TipHeight:           0,
-		ClientVersion:       CLIENT_VERSION,
-		WireProtocolVersion: WIRE_PROTOCOL_VERSION,
-		ClientAddress:       p.GetExternalAddr(),
-		Time:                time.Now(),
-	}
+	heartbeatMsg := p.makeHeartbeat()
 
 	if peer.url == p.GetExternalAddr() || peer.url == p.GetLocalAddr() {
 		// Skip self.
@@ -484,14 +491,30 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 	}
 
 	// Send heartbeat message to peer.
-	_, err = SendMessageToPeer(peer.url, heartbeatMsg, &p.peerLogger)
+	res, err := SendMessageToPeer(peer.url, heartbeatMsg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
 		return
 	}
 
-	p.peerLogger.Println("Peer is alive, adding to peer list")
+	// Decode response.
+	var heartbeatReply HeartbeatMesage
+	if err := json.Unmarshal(res, &heartbeatReply); err != nil {
+		p.peerLogger.Printf("Failed to unmarshal heartbeat reply: %v", err)
+		return
+	}
+
+	p.peerLogger.Println("Peer is alive")
+
+	// Now we check if this is our peer.
+	if heartbeatReply.PeerId == p.peerId {
+		p.peerLogger.Printf("AddPeer found peerInfo corresponding to our peer. Skipping.\n")
+		return
+	}
 
 	// Add peer to list.
 	p.peers = append(p.peers, peer)
+
+	// Print.
+	p.peerLogger.Printf("Added peer url=%s\n", peer.url)
 }

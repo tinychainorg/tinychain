@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// healthCheck dials an HTTP server and checks if it is running by calling the /health endpoint
+// healthCheck dials an HTTP server and checks if it is running
 func healthCheck(peerUrl string) error {
 	// Set a timeout for the connection attempt
 	timeout := 1 * time.Second

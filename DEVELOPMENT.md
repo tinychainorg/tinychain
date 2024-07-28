@@ -20,6 +20,9 @@ godoc -http=:6060
 
 ```sh
 go test -v -run TestStartPeerHeartbeat ./...
+
+# ignore test cache.
+go test -v -count=1 -run TestStartPeerHeartbeat ./...
 ```
 
 ### The entire test suite.

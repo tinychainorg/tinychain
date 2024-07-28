@@ -67,8 +67,8 @@ func (s *PeerServer) Start() error {
 		return handlers
 	}())
 
+	s.log.Printf("Peer server listening on http://%s\n", s.server.Addr)
 	if err := s.server.ListenAndServe(); err != nil {
-		s.log.Printf("Peer server listening on http://%s\n", s.server.Addr)
 		s.log.Println("Error starting server:", err)
 		return err
 	}
@@ -107,7 +107,7 @@ func (s *PeerServer) inboxHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Log the message type.
 	messageType := payload["type"].(string)
-	s.log.Printf("Received '%s' message\n", messageType)
+	s.log.Printf("Received '%s' message from %s\n", messageType, r.RemoteAddr)
 
 	// Check we have a message handler.
 	if _, ok := s.messageHandlers[messageType]; !ok {
@@ -118,7 +118,7 @@ func (s *PeerServer) inboxHandler(w http.ResponseWriter, r *http.Request) {
 	// Handle.
 	res, err := s.messageHandlers[messageType](body)
 	if err != nil {
-		http.Error(w, "Failed to process message", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to process message: %s", err), http.StatusInternalServerError)
 		return
 	}
 

@@ -54,5 +54,27 @@ func GetRawGenesisBlockFromConfig(consensus ConsensusConfig) RawBlock {
 	work := CalculateWork(Bytes32ToBigInt(block.Hash()))
 
 	fmt.Printf("Genesis block hash=%x work=%s\n", block.Hash(), work.String())
+
+	// to block header
+	// header := BlockHeader{
+	// 	ParentHash:             block.ParentHash,
+	// 	ParentTotalWork:        block.ParentTotalWork,
+	// 	Difficulty:             block.Difficulty,
+	// 	Timestamp:              block.Timestamp,
+	// 	NumTransactions:        block.NumTransactions,
+	// 	TransactionsMerkleRoot: block.TransactionsMerkleRoot,
+	// 	Nonce:                  block.Nonce,
+	// 	Graffiti:               block.Graffiti,
+	// }
+	// fmt.Printf("Genesis header block hash=%x\n", header.BlockHash())
+	// fmt.Printf("ParentHash: %x\n", header.ParentHash)
+	// fmt.Printf("ParentTotalWork: %x\n", header.ParentTotalWork)
+	// fmt.Printf("Difficulty: %x\n", header.Difficulty)
+	// fmt.Printf("Timestamp: %x\n", header.Timestamp)
+	// fmt.Printf("NumTransactions: %d\n", header.NumTransactions)
+	// fmt.Printf("TransactionsMerkleRoot: %x\n", header.TransactionsMerkleRoot)
+	// fmt.Printf("Nonce: %x\n", header.Nonce)
+	// fmt.Printf("Graffiti: %x\n", header.Graffiti)
+
 	return block
 }

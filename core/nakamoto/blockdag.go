@@ -3,12 +3,18 @@ package nakamoto
 import (
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	_ "github.com/mattn/go-sqlite3"
+)
+
+var (
+	ErrBlockNotFound = fmt.Errorf("Block not found.")
 )
 
 func OpenDB(dbPath string) (*sql.DB, error) {
@@ -27,7 +33,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
 	// Check the database version.
-	rows, err := tx.Query("select version from tinychain_version limit 1")
+	rows, err := tx.Query("select version from tinychain_version order by version asc limit 1")
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
@@ -114,7 +120,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 
 		// Create indexes.
-		_, err = tx.Exec("create index blocks_parent_hash on blocks (parent_hash)")
+		_, err = tx.Exec(`create index blocks_parent_hash on blocks (parent_hash)`)
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'blocks_parent_hash' index: %s", err)
 		}
@@ -125,6 +131,27 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			return nil, fmt.Errorf("error updating database version: %s", err)
 		}
 
+		logger.Printf("Database upgraded to: %d\n", dbVersion)
+	}
+	if databaseVersion < 1 {
+		_, err = tx.Exec(
+			`CREATE INDEX idx_blocks_parent_hash ON blocks (parent_hash);
+			CREATE INDEX idx_blocks_hash ON blocks (hash);
+			CREATE INDEX idx_blocks_acc_work ON blocks (acc_work);
+			CREATE INDEX idx_transactions_blocks_block_hash ON transactions_blocks (block_hash);
+			CREATE INDEX idx_transactions_blocks_transaction_hash ON transactions_blocks (transaction_hash);
+			CREATE INDEX idx_transactions_blocks_txindex ON transactions_blocks (txindex);
+		`)
+		if err != nil {
+			return nil, fmt.Errorf("error creating indexes: %s", err)
+		}
+
+		// Update version.
+		dbVersion := 2
+		_, err = tx.Exec("insert into tinychain_version (version) values (?)", dbVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error updating database version: %s", err)
+		}
 		logger.Printf("Database upgraded to: %d\n", dbVersion)
 	}
 
@@ -153,6 +180,9 @@ type BlockDAG struct {
 	// Consensus settings.
 	consensus ConsensusConfig
 
+	// Tips mutex.
+	tipsMutex *sync.Mutex
+
 	// The "light client" tip. This is the tip of the heaviest chain of block headers.
 	HeadersTip Block
 
@@ -172,6 +202,7 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus
 		stateMachine: stateMachine,
 		consensus:    consensus,
 		log:          NewLogger("blockdag", ""),
+		tipsMutex:    &sync.Mutex{},
 	}
 
 	err := dag.initialiseBlockDAG()
@@ -244,7 +275,7 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 		genesisBlockHash[:],
 		genesisBlock.ParentHash[:],
 		genesisBlock.ParentTotalWork[:],
-		dag.consensus.GenesisDifficulty.Bytes(),
+		genesisBlock.Difficulty[:],
 		genesisBlock.Timestamp,
 		genesisBlock.NumTransactions,
 		genesisBlock.TransactionsMerkleRoot[:],
@@ -310,6 +341,9 @@ func (dag *BlockDAG) updateFullTip() error {
 }
 
 func (dag *BlockDAG) updateTip() error {
+	dag.tipsMutex.Lock()
+	defer dag.tipsMutex.Unlock()
+
 	err := dag.updateHeadersTip()
 	if err != nil {
 		return err
@@ -439,8 +473,43 @@ func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
 }
 
 // Ingests a block's body, which is linked to a previously ingested block header.
-func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) error {
+func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
+	// Get the merkle root for this body.
+	txMerkleRoot := GetMerkleRootForTxs(body)
+
+	// Lookup the block that has this merkle root.
+	rows, err := dag.db.Query(`select hash from blocks where transactions_merkle_root = ?`, txMerkleRoot[:])
+	if err != nil {
+		return err
+	}
+	blockhashBuf := make([]byte, 32)
+	if rows.Next() {
+		rows.Scan(&blockhashBuf)
+	} else {
+		return fmt.Errorf("Block header not found for txs merkle root.")
+	}
+	rows.Close()
+
+	// Verify we have not already ingested the txs.
+	rows, err = dag.db.Query(`select count(*) from transactions_blocks where block_hash = ?`, blockhashBuf)
+	if err != nil {
+		return err
+	}
+	count := 0
+	if rows.Next() {
+		rows.Scan(&count)
+	}
+	rows.Close()
+	// dag.log.Printf("Blocks with merkle root: %d\n", count)
+	// TODO later.
+
+	if count > 0 {
+		return fmt.Errorf("Block already has transactions ingested.")
+	}
+
 	// Lookup block header.
+	blockhash := [32]byte{}
+	copy(blockhash[:], blockhashBuf)
 	block, err := dag.GetBlockByHash(blockhash)
 	if err != nil {
 		return err
@@ -449,6 +518,7 @@ func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) 
 		return fmt.Errorf("Block header missing during body ingestion.")
 	}
 	raw := block.ToRawBlock()
+	raw.Transactions = body
 
 	// 2. Verify timestamp is within bounds.
 	// TODO: subjectivity.
@@ -481,17 +551,12 @@ func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) 
 	}
 
 	// 5. Verify transaction merkle root is valid.
-	txlist := make([][]byte, len(raw.Transactions))
-	for i, block_tx := range raw.Transactions {
-		txlist[i] = block_tx.Envelope()
-	}
-	expectedMerkleRoot := core.ComputeMerkleHash(txlist)
+	expectedMerkleRoot := GetMerkleRootForTxs(raw.Transactions)
 	if expectedMerkleRoot != raw.TransactionsMerkleRoot {
 		return fmt.Errorf("Merkle root does not match computed merkle root.")
 	}
 
 	// 7. Verify block size is within bounds.
-	raw.Transactions = body
 	if dag.consensus.MaxBlockSizeBytes < raw.SizeBytes() {
 		return fmt.Errorf("Block size exceeds maximum block size.")
 	}
@@ -567,11 +632,13 @@ func (dag *BlockDAG) IngestBlockBody(blockhash [32]byte, body []RawTransaction) 
 func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	// 1. Verify parent is known.
 	parentBlock, err := dag.GetBlockByHash(raw.ParentHash)
+
+	// Check if block not found error.
+	if errors.Is(err, ErrBlockNotFound) {
+		return fmt.Errorf("Unknown parent block.")
+	}
 	if err != nil {
 		return err
-	}
-	if parentBlock == nil {
-		return fmt.Errorf("Unknown parent block.")
 	}
 
 	// 2. Verify timestamp is within bounds.
@@ -605,11 +672,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 5. Verify transaction merkle root is valid.
-	txlist := make([][]byte, len(raw.Transactions))
-	for i, block_tx := range raw.Transactions {
-		txlist[i] = block_tx.Envelope()
-	}
-	expectedMerkleRoot := core.ComputeMerkleHash(txlist)
+	expectedMerkleRoot := GetMerkleRootForTxs(raw.Transactions)
 	if expectedMerkleRoot != raw.TransactionsMerkleRoot {
 		return fmt.Errorf("Merkle root does not match computed merkle root.")
 	}

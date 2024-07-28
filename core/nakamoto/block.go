@@ -21,6 +21,8 @@ type BlockHeader struct {
 	Graffiti               [32]byte
 }
 
+type BlockBody = []RawTransaction
+
 type Block struct {
 	// Block header.
 	ParentHash             [32]byte
@@ -33,7 +35,7 @@ type Block struct {
 	Graffiti               [32]byte
 
 	// Block body.
-	Transactions []RawTransaction
+	Transactions BlockBody
 
 	// Metadata.
 	Height          uint64
@@ -90,7 +92,7 @@ func (b *Block) ToBlockHeader() BlockHeader {
 	return BlockHeader{
 		ParentHash:             b.ParentHash,
 		ParentTotalWork:        BigIntToBytes32(b.ParentTotalWork),
-		Difficulty:             BigIntToBytes32(b.Work),
+		Difficulty:             b.Difficulty,
 		Timestamp:              b.Timestamp,
 		NumTransactions:        b.NumTransactions,
 		TransactionsMerkleRoot: b.TransactionsMerkleRoot,

@@ -476,3 +476,90 @@ func TestStateMachineReconstructState(t *testing.T) {
 		t.Logf("Account %x has balance %d", wallet.PubkeyBytes(), balance)
 	}
 }
+
+func assertIntEqual[num int | uint | int8 | uint8 | int16 | uint16 | int32 | uint32 | int64 | uint64](t *testing.T, a num, b num) {
+	if a != b {
+		t.Fatalf("Expected %d to equal %d", a, b)
+	}
+}
+
+// Test the constraint that we only process a transaction once (ie. no replay attacks).
+func TestStateMachineTxAlreadySequenced(t *testing.T) {
+	dag, _, _ := newBlockdagForStateMachine()
+	wallets := getTestingWallets(t)
+	state, err := NewStateMachine(dag.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	miner := NewMiner(dag, &wallets[0])
+
+	// Mine 10 blocks.
+	miner.OnBlockSolution = func(block RawBlock) {
+		err := dag.IngestBlock(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	miner.Start(10)
+
+	// Apply transactions into state.
+	longestChainHashList, err := dag.GetLongestChainHashList(dag.FullTip.Hash, dag.FullTip.Height)
+	if err != nil {
+		t.Fatalf("Failed to get longest chain hash list: %s\n", err)
+	}
+	state, err = RebuildState(&dag, *state, longestChainHashList)
+	if err != nil {
+		t.Fatalf("Failed to rebuild state: %s\n", err)
+	}
+
+	wallet0_balance := state.GetBalance(wallets[0].PubkeyBytes())
+	assertIntEqual(t, uint64(50*10), wallet0_balance) // coinbase rewards.
+
+	// Now we send a transfer tx.
+	// First create the tx, then mine a block with it.
+	rawTx := MakeTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 100, &wallets[0], 0)
+	miner.GetBlockBody = func() BlockBody {
+		return []RawTransaction{rawTx}
+	}
+	// This should succeed.
+	miner.Start(1)
+
+	// Rebuild state.
+	state2, err := NewStateMachine(dag.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	longestChainHashList, err = dag.GetLongestChainHashList(dag.FullTip.Hash, dag.FullTip.Height)
+	if err != nil {
+		t.Fatalf("Failed to get longest chain hash list: %s\n", err)
+	}
+	state2, err = RebuildState(&dag, *state2, longestChainHashList)
+	if err != nil {
+		t.Fatalf("Failed to rebuild state: %s\n", err)
+	}
+
+	// Check the transfer tx was processed.
+	wallet0_balance2 := state2.GetBalance(wallets[0].PubkeyBytes())
+	wallet1_balance1 := state2.GetBalance(wallets[1].PubkeyBytes())
+	assertIntEqual(t, uint64(450), wallet0_balance2)
+	assertIntEqual(t, uint64(100), wallet1_balance1)
+
+	// Now we test transaction replay.
+	// This only involves testing the state machine itself.
+	replayAttackInput := StateMachineInput{
+		RawTransaction: rawTx,
+		IsCoinbase:     false,
+		MinerPubkey:    miner.CoinbaseWallet.PubkeyBytes(),
+	}
+
+	t.Skip()
+	// TODO: we will finish the state machine unique tx sequence constraint later.
+
+	effects, err := state2.Transition(replayAttackInput)
+	if err == nil {
+		t.Fatalf("Expected transaction to be rejected\n")
+	}
+
+	assert.Equal(t, "transaction already sequenced", err.Error())
+	assertIntEqual(t, 0, len(effects))
+}

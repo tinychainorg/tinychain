@@ -136,7 +136,7 @@ func (dag *BlockDAG) GetBlockByHash(hash [32]byte) (*Block, error) {
 
 		return &block, nil
 	} else {
-		return nil, err
+		return nil, ErrBlockNotFound
 	}
 }
 
@@ -279,6 +279,8 @@ func (dag *BlockDAG) GetLatestFullTip() (Block, error) {
 	rows, err := dag.db.Query(`
 		SELECT hash 
 		FROM (
+			-- Case 1: Blocks with transactions.
+			-- Only blocks with their transactions downloaded are considered for the "full tip".
 			SELECT b.hash, b.acc_work
 			FROM blocks b
 			JOIN (
@@ -290,6 +292,8 @@ func (dag *BlockDAG) GetLatestFullTip() (Block, error) {
 
 			UNION
 
+			-- Case 2: Blocks without transactions.
+			-- If a block has no transactions, then it is fully downloaded and is considered for the "full tip".
 			SELECT b.hash, b.acc_work
 			FROM blocks b
 			WHERE b.num_transactions = 0
@@ -329,6 +333,7 @@ func (dag *BlockDAG) GetLatestFullTip() (Block, error) {
 }
 
 // Gets the list of hashes for the longest chain, traversing backwards from startHash and accumulating depthFromTip items.
+// This returns the list in chronological order. list[0] is genesis.
 func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip uint64) ([][32]byte, error) {
 	list := make([][32]byte, 0, depthFromTip)
 
@@ -358,6 +363,7 @@ func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip ui
 	if err != nil {
 		return list, err
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		hashBuf := []byte{}
@@ -385,6 +391,35 @@ func (dag *BlockDAG) GetLongestChainHashList(startHash [32]byte, depthFromTip ui
 func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction int) ([][32]byte, error) {
 	list := make([][32]byte, 0, depthFromTip)
 
+	if direction == 1 {
+		// Get the longest chain hash list.
+		// First begin from the current tip, accumulate all hashes back to genesis.
+		currentTip := dag.FullTip
+		longestchain, err := dag.GetLongestChainHashList(currentTip.Hash, currentTip.Height+1) // TODO off-by-one error here.
+		if err != nil {
+			return list, err
+		}
+
+		// Find the start hash.
+		startIndex := 0
+		for i, hash := range longestchain {
+			if hash == startHash {
+				startIndex = i
+				break
+			}
+		}
+
+		// Slice the list from startIndex.
+		list = longestchain[startIndex:]
+
+		// Cap the list at depthFromTip.
+		if uint64(len(list)) > depthFromTip {
+			list = list[:depthFromTip]
+		}
+
+		return list, nil
+	}
+
 	// When iterating backwards, we don't have to worry about accumulated work. Since we're going backwards, we can just follow the parent hash.
 	queryDirectionBackwards := `
 		WITH RECURSIVE block_path AS (
@@ -401,44 +436,16 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 		)
 		SELECT hash, parent_hash
 		FROM block_path
-		ORDER BY depth DESC;`
-
-	// When iterating forward, find the block with highest accumulated work.
-	queryDirectionForwards := `
-		WITH RECURSIVE block_path AS (
-			SELECT hash, parent_hash, acc_work, 1 AS depth
-			FROM blocks
-			WHERE hash = ?
-
-			UNION ALL
-
-			SELECT b.hash, b.parent_hash, b.acc_work, bp.depth + 1
-			FROM blocks b
-			INNER JOIN block_path bp 
-			ON bp.hash = b.parent_hash
-			WHERE bp.depth < ?
-			ORDER BY b.acc_work DESC
-			LIMIT 1
-		)
-		SELECT hash, parent_hash, acc_work
-		FROM block_path
 		ORDER BY depth ASC;`
-
-	query := ""
-	if direction == 1 {
-		query = queryDirectionForwards
-	} else {
-		query = queryDirectionBackwards
-	}
-
 	rows, err := dag.db.Query(
-		query,
+		queryDirectionBackwards,
 		startHash[:],
 		depthFromTip,
 	)
 	if err != nil {
 		return list, err
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		hashBuf := []byte{}
