@@ -210,7 +210,7 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus
 		panic(err)
 	}
 
-	err = dag.updateTip()
+	err = dag.UpdateTip()
 	if err != nil {
 		panic(err)
 	}
@@ -340,7 +340,7 @@ func (dag *BlockDAG) updateFullTip() error {
 	return nil
 }
 
-func (dag *BlockDAG) updateTip() error {
+func (dag *BlockDAG) UpdateTip() error {
 	dag.tipsMutex.Lock()
 	defer dag.tipsMutex.Unlock()
 
@@ -464,7 +464,7 @@ func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
 	tx.Commit()
 
 	// Update the headers tip.
-	err = dag.updateTip()
+	err = dag.UpdateTip()
 	if err != nil {
 		return err
 	}
@@ -620,7 +620,7 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	tx.Commit()
 
 	// Update the tip.
-	err = dag.updateTip()
+	err = dag.UpdateTip()
 	if err != nil {
 		return err
 	}
@@ -827,7 +827,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	tx.Commit()
 
 	// Update the tip.
-	err = dag.updateTip()
+	err = dag.UpdateTip()
 	if err != nil {
 		return err
 	}
