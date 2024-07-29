@@ -469,10 +469,6 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 	return list, nil
 }
 
-
-
-
-
 func (dag *BlockDAG) GetTransactionByHash(hash [32]byte) (*Transaction, error) {
 	tx := Transaction{}
 

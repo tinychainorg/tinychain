@@ -23,20 +23,21 @@ import (
 var embedFS embed.FS
 
 type BlockExplorerServer struct {
-	router      *mux.Router
-	log         *log.Logger
+	router *mux.Router
+	log    *log.Logger
 
-	host string
+	host        string
 	port        int
 	environment string
-	
-	dag         *nakamoto.BlockDAG
-	state 	 *nakamoto.StateMachine
+
+	dag   *nakamoto.BlockDAG
+	state *nakamoto.StateMachine
 }
 
 type localDirFS struct {
 	baseDir string
 }
+
 func (fs localDirFS) Open(name string) (fs.File, error) {
 	return os.Open(filepath.Join(fs.baseDir, name))
 }
@@ -44,9 +45,9 @@ func (fs localDirFS) Open(name string) (fs.File, error) {
 func (expl *BlockExplorerServer) getFS() *fs.FS {
 	_, currentFile, _, _ := runtime.Caller(0)
 	baseDir := filepath.Dir(currentFile)
-	
+
 	fs := map[string]fs.FS{
-		"dev": localDirFS{baseDir: baseDir},
+		"dev":  localDirFS{baseDir: baseDir},
 		"test": embedFS,
 		"live": embedFS,
 	}[expl.environment]
@@ -71,7 +72,7 @@ func NewBlockExplorerServer(dag *nakamoto.BlockDAG, port int) *BlockExplorerServ
 
 	log.Println("Environment:", environment)
 	host := map[string]string{
-		"dev": "127.0.0.1",
+		"dev":  "127.0.0.1",
 		"test": "0.0.0.0",
 		"live": "0.0.0.0",
 	}[environment]
@@ -81,7 +82,7 @@ func NewBlockExplorerServer(dag *nakamoto.BlockDAG, port int) *BlockExplorerServ
 	expl := &BlockExplorerServer{
 		router:      router,
 		log:         log,
-		host: host,
+		host:        host,
 		port:        port,
 		environment: environment,
 		dag:         dag,
@@ -97,7 +98,7 @@ func NewBlockExplorerServer(dag *nakamoto.BlockDAG, port int) *BlockExplorerServ
 	expl.router.HandleFunc("/search/", expl.search)
 
 	// Serve static files.
-	expl.router.PathPrefix("/assets/").HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+	expl.router.PathPrefix("/assets/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fs := *expl.getFS()
 		httpFs := http.FS(fs)
 		http.FileServer(httpFs).ServeHTTP(w, r)
@@ -112,20 +113,18 @@ func (expl *BlockExplorerServer) computeState() {
 		expl.log.Fatalf("Failed to get longest chain hash list: %s", err)
 	}
 
-	// TODO 
+	// TODO
 	stateMachine, err := nakamoto.NewStateMachine(nil)
 	if err != nil {
 		expl.log.Fatalf("Failed to create state machine: %s", err)
 	}
-	
+
 	state, err := nakamoto.RebuildState(expl.dag, *stateMachine, longestChainHashList)
 	if err != nil {
 		expl.log.Fatalf("Failed to rebuild state: %s", err)
 	}
 	expl.state = state
 }
-
-
 
 func (expl *BlockExplorerServer) Start() {
 	expl.log.Println("Starting explorer server...")
@@ -176,7 +175,7 @@ func (expl *BlockExplorerServer) search(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, fmt.Sprintf("/blocks/%s", query), http.StatusFound)
 		return
 	}
-	
+
 	// If it's not a block hash, it could be a transaction hash.
 	tx, err := expl.dag.GetTransactionByHash(blockHash)
 	if err != nil {
@@ -206,10 +205,10 @@ func (expl *BlockExplorerServer) homePage(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	tmpl := expl.getTemplates("templates/index.html", "templates/_base_layout.html")
 	err = tmpl.ExecuteTemplate(w, "index.html", map[string]interface{}{
-		"Title": "Home",
+		"Title":   "Home",
 		"fullTip": fullTip,
 	})
 	if err != nil {
@@ -231,7 +230,7 @@ func (expl *BlockExplorerServer) getChain(w http.ResponseWriter, r *http.Request
 	// }
 
 	// Get the full chain hash list.
-	chain, err := expl.dag.GetLongestChainHashList(expl.dag.FullTip.Hash, expl.dag.FullTip.Height + 1)
+	chain, err := expl.dag.GetLongestChainHashList(expl.dag.FullTip.Hash, expl.dag.FullTip.Height+1)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -249,13 +248,12 @@ func (expl *BlockExplorerServer) getChain(w http.ResponseWriter, r *http.Request
 		}
 		blocks = append(blocks, block)
 	}
-	
 
 	// Render.
 	tmpl := expl.getTemplates("templates/chain.html", "templates/_base_layout.html")
 	err = tmpl.ExecuteTemplate(w, "chain.html", map[string]interface{}{
-		"Title": "Blockchain",
-		"Chain": chain,
+		"Title":  "Blockchain",
+		"Chain":  chain,
 		"Blocks": blocks,
 	})
 	if err != nil {
@@ -285,8 +283,8 @@ func (expl *BlockExplorerServer) getBlock(w http.ResponseWriter, r *http.Request
 	// Render.
 	tmpl := expl.getTemplates("templates/block.html", "templates/_base_layout.html")
 	err = tmpl.ExecuteTemplate(w, "block.html", map[string]interface{}{
-		"Title": fmt.Sprintf("Block #%d (%x)", block.Height, block.Hash),
-		"Block": block,
+		"Title":        fmt.Sprintf("Block #%d (%x)", block.Height, block.Hash),
+		"Block":        block,
 		"Transactions": txs,
 	})
 	if err != nil {
@@ -363,29 +361,28 @@ func (expl *BlockExplorerServer) getAccount(w http.ResponseWriter, r *http.Reque
 
 		transactions = append(transactions, tx)
 	}
-	
+
 	tmpl := expl.getTemplates("templates/account.html", "templates/_base_layout.html")
 	err = tmpl.ExecuteTemplate(w, "account.html", map[string]interface{}{
-		"Title": fmt.Sprintf("Account (%s)", accountPubkey_),
-		"AccountPubkey": accountPubkey_,
+		"Title":          fmt.Sprintf("Account (%s)", accountPubkey_),
+		"AccountPubkey":  accountPubkey_,
 		"AccountBalance": accountBalance,
-		"Transactions": transactions,
+		"Transactions":   transactions,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-
 func (expl *BlockExplorerServer) getAccounts(w http.ResponseWriter, r *http.Request) {
 	type account struct {
-		Pubkey [65]byte
+		Pubkey  [65]byte
 		Balance uint64
 	}
 	accounts := make([]account, 0)
 	for pubkey, balance := range expl.state.GetState() {
 		accounts = append(accounts, account{
-			Pubkey: pubkey,
+			Pubkey:  pubkey,
 			Balance: balance,
 		})
 	}
@@ -393,7 +390,7 @@ func (expl *BlockExplorerServer) getAccounts(w http.ResponseWriter, r *http.Requ
 	// Render.
 	tmpl := expl.getTemplates("templates/accounts.html", "templates/_base_layout.html")
 	err := tmpl.ExecuteTemplate(w, "accounts.html", map[string]interface{}{
-		"Title": "Ledger",
+		"Title":    "Ledger",
 		"Accounts": accounts,
 	})
 	if err != nil {
@@ -423,14 +420,14 @@ func (expl *BlockExplorerServer) getTransaction(w http.ResponseWriter, r *http.R
 	// Compute the tx status.
 	type ConfirmationInfo struct {
 		Status string
-		Block nakamoto.Block
+		Block  nakamoto.Block
 	}
 
 	txStatus := ConfirmationInfo{
 		Status: "Unconfirmed",
 	}
 	// confirmed := make(map[[32]byte]bool)
-	chain, err := expl.dag.GetLongestChainHashList(expl.dag.FullTip.Hash, expl.dag.FullTip.Height + 1)
+	chain, err := expl.dag.GetLongestChainHashList(expl.dag.FullTip.Hash, expl.dag.FullTip.Height+1)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -450,14 +447,14 @@ func (expl *BlockExplorerServer) getTransaction(w http.ResponseWriter, r *http.R
 			}
 		}
 	}
-	
+
 	// Render.
 	tmpl := expl.getTemplates("templates/transaction.html", "templates/_base_layout.html")
 	err = tmpl.ExecuteTemplate(w, "transaction.html", map[string]interface{}{
-		"Title": fmt.Sprintf("Transaction (%x)", tx.Hash),
+		"Title":       fmt.Sprintf("Transaction (%x)", tx.Hash),
 		"Transaction": tx,
-		"Blocks": blocks,
-		"TxStatus": txStatus,
+		"Blocks":      blocks,
+		"TxStatus":    txStatus,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
