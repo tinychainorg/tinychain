@@ -467,3 +467,83 @@ func (dag *BlockDAG) GetPath(startHash [32]byte, depthFromTip uint64, direction 
 
 	return list, nil
 }
+
+
+
+
+
+func (dag *BlockDAG) GetTransactionByHash(hash [32]byte) (*Transaction, error) {
+	tx := Transaction{}
+
+	// Query database.
+	rows, err := dag.db.Query(
+		`SELECT hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, version FROM transactions WHERE hash = ?;`,
+		hash[:],
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		hash := []byte{}
+		sig := []byte{}
+		fromPubkey := []byte{}
+		toPubkey := []byte{}
+		amount := uint64(0)
+		fee := uint64(0)
+		nonce := uint64(0)
+		version := 0 // TODO
+
+		err := rows.Scan(&hash, &sig, &fromPubkey, &toPubkey, &amount, &fee, &nonce, &version)
+		if err != nil {
+			return nil, err
+		}
+
+		copy(tx.Hash[:], hash)
+		copy(tx.Sig[:], sig)
+		copy(tx.FromPubkey[:], fromPubkey)
+		copy(tx.ToPubkey[:], toPubkey)
+		tx.Amount = amount
+		tx.Fee = fee
+		tx.Nonce = nonce
+		tx.Version = byte(version)
+
+		return &tx, nil
+	} else {
+		return nil, err
+	}
+}
+
+func (dag *BlockDAG) GetEpochById(id string) (*Epoch, error) {
+	epoch := Epoch{}
+
+	// Query database.
+	rows, err := dag.db.Query(
+		`select id, start_block_hash, start_time, start_height, difficulty from epochs where id = ? limit 1`,
+		id,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		startBlockHash := []byte{}
+		difficulty := []byte{}
+
+		err := rows.Scan(&epoch.Id, &startBlockHash, &epoch.StartTime, &epoch.StartHeight, &difficulty)
+		if err != nil {
+			return nil, err
+		}
+
+		copy(epoch.StartBlockHash[:], startBlockHash)
+		diffBytes32 := [32]byte{}
+		copy(diffBytes32[:], difficulty)
+		epoch.Difficulty = Bytes32ToBigInt(diffBytes32)
+	} else {
+		return nil, err
+	}
+
+	return &epoch, nil
+}
