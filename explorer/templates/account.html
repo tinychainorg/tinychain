@@ -1,0 +1,15 @@
+{{define "pageBody"}}
+<h2>Account: {{.AccountPubkey}}</h2>
+<table border="1">
+    <tr>
+        <td>Public key</td>
+        <td>{{.AccountPubkey}}</td>
+    </tr>
+    <tr>
+        <td>Balance</td>
+        <td>{{.AccountBalance | printf "%d"}} TNY</td>
+    </tr>
+</table>
+{{end}}
+
+{{template "_base_layout.html" .}}

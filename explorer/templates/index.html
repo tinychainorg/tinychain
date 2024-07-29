@@ -1,0 +1,11 @@
+{{define "pageBody"}}
+    <p>Welcome to our block explorer. Use the navigation menu to explore blocks, accounts, and transactions.</p>
+
+    <p>Latest block: 
+        <a href='/blocks/{{.fullTip.Hash | printf "%x" }}'>
+            {{.fullTip.Hash | printf "%x" }}
+        </a>
+    </p>
+{{end}}
+
+{{template "_base_layout.html" .}}

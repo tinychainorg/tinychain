@@ -1,0 +1,21 @@
+{{define "pageBody"}}
+<h2>Epoch {{.Epoch.Id}}</h2>
+
+<table border="1">
+    <tr>
+        <td>Number</td>
+        <td>{{.Epoch.Number}}</td>
+    </tr>
+    <tr>
+        <td>StartBlockHash</td>
+        <td><a href='/blocks/{{.Epoch.StartBlockHash | printf "%x"}}'>{{.Epoch.StartBlockHash | printf "%x"}}</a></td>
+    </tr>
+    <tr>
+        <td>Difficulty</td>
+        <td>{{.Epoch.Difficulty.String}}</a></td>
+    </tr>
+</table>
+
+{{end}}
+
+{{template "_base_layout.html" .}}

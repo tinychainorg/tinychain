@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/assets/normalize.css"/>
+
+    <title>{{.Title}} - tinychain Block Explorer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        nav {
+            margin-bottom: 20px;
+        }
+
+        nav ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        nav ul li {
+            display: inline;
+            margin-right: 10px;
+        }
+
+        a:visited {
+            color: blue;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>tinyscan</h1>
+        <nav>
+            <ul>
+                <li><a href="/">Home</a></li>
+                <li><a href="/blocks/">Blocks</a></li>
+                <li><a href="/accounts/">Accounts</a></li>
+                <!-- <li><a href="/transactions/xyz789">Transactions</a></li> -->
+            </ul>
+        </nav>
+    </header>
+    <main>
+        {{template "pageBody" .}}
+    </main>
+    <footer>
+        <!-- <p style="display: flex; justify-items:baseline;"><img src="/assets/logo.png" height="20" /></p> -->
+    </footer>
+</body>
+
+</html>

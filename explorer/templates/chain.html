@@ -1,0 +1,24 @@
+{{define "pageBody"}}
+
+<h2>Blocks</h2>
+<p>Chain length: {{ len .Chain | printf "%d" }} blocks</p>
+<table border="1">
+    <tr>
+        <th>Height</th>
+        <th>Timestamp</th>
+        <th>Hash</th>
+        <th>Num txs.</th>
+    </tr>
+    {{range .Blocks}}
+    <tr>
+        <td><a href='/blocks/{{.Hash | printf "%x"}}'>{{.Height}}</a></td>
+        <td>{{.Timestamp}}</td>
+        <td>{{.Hash | printf "%x"}}</td>
+        <td>{{.NumTransactions}}</td>
+    </tr>
+    {{end}}
+</table>
+
+{{end}}
+
+{{template "_base_layout.html" .}}

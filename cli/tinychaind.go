@@ -41,6 +41,22 @@ func main() {
 					},
 				},
 			},
+			{
+				Name:   "explorer",
+				Usage:  "runs the tinychain blockchain explorer web app",
+				Action: cmd.RunExplorer,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "port",
+						Usage: "The port to run the node on",
+						Value: "9000",
+					},
+					&cli.StringFlag{
+						Name:  "db",
+						Usage: "The path to the tinychain database",
+					},
+				},
+			},
 		},
 	}
 

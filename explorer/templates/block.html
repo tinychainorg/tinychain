@@ -1,0 +1,83 @@
+{{define "pageBody"}}
+<h2>Block {{.Block.Height | printf "%d"}}</h2>
+<table border="1">
+    <tr>
+        <td>Height</td>
+        <td>{{.Block.Height}}</td>
+    </tr>
+    <tr>
+        <td>Hash</td>
+        <td>{{.Block.Hash | printf "%x"}}</td>
+    </tr>
+    <tr>
+        <td>Parent</td>
+        <td><a href='/blocks/{{.Block.ParentHash | printf "%x"}}'>{{.Block.ParentHash | printf "%x"}}</a></td>
+    </tr>
+    <tr>
+        <td>Timestamp</td>
+        <td>{{.Block.Timestamp}}</td>
+    </tr>
+    <tr>
+        <td>NumTransactions</td>
+        <td>{{.Block.NumTransactions}}</td>
+    </tr>
+    <tr>
+        <td>TransactionsMerkleRoot</td>
+        <td>{{.Block.TransactionsMerkleRoot | printf "%x"}}</td>
+    </tr>
+    <tr>
+        <td>Nonce</td>
+        <td>{{.Block.Nonce | printf "%x"}}</td>
+    </tr>
+    <tr>
+        <td>Graffiti</td>
+        <td>{{.Block.Graffiti | printf "%s"}}</td>
+    </tr>
+    <tr>
+        <td>Epoch</td>
+        <td><a href='/epochs/{{.Block.Epoch}}'>{{.Block.Epoch}}</a></td>
+    </tr>
+    <!-- <tr>
+        <td>Work</td>
+        <td>{{.Block.Work}}</td>
+    </tr> -->
+    <tr>
+        <td>SizeBytes</td>
+        <td>{{.Block.SizeBytes}}</td>
+    </tr>
+    <tr>
+        <td>ParentTotalWork</td>
+        <td>{{.Block.ParentTotalWork.String}}</td>
+    </tr>
+    <tr>
+        <td>AccumulatedWork</td>
+        <td>{{.Block.AccumulatedWork.String}}</td>
+    </tr>
+</table>
+
+<!-- Transactions table. -->
+<h3>Transactions</h3>
+<table border="1">
+    <tr>
+        <th>Index</th>
+        <th>ID</th>
+        <th>From</th>
+        <th>To</th>
+        <th>Amount</th>
+        <th>Fee</th>
+    </tr>
+    {{range .Transactions}}
+    <tr>
+        <td>{{.TxIndex}}</td>
+        <td><a href='/transactions/{{.Hash | printf "%x"}}'>{{.Hash | printf "%x" | printf "%0.20s"}}</a></td>
+        <td><a href='/accounts/{{.FromPubkey | printf "%x" }}'>{{.FromPubkey | printf "%x" | printf "%.20s" }}</a></td>
+        <td><a href='/accounts/{{.ToPubkey | printf "%x" }}'>{{.ToPubkey | printf "%x" | printf "%.20s" }}</a></td>
+        <td>{{.Amount}} TNY</td>
+        <td>{{.Fee}} TNY</td>
+    </tr>
+    {{end}}
+</table>
+
+{{end}}
+
+{{template "_base_layout.html" .}}

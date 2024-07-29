@@ -1,0 +1,29 @@
+{{define "pageBody"}}
+    <h2>Transaction</h2>
+    <table border="1">
+        <tr>
+            <td>Hash</td>
+            <td>{{.Transaction.Hash | printf "%x"}}</td>
+        </tr>
+        <!-- From to amount fee -->
+        <tr>
+            <td>From</td>
+            <td><a href='/accounts/{{.Transaction.FromPubkey | printf "%x" }}'>{{.Transaction.FromPubkey | printf "%x" | printf "%.20s" }}</a></td>
+        </tr>
+        <tr>
+            <td>To</td>
+            <td><a href='/accounts/{{.Transaction.ToPubkey | printf "%x" }}'>{{.Transaction.ToPubkey | printf "%x" | printf "%.20s" }}</a></td>
+        </tr>
+        <tr>
+            <td>Amount</td>
+            <td>{{.Transaction.Amount}} TNY</td>
+        </tr>
+        <tr>
+            <td>Fee</td>
+            <td>{{.Transaction.Fee}} TNY</td>
+        </tr>
+
+    </table>
+{{end}}
+
+{{template "_base_layout.html" .}}
