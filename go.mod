@@ -18,6 +18,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/ethereum/go-ethereum v1.14.5 // indirect
+	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/iden3/go-iden3-crypto v0.0.16 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
