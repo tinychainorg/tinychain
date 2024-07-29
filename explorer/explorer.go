@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
@@ -55,9 +56,41 @@ func (expl *BlockExplorerServer) getFS() *fs.FS {
 	return &fs
 }
 
+
+func timeAgo(ts uint64) string {
+	t := time.UnixMilli(int64(ts))
+	duration := time.Since(t)
+	switch {
+	case duration < time.Minute:
+		return fmt.Sprintf("%d seconds ago", int(duration.Seconds()))
+	case duration < time.Hour:
+		return fmt.Sprintf("%d minutes ago", int(duration.Minutes()))
+	case duration < time.Hour*24:
+		return fmt.Sprintf("%d hours ago", int(duration.Hours()))
+	default:
+		return fmt.Sprintf("%d days ago", int(duration.Hours()/24))
+	}
+}
+
+func formatTimestamp(ts uint64) string {
+	t := time.UnixMilli(int64(ts))
+	return t.Format("02 Jan 2006 15:04:05 MST")
+}
+
+func formatTimestampDatetime(ts uint64) string {
+	t := time.UnixMilli(int64(ts))
+	return t.Format("2006-01-02 15:04:05")
+}
+
+
 func (expl *BlockExplorerServer) getTemplates(patterns ...string) *template.Template {
 	fs := *expl.getFS()
-	return template.Must(template.New("").ParseFS(fs, patterns...))
+	funcMap := template.FuncMap{
+		"timeAgo": timeAgo,
+		"formatTimestamp": formatTimestamp,
+		"formatTimestampDatetime": formatTimestampDatetime,
+	}
+	return template.Must(template.New("").Funcs(funcMap).ParseFS(fs, patterns...))
 }
 
 func NewBlockExplorerServer(dag *nakamoto.BlockDAG, port int) *BlockExplorerServer {
@@ -128,9 +161,30 @@ func (expl *BlockExplorerServer) computeState() {
 
 func (expl *BlockExplorerServer) Start() {
 	expl.log.Println("Starting explorer server...")
-	expl.computeState()
 	listenAddr := fmt.Sprintf("%s:%d", expl.host, expl.port)
 	expl.log.Printf("Listening on http://%s", listenAddr)
+
+	// recompute state on a loop.
+	expl.computeState()
+	go func() {
+		latestFullTip := [32]byte{}
+
+		for {
+			time.Sleep(1 * time.Second)
+			latestTip, err := expl.dag.GetLatestFullTip()
+			if err != nil {
+				expl.log.Fatalf("Failed to get latest tip: %s", err)
+			}
+
+			if latestTip.Hash != latestFullTip {
+				expl.log.Println("Recomputing state...")
+				expl.dag.UpdateTip()
+				expl.computeState()
+				expl.log.Println("Recomputing state done.")
+				latestFullTip = expl.dag.FullTip.Hash
+			}
+		}
+	}()
 
 	err := http.ListenAndServe(listenAddr, expl.router)
 	if err != nil {

@@ -14,6 +14,10 @@
         <td><a href='/blocks/{{.Block.ParentHash | printf "%x"}}'>{{.Block.ParentHash | printf "%x"}}</a></td>
     </tr>
     <tr>
+        <td>Time</td>
+        <td><time datetime='{{.Block.Timestamp | formatTimestampDatetime}}'>{{.Block.Timestamp | formatTimestamp}}</time></td>
+    </tr>
+    <tr>
         <td>Timestamp</td>
         <td>{{.Block.Timestamp}}</td>
     </tr>

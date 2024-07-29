@@ -5,6 +5,7 @@
 <table border="1">
     <tr>
         <th>Height</th>
+        <th>Time</th>
         <th>Timestamp</th>
         <th>Hash</th>
         <th>Num txs.</th>
@@ -12,7 +13,8 @@
     {{range .Blocks}}
     <tr>
         <td><a href='/blocks/{{.Hash | printf "%x"}}'>{{.Height}}</a></td>
-        <td>{{.Timestamp}}</td>
+        <td><time datetime='{{.Timestamp | formatTimestampDatetime}}'>{{.Timestamp | formatTimestamp}}</time></td>
+        <td>{{.Timestamp | printf "%d"}}</td>
         <td>{{.Hash | printf "%x"}}</td>
         <td>{{.NumTransactions}}</td>
     </tr>

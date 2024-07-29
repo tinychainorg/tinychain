@@ -22,6 +22,10 @@
             <td>Fee</td>
             <td>{{.Transaction.Fee}} TNY</td>
         </tr>
+        <tr>
+            <td>Signature</td>
+            <td>{{.Transaction.Sig | printf "%x" }}</td>
+        </tr>
 
         <tr>
             <td>Status</td>
