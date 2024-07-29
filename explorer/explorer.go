@@ -3,6 +3,7 @@ package explorer
 import (
 	"embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
@@ -92,6 +94,7 @@ func NewBlockExplorerServer(dag *nakamoto.BlockDAG, port int) *BlockExplorerServ
 	expl.router.HandleFunc("/accounts/", expl.getAccounts)
 	expl.router.HandleFunc("/accounts/{id}", expl.getAccount)
 	expl.router.HandleFunc("/transactions/{id}", expl.getTransaction)
+	expl.router.HandleFunc("/search/", expl.search)
 
 	// Serve static files.
 	expl.router.PathPrefix("/assets/").HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
@@ -134,6 +137,67 @@ func (expl *BlockExplorerServer) Start() {
 	if err != nil {
 		expl.log.Fatal("ListenAndServe: ", err)
 	}
+}
+
+func (expl *BlockExplorerServer) search(w http.ResponseWriter, r *http.Request) {
+	// Get the 'q' query parameter.
+	query := r.URL.Query().Get("q")
+	// Trim it.
+	query = strings.Trim(query, " ")
+	if query == "" {
+		http.Error(w, "No search query provided", http.StatusBadRequest)
+		return
+	}
+
+	// If q is 65 bytes, it's a pubkey.
+	if len(query) == 65*2 {
+		// Check if it's a pubkey.
+		_, err := hex.DecodeString(query)
+		if err != nil {
+			http.Error(w, "Invalid pubkey", http.StatusBadRequest)
+			return
+		}
+
+		// Redirect to account page.
+		http.Redirect(w, r, fmt.Sprintf("/accounts/%s", query), http.StatusFound)
+		return
+	}
+
+	// Else it could be a tx hash or a block hash.
+	// Looking up the block is cheaper, because the blocks table grows slower than transactions table.
+	// So we'll check if it's a block hash first.
+	blockHash := nakamoto.HexStringToBytes32(query)
+	block, err := expl.dag.GetBlockByHash(blockHash)
+	if err != nil && !errors.Is(err, nakamoto.ErrBlockNotFound) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if block != nil {
+		http.Redirect(w, r, fmt.Sprintf("/blocks/%s", query), http.StatusFound)
+		return
+	}
+	
+	// If it's not a block hash, it could be a transaction hash.
+	tx, err := expl.dag.GetTransactionByHash(blockHash)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if tx != nil {
+		http.Redirect(w, r, fmt.Sprintf("/transactions/%s", query), http.StatusFound)
+		return
+	}
+
+	// Render a no results found page.
+	tmpl := expl.getTemplates("templates/search.html", "templates/_base_layout.html")
+	err = tmpl.ExecuteTemplate(w, "search.html", map[string]interface{}{
+		"Title": "Search",
+		"Query": query,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	return
 }
 
 func (expl *BlockExplorerServer) homePage(w http.ResponseWriter, r *http.Request) {
@@ -258,15 +322,54 @@ func (expl *BlockExplorerServer) getAccount(w http.ResponseWriter, r *http.Reque
 	b, _ := hex.DecodeString(accountPubkey_)
 	var fbuf [65]byte
 	copy(fbuf[:], b)
-	fmt.Printf("%v", expl.state)
-	fmt.Printf("%v", fbuf)
+	accountPubkey := fbuf
 	accountBalance := expl.state.GetBalance(fbuf)
+
+	// Get all the transactions for an account.
+	db := expl.dag.GetDB()
+	rows, err := db.Query("SELECT hash, sig, from_pubkey, to_pubkey, amount, fee, nonce, version FROM transactions WHERE from_pubkey = ? OR to_pubkey = ?", accountPubkey[:], accountPubkey[:])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	transactions := make([]nakamoto.Transaction, 0)
+	for rows.Next() {
+		tx := nakamoto.Transaction{}
+		hash := []byte{}
+		sig := []byte{}
+		fromPubkey := []byte{}
+		toPubkey := []byte{}
+		amount := uint64(0)
+		fee := uint64(0)
+		nonce := uint64(0)
+		version := 0 // TODO
+
+		err := rows.Scan(&hash, &sig, &fromPubkey, &toPubkey, &amount, &fee, &nonce, &version)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		copy(tx.Hash[:], hash)
+		copy(tx.Sig[:], sig)
+		copy(tx.FromPubkey[:], fromPubkey)
+		copy(tx.ToPubkey[:], toPubkey)
+		tx.Amount = amount
+		tx.Fee = fee
+		tx.Nonce = nonce
+		tx.Version = byte(version)
+
+		transactions = append(transactions, tx)
+	}
 	
 	tmpl := expl.getTemplates("templates/account.html", "templates/_base_layout.html")
-	err := tmpl.ExecuteTemplate(w, "account.html", map[string]interface{}{
+	err = tmpl.ExecuteTemplate(w, "account.html", map[string]interface{}{
 		"Title": fmt.Sprintf("Account (%s)", accountPubkey_),
 		"AccountPubkey": accountPubkey_,
 		"AccountBalance": accountBalance,
+		"Transactions": transactions,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -309,11 +412,52 @@ func (expl *BlockExplorerServer) getTransaction(w http.ResponseWriter, r *http.R
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Get the blocks the transaction is included in.
+	blocks, err := expl.dag.GetTransactionBlocks(txHash)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Compute the tx status.
+	type ConfirmationInfo struct {
+		Status string
+		Block nakamoto.Block
+	}
+
+	txStatus := ConfirmationInfo{
+		Status: "Unconfirmed",
+	}
+	// confirmed := make(map[[32]byte]bool)
+	chain, err := expl.dag.GetLongestChainHashList(expl.dag.FullTip.Hash, expl.dag.FullTip.Height + 1)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for _, confirmedBlock := range chain {
+		// Check if blocks array contains this block.
+		for _, block := range blocks {
+			if block == confirmedBlock {
+				// confirmed[block] = true
+				txStatus.Status = "Confirmed"
+				block_, err := expl.dag.GetBlockByHash(confirmedBlock)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				txStatus.Block = *block_
+			}
+		}
+	}
 	
+	// Render.
 	tmpl := expl.getTemplates("templates/transaction.html", "templates/_base_layout.html")
 	err = tmpl.ExecuteTemplate(w, "transaction.html", map[string]interface{}{
 		"Title": fmt.Sprintf("Transaction (%x)", tx.Hash),
 		"Transaction": tx,
+		"Blocks": blocks,
+		"TxStatus": txStatus,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

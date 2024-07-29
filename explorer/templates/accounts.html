@@ -9,7 +9,7 @@
     </tr>
     {{range .Accounts}}
     <tr>
-        <td>{{ .Pubkey | printf "%x" }}</td>
+        <td><a href='/accounts/{{ .Pubkey | printf "%x" }}'>{{ .Pubkey | printf "%x" }}</a></td>
         <td>{{ .Balance | printf "%d" }} TNY</td>
     </tr>
     {{end}}

@@ -1,6 +1,7 @@
 package nakamoto
 
 import (
+	"database/sql"
 	"fmt"
 )
 
@@ -546,4 +547,37 @@ func (dag *BlockDAG) GetEpochById(id string) (*Epoch, error) {
 	}
 
 	return &epoch, nil
+}
+
+func (dag *BlockDAG) GetTransactionBlocks(txHash [32]byte) ([][32]byte, error) {
+	blocks := make([][32]byte, 0)
+
+	// Query database.
+	rows, err := dag.db.Query(
+		`SELECT block_hash FROM transactions_blocks WHERE transaction_hash = ?;`,
+		txHash[:],
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		blockHash := []byte{}
+		err := rows.Scan(&blockHash)
+		if err != nil {
+			return nil, err
+		}
+
+		hash := [32]byte{}
+		copy(hash[:], blockHash)
+
+		blocks = append(blocks, hash)
+	}
+
+	return blocks, nil
+}
+
+func (dag *BlockDAG) GetDB() *sql.DB {
+	return dag.db
 }
