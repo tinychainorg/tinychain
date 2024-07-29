@@ -28,6 +28,7 @@ func main() {
 						Name:  "db",
 						Usage: "The path to the tinychain database",
 						Value: "tinychain.db",
+						Required: true,
 					},
 					&cli.StringFlag{
 						Name:  "peers",
@@ -54,6 +55,7 @@ func main() {
 					&cli.StringFlag{
 						Name:  "db",
 						Usage: "The path to the tinychain database",
+						Required: true,
 					},
 				},
 			},
