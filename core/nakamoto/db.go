@@ -143,7 +143,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 		logger.Printf("Database upgraded to: %d\n", dbVersion)
 	}
-	if databaseVersion < 3 {
+	if databaseVersion < 2 {
 		// config
 		_, err = tx.Exec(`create table datastores (
 			id TEXT PRIMARY KEY, 
@@ -152,6 +152,14 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
+
+		// Update version.
+		dbVersion := 3
+		_, err = tx.Exec("insert into tinychain_version (version) values (?)", dbVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error updating database version: %s", err)
+		}
+		logger.Printf("Database upgraded to: %d\n", dbVersion)
 	}
 
 	err = tx.Commit()

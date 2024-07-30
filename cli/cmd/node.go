@@ -66,6 +66,34 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 	return blockdag, conf, db
 }
 
+func getMinerWallet(db *sql.DB) (*core.Wallet, error) {
+	walletsStore, err := nakamoto.LoadConfigStore[nakamoto.WalletsStore](db, "wallets")
+	if err != nil {
+		return nil, err
+	}
+	if 0 == len(walletsStore.Wallets) {
+		wallet, err := core.CreateRandomWallet()
+		if err != nil {
+			return nil, err
+		}
+
+		walletsStore.Wallets = append(walletsStore.Wallets, nakamoto.UserWallet{
+			Label:            "miner",
+			PrivateKeyString: wallet.PrvkeyStr(),
+		})
+
+		err = nakamoto.SaveConfigStore(db, "wallets", *walletsStore)
+		if err != nil {
+			return nil, err
+		}
+	}
+	minerWallet, err := core.WalletFromPrivateKey(walletsStore.Wallets[0].PrivateKeyString)
+	if err != nil {
+		return nil, err
+	}
+	return minerWallet, nil
+}
+
 func RunNode(cmdCtx *cli.Context) error {
 	port := cmdCtx.String("port")
 	dbPath := cmdCtx.String("db")
@@ -73,14 +101,14 @@ func RunNode(cmdCtx *cli.Context) error {
 	runMiner := cmdCtx.Bool("miner")
 
 	// DAG.
-	dag, _, _ := newBlockdag(dbPath)
+	dag, _, db := newBlockdag(dbPath)
 
 	// Miner.
-	minerWallet, err := core.CreateRandomWallet()
+	minerWallet, err := getMinerWallet(db)
 	if err != nil {
 		return err
 	}
-
+	fmt.Printf("Miner wallet: %x\n", minerWallet.PubkeyBytes())
 	miner := nakamoto.NewMiner(dag, minerWallet)
 
 	// Peer.
