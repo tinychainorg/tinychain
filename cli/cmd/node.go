@@ -67,7 +67,7 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 }
 
 func getMinerWallet(db *sql.DB) (*core.Wallet, error) {
-	walletsStore, err := nakamoto.LoadConfigStore[nakamoto.WalletsStore](db, "wallets")
+	walletsStore, err := nakamoto.LoadDataStore[nakamoto.WalletsStore](db, "wallets")
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func getMinerWallet(db *sql.DB) (*core.Wallet, error) {
 			PrivateKeyString: wallet.PrvkeyStr(),
 		})
 
-		err = nakamoto.SaveConfigStore(db, "wallets", *walletsStore)
+		err = nakamoto.SaveDataStore(db, "wallets", *walletsStore)
 		if err != nil {
 			return nil, err
 		}

@@ -8,6 +8,57 @@ import (
 	"github.com/fatih/color"
 )
 
+func dbGetVersion(db *sql.DB) (int, error) {
+	// Check the database version.
+	row := db.QueryRow("SELECT version FROM tinychain_version ORDER BY version DESC LIMIT 1")
+	if err := row.Err(); err != nil {
+		return -1, fmt.Errorf("error checking database version: %s", err)
+	}
+	
+	databaseVersion := -1
+	row.Scan(&databaseVersion)
+
+	return databaseVersion, nil
+}
+
+func dbMigrate(db *sql.DB, migrationIndex int, migrateFn func(tx *sql.Tx) error) error {
+	logger := NewLogger("db", "")
+
+	version, err := dbGetVersion(db)
+	if err != nil {
+		return err
+	}
+
+	// Skip migration if the database is already at the target version.
+	if migrationIndex <= version { 
+		logger.Printf("Skipping migration: %d\n", migrationIndex)
+		return nil 
+	}
+
+	// Perform the migration.
+	logger.Printf("Running migration: %d\n", migrationIndex)
+	tx, err := db.Begin()
+	err = migrateFn(tx)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Update the database version.
+	_, err = tx.Exec("insert into tinychain_version (version) values (?)", migrationIndex)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		panic(err)
+	}
+
+	return nil
+}
+
 func OpenDB(dbPath string) (*sql.DB, error) {
 	logger := NewLogger("db", "")
 
@@ -16,38 +67,23 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	tx, err := db.Begin()
-
 	// Check to perform migrations.
-	_, err = tx.Exec("create table if not exists tinychain_version (version int)")
+	_, err = db.Exec("create table if not exists tinychain_version (version int)")
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
 	// Check the database version.
-	rows, err := tx.Query("select version from tinychain_version order by version asc limit 1")
+	databaseVersion, err := dbGetVersion(db)
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
-	}
-	databaseVersion := 0
-	if rows.Next() {
-		rows.Scan(&databaseVersion)
-	}
-	err = rows.Close()
-	if err != nil {
-		return nil, err
 	}
 
 	// Log version.
 	logger.Printf("Database version: %d\n", databaseVersion)
 
 	// Migration: v0.
-	if databaseVersion == 0 {
-		// Perform migrations.
-		dbVersion := 1
-		logger.Printf("Running migration: %d\n", dbVersion)
-
+	dbMigrate(db, 0, func(tx *sql.Tx) error {
 		// Create tables.
-
 		// epochs
 		_, err = tx.Exec(`create table epochs (
 			id TEXT PRIMARY KEY, 
@@ -57,7 +93,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			difficulty blob
 		)`)
 		if err != nil {
-			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
+			return fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
 
 		// blocks
@@ -78,7 +114,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			foreign key (epoch) REFERENCES epochs (id)
 		)`)
 		if err != nil {
-			return nil, fmt.Errorf("error creating 'blocks' table: %s", err)
+			return fmt.Errorf("error creating 'blocks' table: %s", err)
 		}
 
 		// transactions_blocks
@@ -92,7 +128,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			)
 		`)
 		if err != nil {
-			return nil, fmt.Errorf("error creating 'transactions_blocks' table: %s", err)
+			return fmt.Errorf("error creating 'transactions_blocks' table: %s", err)
 		}
 
 		// transactions
@@ -107,24 +143,19 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			version integer
 		)`)
 		if err != nil {
-			return nil, fmt.Errorf("error creating 'transactions' table: %s", err)
+			return fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
 
 		// Create indexes.
 		_, err = tx.Exec(`create index blocks_parent_hash on blocks (parent_hash)`)
 		if err != nil {
-			return nil, fmt.Errorf("error creating 'blocks_parent_hash' index: %s", err)
+			return fmt.Errorf("error creating 'blocks_parent_hash' index: %s", err)
 		}
 
-		// Update version.
-		_, err = tx.Exec("insert into tinychain_version (version) values (?)", dbVersion)
-		if err != nil {
-			return nil, fmt.Errorf("error updating database version: %s", err)
-		}
+		return nil
+	})
 
-		logger.Printf("Database upgraded to: %d\n", dbVersion)
-	}
-	if databaseVersion < 1 {
+	dbMigrate(db, 1, func(tx *sql.Tx) error {
 		_, err = tx.Exec(
 			`CREATE INDEX idx_blocks_parent_hash ON blocks (parent_hash);
 			CREATE INDEX idx_blocks_hash ON blocks (hash);
@@ -134,42 +165,31 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 			CREATE INDEX idx_transactions_blocks_txindex ON transactions_blocks (txindex);
 		`)
 		if err != nil {
-			return nil, fmt.Errorf("error creating indexes: %s", err)
+			return fmt.Errorf("error creating indexes: %s", err)
 		}
+		return nil
+	})
 
-		// Update version.
-		dbVersion := 2
-		_, err = tx.Exec("insert into tinychain_version (version) values (?)", dbVersion)
-		if err != nil {
-			return nil, fmt.Errorf("error updating database version: %s", err)
-		}
-		logger.Printf("Database upgraded to: %d\n", dbVersion)
-	}
-	if databaseVersion < 2 {
+	dbMigrate(db, 2, func(tx *sql.Tx) error {
 		// config
 		_, err = tx.Exec(`create table datastores (
-			id TEXT PRIMARY KEY, 
-			data blob
+			-- use k,v instead of key,value to avoid reserved word conflicts
+			k TEXT PRIMARY KEY, 
+			v blob
 		)`)
 		if err != nil {
-			return nil, fmt.Errorf("error creating 'epochs' table: %s", err)
+			return fmt.Errorf("error creating 'datastores' table: %s", err)
 		}
-
-		// Update version.
-		dbVersion := 3
-		_, err = tx.Exec("insert into tinychain_version (version) values (?)", dbVersion)
-		if err != nil {
-			return nil, fmt.Errorf("error updating database version: %s", err)
-		}
-		logger.Printf("Database upgraded to: %d\n", dbVersion)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		panic(err)
-	}
+		return nil
+	})
 
 	return db, err
+}
+
+// DataStore is a generic interface for reading/writing persistent data to the database.
+// It is used for storing configuration (wallet private keys), caching (peer addresses) and other things. They are stored in the database under a unique key, and are serialised/deserialised using the JSON encoding.
+type DataStore interface {
+	NetworkStore | WalletsStore
 }
 
 type NetworkStore struct {
@@ -188,11 +208,12 @@ type UserWallet struct {
 	PrivateKeyString string `json:"privateKeyString"`
 }
 
-func LoadConfigStore[T NetworkStore | WalletsStore](db *sql.DB, key string) (*T, error) {
+// Load a data store from the database by key.
+func LoadDataStore[T DataStore](db *sql.DB, key string) (*T, error) {
 	logger := NewLogger("db", "")
 
 	buf := []byte("{}")
-	err := db.QueryRow("SELECT data FROM datastores WHERE id = ?", key).Scan(&buf)
+	err := db.QueryRow("SELECT v FROM datastores WHERE k = ?", key).Scan(&buf)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -209,7 +230,8 @@ func LoadConfigStore[T NetworkStore | WalletsStore](db *sql.DB, key string) (*T,
 	return &store, nil
 }
 
-func SaveConfigStore[T NetworkStore | WalletsStore](db *sql.DB, key string, value T) error {
+// Persist a data store to the database under the given key.
+func SaveDataStore[T DataStore](db *sql.DB, key string, value T) error {
 	logger := NewLogger("db", "")
 	logger.Printf("store name=%s saving\n", color.HiYellowString(key))
 
@@ -225,7 +247,7 @@ func SaveConfigStore[T NetworkStore | WalletsStore](db *sql.DB, key string, valu
 	}
 
 	// Perform an upsert (insert or update) operation.
-	_, err = tx.Exec("INSERT INTO datastores (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data", key, buf)
+	_, err = tx.Exec("INSERT INTO datastores (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v", key, buf)
 	if err != nil {
 		return err
 	}

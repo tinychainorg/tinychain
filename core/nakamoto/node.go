@@ -218,7 +218,7 @@ func (n *Node) setup() {
 
 
 	// Load peers from cache.
-	networkStore, err := LoadConfigStore[NetworkStore](n.Dag.db, "network")
+	networkStore, err := LoadDataStore[NetworkStore](n.Dag.db, "network")
 	if err != nil {
 		n.log.Printf("Failed to load network store: %s\n", err)
 	}
@@ -269,7 +269,7 @@ func (n *Node) Shutdown() {
 	networkStore := NetworkStore{
 		PeerCache: peers,
 	}
-	SaveConfigStore(n.Dag.db, "network", networkStore)
+	SaveDataStore(n.Dag.db, "network", networkStore)
 
 	// Close the database.
 	err := n.Dag.db.Close()

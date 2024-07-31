@@ -17,7 +17,7 @@ func TestLoadSaveConfigStore(t *testing.T) {
 	defer db.Close()
 
 	// Create a new config store.
-	wallets, err := LoadConfigStore[WalletsStore](db, "wallets")
+	wallets, err := LoadDataStore[WalletsStore](db, "wallets")
 	if err != nil {
 		t.Error(err)
 		return
@@ -41,14 +41,14 @@ func TestLoadSaveConfigStore(t *testing.T) {
 	})
 
 	// Save the store.
-	err = SaveConfigStore[WalletsStore](db, "wallets", *wallets)
+	err = SaveDataStore[WalletsStore](db, "wallets", *wallets)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
 	// Load the store again.
-	wallets, err = LoadConfigStore[WalletsStore](db, "wallets")
+	wallets, err = LoadDataStore[WalletsStore](db, "wallets")
 	if err != nil {
 		t.Error(err)
 		return
@@ -73,7 +73,7 @@ func TestLoadSaveConfigStore(t *testing.T) {
 	}
 
 	// Test saving a store overwrites an old store.
-	err = SaveConfigStore[WalletsStore](db, "wallets", *wallets)
+	err = SaveDataStore[WalletsStore](db, "wallets", *wallets)
 	if err != nil {
 		t.Error(err)
 		return
