@@ -6,6 +6,24 @@ import (
 	"github.com/liamzebedee/tinychain-go/core"
 )
 
+func TestOpenDB(t *testing.T) {
+	t.Log("Testing database open")
+
+	// Open an in-memory database.
+	db, err := OpenDB(":memory:")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer db.Close()
+
+	// Check that the database is open.
+	err = db.Ping()
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestLoadSaveConfigStore(t *testing.T) {
 	t.Log("Testing config store")
 

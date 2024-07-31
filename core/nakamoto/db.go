@@ -45,7 +45,7 @@ func dbMigrate(db *sql.DB, migrationIndex int, migrateFn func(tx *sql.Tx) error)
 	}
 
 	// Update the database version.
-	_, err = tx.Exec("insert into tinychain_version (version) values (?)", migrationIndex)
+	_, err = tx.Exec("INSERT INTO tinychain_version (version) VALUES (?)", migrationIndex)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -68,7 +68,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	}
 
 	// Check to perform migrations.
-	_, err = db.Exec("create table if not exists tinychain_version (version int)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS tinychain_version (version INT)")
 	if err != nil {
 		return nil, fmt.Errorf("error checking database version: %s", err)
 	}
@@ -85,33 +85,33 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 	dbMigrate(db, 0, func(tx *sql.Tx) error {
 		// Create tables.
 		// epochs
-		_, err = tx.Exec(`create table epochs (
+		_, err = tx.Exec(`CREATE TABLE epochs (
 			id TEXT PRIMARY KEY, 
-			start_block_hash blob, 
-			start_time integer, 
-			start_height integer, 
-			difficulty blob
+			start_block_hash BLOB, 
+			start_time INTEGER, 
+			start_height INTEGER, 
+			difficulty BLOB
 		)`)
 		if err != nil {
 			return fmt.Errorf("error creating 'epochs' table: %s", err)
 		}
 
 		// blocks
-		_, err = tx.Exec(`create table blocks (
-			hash blob primary key, 
-			parent_hash blob, 
-			difficulty blob, 
-			timestamp integer, 
-			num_transactions integer, 
-			transactions_merkle_root blob, 
-			nonce blob, 
-			graffiti blob, 
-			height integer, 
+		_, err = tx.Exec(`CREATE TABLE blocks (
+			hash BLOB PRIMARY KEY, 
+			parent_hash BLOB, 
+			difficulty BLOB, 
+			timestamp INTEGER, 
+			num_transactions BLOB, 
+			transactions_merkle_root BLOB, 
+			nonce BLOB, 
+			graffiti BLOB, 
+			height INTEGER, 
 			epoch TEXT, 
-			size_bytes integer, 
-			parent_total_work blob, 
-			acc_work blob, 
-			foreign key (epoch) REFERENCES epochs (id)
+			size_bytes INTEGER, 
+			parent_total_work BLOB, 
+			acc_work BLOB, 
+			FOREIGN KEY (epoch) REFERENCES epochs (id)
 		)`)
 		if err != nil {
 			return fmt.Errorf("error creating 'blocks' table: %s", err)
@@ -119,12 +119,12 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 
 		// transactions_blocks
 		_, err = tx.Exec(`
-			create table transactions_blocks (
-				block_hash blob, transaction_hash blob, txindex integer, 
+			CREATE TABLE transactions_blocks (
+				block_hash BLOB, transaction_hash BLOB, txindex INTEGER, 
 				
-				primary key (block_hash, transaction_hash, txindex),
-				foreign key (block_hash) references blocks (hash), 
-				foreign key (transaction_hash) references transactions (hash)
+				PRIMARY KEY (block_hash, transaction_hash, txindex),
+				FOREIGN KEY (block_hash) REFERENCES blocks (hash), 
+				FOREIGN KEY (transaction_hash) REFERENCES transactions (hash)
 			)
 		`)
 		if err != nil {
@@ -132,22 +132,22 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 		}
 
 		// transactions
-		_, err = tx.Exec(`create table transactions (
-			hash blob primary key, 
-			sig blob, 
-			from_pubkey blob, 
-			to_pubkey blob, 
-			amount integer, 
-			fee integer, 
-			nonce integer, 
-			version integer
+		_, err = tx.Exec(`CREATE TABLE transactions (
+			hash BLOB PRIMARY KEY, 
+			sig BLOB, 
+			from_pubkey BLOB, 
+			to_pubkey BLOB, 
+			amount INTEGER, 
+			fee INTEGER, 
+			nonce INTEGER, 
+			version INTEGER
 		)`)
 		if err != nil {
 			return fmt.Errorf("error creating 'transactions' table: %s", err)
 		}
 
 		// Create indexes.
-		_, err = tx.Exec(`create index blocks_parent_hash on blocks (parent_hash)`)
+		_, err = tx.Exec(`CREATE INDEX blocks_parent_hash ON blocks (parent_hash)`)
 		if err != nil {
 			return fmt.Errorf("error creating 'blocks_parent_hash' index: %s", err)
 		}
@@ -172,10 +172,10 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 
 	dbMigrate(db, 2, func(tx *sql.Tx) error {
 		// config
-		_, err = tx.Exec(`create table datastores (
+		_, err = tx.Exec(`CREATE TABLE datastores (
 			-- use k,v instead of key,value to avoid reserved word conflicts
 			k TEXT PRIMARY KEY, 
-			v blob
+			v BLOB
 		)`)
 		if err != nil {
 			return fmt.Errorf("error creating 'datastores' table: %s", err)
