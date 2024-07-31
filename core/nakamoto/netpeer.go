@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/liamzebedee/tinychain-go/core"
@@ -32,6 +33,7 @@ var WIRE_PROTOCOL_VERSION = uint(1)
 // It handles bootstrapping, peer discovery, gossip routines for transactions and blocks.
 // It implements the wire protocol for the network, providing API's to send messages to other peers, and callbacks to handle messages sent to us.
 type PeerCore struct {
+	peersMutex  sync.Mutex
 	peers        []Peer
 	server       *PeerServer
 	config       PeerConfig
@@ -69,6 +71,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 	}
 
 	p := &PeerCore{
+		peersMutex: 			   sync.Mutex{},
 		peers:                      []Peer{},
 		server:                     nil,
 		config:                     config,
@@ -464,6 +467,15 @@ func (p *PeerCore) makeHeartbeat() HeartbeatMesage {
 	return heartbeatMsg
 }
 
+func (p *PeerCore) HasPeer(peerAddress string) bool {
+	for _, peer := range p.peers {
+		if peer.Addr == peerAddress {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *PeerCore) AddPeer(peerAddress string) {
 	// Check URL valid.
 	_, err := url.Parse(peerAddress)
@@ -510,7 +522,11 @@ func (p *PeerCore) AddPeer(peerAddress string) {
 	}
 
 	// Add peer to list.
-	p.peers = append(p.peers, peer)
+	p.peersMutex.Lock()
+	if !p.HasPeer(peer.Addr) {
+		p.peers = append(p.peers, peer)
+	}
+	defer p.peersMutex.Unlock()
 
 	// Print.
 	p.peerLogger.Printf("Added peer.Addr=%s\n", peer.Addr)
