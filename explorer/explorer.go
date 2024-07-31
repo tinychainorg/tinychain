@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -440,6 +441,17 @@ func (expl *BlockExplorerServer) getAccounts(w http.ResponseWriter, r *http.Requ
 			Balance: balance,
 		})
 	}
+
+	// Now sort the accounts by balance desc.
+	slices.SortFunc(accounts, func(a, b account) int {
+		if a.Balance > b.Balance {
+			return -1
+		}
+		if a.Balance < b.Balance {
+			return 1
+		}
+		return 0
+	})
 
 	// Render.
 	tmpl := expl.getTemplates("templates/accounts.html", "templates/_base_layout.html")
