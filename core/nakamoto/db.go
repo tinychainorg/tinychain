@@ -7,7 +7,7 @@ import (
 )
 
 func OpenDB(dbPath string) (*sql.DB, error) {
-	logger := NewLogger("blockdag", "db")
+	logger := NewLogger("db", "")
 
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -172,7 +172,7 @@ func OpenDB(dbPath string) (*sql.DB, error) {
 
 type NetworkStore struct {
 	// A cache of peers we have connected to.
-	Peers map[string]*Peer
+	PeerCache []Peer `json:"peerCache"`
 }
 
 type WalletsStore struct {
@@ -182,7 +182,7 @@ type WalletsStore struct {
 type UserWallet struct {
 	// Wallet label.
 	Label string `json:"label"`
-	// Wallet private key.
+	// Wallet private key as a hex string.
 	PrivateKeyString string `json:"privateKeyString"`
 }
 
