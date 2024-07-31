@@ -24,7 +24,7 @@ func newNodeFromConfig(t *testing.T) *Node {
 	miner := NewMiner(dag, minerWallet)
 
 	// Peer.
-	peer := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort()})
+	peer := NewPeerCore(PeerConfig{ipAddress: "127.0.0.1", port: getRandomPort()})
 
 	// Create the node.
 	node := NewNode(&dag, miner, peer)

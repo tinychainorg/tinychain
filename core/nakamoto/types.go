@@ -39,13 +39,13 @@ func (e *Epoch) GetId() string {
 }
 
 type PeerConfig struct {
-	address        string
+	ipAddress        string
 	port           string
 	bootstrapPeers []string
 }
 
-func NewPeerConfig(address string, port string, bootstrapPeers []string) PeerConfig {
-	return PeerConfig{address: address, port: port, bootstrapPeers: bootstrapPeers}
+func NewPeerConfig(ipAddress string, port string, bootstrapPeers []string) PeerConfig {
+	return PeerConfig{ipAddress: ipAddress, port: port, bootstrapPeers: bootstrapPeers}
 }
 
 type NetworkMessage struct {

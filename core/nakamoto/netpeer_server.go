@@ -30,7 +30,7 @@ func NewPeerServer(config PeerConfig) *PeerServer {
 	}
 
 	// Get the port from the environment variable
-	addr := s.config.address
+	addr := s.config.ipAddress
 	port := s.config.port
 
 	// Setup HTTP server mux.
