@@ -113,6 +113,8 @@ func RunNode(cmdCtx *cli.Context) error {
 	runMiner := cmdCtx.Bool("miner")
 	runExplorer := cmdCtx.Bool("explorer")
 	network := cmdCtx.String("network")
+	graffitiTag := cmdCtx.String("miner-tag")
+
 	if network == "" {
 		network = "testnet1"
 	}
@@ -137,6 +139,7 @@ func RunNode(cmdCtx *cli.Context) error {
 	}
 	fmt.Printf("Miner wallet: %x\n", minerWallet.PubkeyBytes())
 	miner := nakamoto.NewMiner(dag, minerWallet)
+	miner.GraffitiTag = nakamoto.StringToBytes32(graffitiTag)
 
 	// Peer.
 	peer := nakamoto.NewPeerCore(nakamoto.NewPeerConfig("0.0.0.0", port, []string{}))

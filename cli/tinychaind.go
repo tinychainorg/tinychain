@@ -40,6 +40,11 @@ func main() {
 						Usage: "Run the miner",
 						Value: false,
 					},
+					&cli.StringFlag{
+						Name:  "miner-tag",
+						Usage: "Sets the graffiti tag you put into blocks you've mined",
+						Value: "",
+					},
 					&cli.BoolFlag{
 						Name:  "explorer",
 						Usage: "Run the block explorer on port 9000",
