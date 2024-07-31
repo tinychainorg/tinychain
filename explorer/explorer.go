@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -293,7 +294,8 @@ func (expl *BlockExplorerServer) getChain(w http.ResponseWriter, r *http.Request
 
 	// For each of those blocks, get the block details.
 	blocks := make([]*nakamoto.Block, 0, len(chain))
-	for i := 0; i < 25; i++ {
+	maxBlocksPerPage := math.Min(25, float64(len(chain)))
+	for i := 0; i < int(maxBlocksPerPage); i++ {
 		blockheight := len(chain) - i - 1
 		blockHash := chain[blockheight]
 		block, err := expl.dag.GetBlockByHash(blockHash)

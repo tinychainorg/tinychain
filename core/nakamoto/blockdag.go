@@ -248,13 +248,15 @@ func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
 			StartHeight:    height,
 			Difficulty:     newDifficulty,
 		}
+		diffBytes := BigIntToBytes32(newDifficulty)
+
 		_, err := dag.db.Exec(
 			"insert into epochs (id, start_block_hash, start_time, start_height, difficulty) values (?, ?, ?, ?, ?)",
 			epoch.GetId(),
 			epoch.StartBlockHash[:],
 			epoch.StartTime,
 			epoch.StartHeight,
-			newDifficulty.Bytes(),
+			diffBytes[:],
 		)
 		if err != nil {
 			return err
@@ -557,13 +559,15 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 			StartHeight:    height,
 			Difficulty:     newDifficulty,
 		}
+		diffBytes := BigIntToBytes32(newDifficulty)
+		
 		_, err := dag.db.Exec(
 			"insert into epochs (id, start_block_hash, start_time, start_height, difficulty) values (?, ?, ?, ?, ?)",
 			epoch.GetId(),
 			epoch.StartBlockHash[:],
 			epoch.StartTime,
 			epoch.StartHeight,
-			newDifficulty.Bytes(),
+			diffBytes[:],
 		)
 		if err != nil {
 			return err

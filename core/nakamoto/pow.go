@@ -51,36 +51,38 @@ func SolvePOW(b RawBlock, startNonce big.Int, target big.Int, maxIterations uint
 
 // Recomputes the difficulty for the next epoch.
 func RecomputeDifficulty(epochStart uint64, epochEnd uint64, currDifficulty big.Int, targetEpochLengthMillis uint64, epochLengthBlocks uint64, height uint64) big.Int {
+	// powLogger.Printf("epoch i=%d start_time=%d end_time=%d duration=%d \n", epochIndex, epochStart, epochEnd, epochDuration)
+	powLogger.Printf("RecomputeDifficulty currDifficulty: %s\n", currDifficulty.String())
+
 	// Compute the epoch duration.
 	epochDuration := epochEnd - epochStart
 
 	// Special case: clamp the epoch duration so it is at least 1.
-	if epochDuration == 0 {
+	if epochDuration <= 0 {
 		epochDuration = 1
+	}
+	// Special case: clamp the epoch duration so it is at max, 2*targetEpochLengthMillis.
+	// The genesis block has a epochStart of 0.
+	if epochDuration > 2*targetEpochLengthMillis {
+		epochDuration = 2 * targetEpochLengthMillis
 	}
 
 	epochIndex := height / epochLengthBlocks
 
-	fmt.Printf("epoch i=%d start_time=%d end_time=%d duration=%d \n", epochIndex, epochStart, epochEnd, epochDuration)
+	powLogger.Printf("epoch i=%d start_time=%d end_time=%d duration=%d \n", epochIndex, epochStart, epochEnd, epochDuration)
 
 	// Compute the target epoch length.
-	targetEpochLength := targetEpochLengthMillis * epochLengthBlocks
+	targetEpochLength := targetEpochLengthMillis
 
 	// Rescale the difficulty.
 	// difficulty = epoch.difficulty * (epoch.duration / target_epoch_length)
-	newDifficulty := new(big.Int)
-	newDifficulty.Mul(
-		&currDifficulty,
-		big.NewInt(int64(epochDuration)),
-	)
-	newDifficulty.Div(
-		newDifficulty,
-		big.NewInt(int64(targetEpochLength)),
-	)
+	diff := new(big.Int)
+	diff.Mul(&currDifficulty, big.NewInt(int64(epochDuration)))
+	diff.Div(diff, big.NewInt(int64(targetEpochLength)))
 
-	powLogger.Printf("New difficulty: %x\n", newDifficulty.String())
+	powLogger.Printf("RecomputeDifficulty :: diff * duration/target = %s\n", diff.String())
 
-	return *newDifficulty
+	return *diff
 }
 
 // Calculates the work of a solution.
