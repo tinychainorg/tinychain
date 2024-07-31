@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/liamzebedee/tinychain-go/core/nakamoto"
+	"github.com/liamzebedee/tinychain-go/explorer"
 	"github.com/urfave/cli/v2"
 
 	"database/sql"
@@ -99,6 +100,7 @@ func RunNode(cmdCtx *cli.Context) error {
 	dbPath := cmdCtx.String("db")
 	bootstrapPeers := cmdCtx.String("peers")
 	runMiner := cmdCtx.Bool("miner")
+	runExplorer := cmdCtx.Bool("explorer")
 
 	// DAG.
 	dag, _, db := newBlockdag(dbPath)
@@ -148,6 +150,11 @@ func RunNode(cmdCtx *cli.Context) error {
 
 	if runMiner {
 		go node.Miner.Start(-1)
+	}
+
+	if runExplorer {
+		expl := explorer.NewBlockExplorerServer(&dag, 9000)
+		go expl.Start()
 	}
 
 	node.Start()

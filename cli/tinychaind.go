@@ -40,6 +40,11 @@ func main() {
 						Usage: "Run the miner",
 						Value: false,
 					},
+					&cli.BoolFlag{
+						Name:  "explorer",
+						Usage: "Run the block explorer on port 9000",
+						Value: false,
+					},
 				},
 			},
 			{
