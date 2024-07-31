@@ -215,6 +215,16 @@ func (n *Node) setup() {
 		// Add transaction to mempool.
 		// TODO.
 	}
+
+
+	// Load peers from cache.
+	networkStore, err := LoadConfigStore[NetworkStore](n.Dag.db, "network")
+	if err != nil {
+		n.log.Printf("Failed to load network store: %s\n", err)
+	}
+	for _, peer := range networkStore.PeerCache {
+		go n.Peer.AddPeer(peer.Addr)
+	}
 }
 
 func (n *Node) rebuildState() error {
@@ -254,6 +264,13 @@ func (n *Node) syncRoutine() {
 }
 
 func (n *Node) Shutdown() {
+	// Save peers to cache.
+	peers := n.Peer.GetPeers()
+	networkStore := NetworkStore{
+		PeerCache: peers,
+	}
+	SaveConfigStore(n.Dag.db, "network", networkStore)
+
 	// Close the database.
 	err := n.Dag.db.Close()
 	if err != nil {

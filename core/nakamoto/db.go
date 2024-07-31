@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+
+	"github.com/fatih/color"
 )
 
 func OpenDB(dbPath string) (*sql.DB, error) {
@@ -187,6 +189,8 @@ type UserWallet struct {
 }
 
 func LoadConfigStore[T NetworkStore | WalletsStore](db *sql.DB, key string) (*T, error) {
+	logger := NewLogger("db", "")
+
 	buf := []byte("{}")
 	err := db.QueryRow("SELECT data FROM datastores WHERE id = ?", key).Scan(&buf)
 	if err != nil && err != sql.ErrNoRows {
@@ -199,11 +203,16 @@ func LoadConfigStore[T NetworkStore | WalletsStore](db *sql.DB, key string) (*T,
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Printf("store name=%s loaded\n", color.HiYellowString(key))
 	
 	return &store, nil
 }
 
 func SaveConfigStore[T NetworkStore | WalletsStore](db *sql.DB, key string, value T) error {
+	logger := NewLogger("db", "")
+	logger.Printf("store name=%s saving\n", color.HiYellowString(key))
+
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -225,6 +234,8 @@ func SaveConfigStore[T NetworkStore | WalletsStore](db *sql.DB, key string, valu
 	if err != nil {
 		return err
 	}
+
+	logger.Printf("store name=%s saved\n", color.HiYellowString(key))
 
 	return nil
 }
