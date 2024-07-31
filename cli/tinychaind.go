@@ -45,6 +45,11 @@ func main() {
 						Usage: "Run the block explorer on port 9000",
 						Value: false,
 					},
+					&cli.StringFlag{
+						Name:  "network",
+						Usage: "The network to run on",
+						Value: "testnet1",
+					},
 				},
 			},
 			{

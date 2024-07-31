@@ -15,7 +15,8 @@ func RunExplorer(cmdCtx *cli.Context) error {
 	dbPath := cmdCtx.String("db")
 
 	// DAG.
-	dag, _, _ := newBlockdag(dbPath)
+	networks := getNetworks()
+	dag, _, _ := newBlockdag(dbPath, networks["testnet1"])
 
 	// Handle process signals.
 	c := make(chan os.Signal, 1)

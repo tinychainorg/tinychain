@@ -26,7 +26,39 @@ func (m *MockStateMachine) VerifyTx(tx nakamoto.RawTransaction) error {
 	return nil
 }
 
-func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *sql.DB) {
+
+func getNetworks() map[string]nakamoto.ConsensusConfig {
+	genesis_difficulty := new(big.Int)
+	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
+
+	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
+	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
+	if err != nil {
+		panic(err)
+	}
+	genesisBlockHash_[0] += 1
+
+	genesisBlockHash := [32]byte{}
+	copy(genesisBlockHash[:], genesisBlockHash_)
+
+
+	network_testnet1 := nakamoto.ConsensusConfig{
+		EpochLengthBlocks:       10,
+		TargetEpochLengthMillis: 1000 * 60, // 1min, 1 block every 10s
+		GenesisDifficulty:       *genesis_difficulty,
+		GenesisParentBlockHash:  genesisBlockHash,
+		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+	}
+
+	networks := map[string]nakamoto.ConsensusConfig{
+		"testnet1": network_testnet1,
+		"terrydavis": network_testnet1,
+	}
+	
+	return networks
+}
+
+func newBlockdag(dbPath string, conf nakamoto.ConsensusConfig) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *sql.DB) {
 	// TODO validate connection string.
 	fmt.Println("database path: ", dbPath)
 	db, err := nakamoto.OpenDB(dbPath)
@@ -39,25 +71,6 @@ func newBlockdag(dbPath string) (nakamoto.BlockDAG, nakamoto.ConsensusConfig, *s
 	}
 
 	stateMachine := newMockStateMachine()
-
-	genesis_difficulty := new(big.Int)
-	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-
-	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
-	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
-	if err != nil {
-		panic(err)
-	}
-	genesisBlockHash := [32]byte{}
-	copy(genesisBlockHash[:], genesisBlockHash_)
-
-	conf := nakamoto.ConsensusConfig{
-		EpochLengthBlocks:       10,
-		TargetEpochLengthMillis: 1000 * 60 * 5, // 5 minutes
-		GenesisDifficulty:       *genesis_difficulty,
-		GenesisParentBlockHash:  genesisBlockHash,
-		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
-	}
 
 	blockdag, err := nakamoto.NewBlockDAGFromDB(db, stateMachine, conf)
 	if err != nil {
@@ -101,9 +114,23 @@ func RunNode(cmdCtx *cli.Context) error {
 	bootstrapPeers := cmdCtx.String("peers")
 	runMiner := cmdCtx.Bool("miner")
 	runExplorer := cmdCtx.Bool("explorer")
+	network := cmdCtx.String("network")
+	if network == "" {
+		network = "testnet1"
+	}
 
 	// DAG.
-	dag, _, db := newBlockdag(dbPath)
+	networks := getNetworks()
+	conf, ok := networks[network]
+	if !ok {
+		availableNetworks := []string{}
+		for k := range networks {
+			availableNetworks = append(availableNetworks, k)
+		}
+		fmt.Printf("Available networks: %s\n", strings.Join(availableNetworks, ", "))
+		return fmt.Errorf("Unknown network: %s", network)
+	}
+	dag, _, db := newBlockdag(dbPath, conf)
 
 	// Miner.
 	minerWallet, err := getMinerWallet(db)
