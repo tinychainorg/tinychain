@@ -39,7 +39,7 @@ func (e *Epoch) GetId() string {
 }
 
 type PeerConfig struct {
-	ipAddress        string
+	ipAddress      string
 	port           string
 	bootstrapPeers []string
 }

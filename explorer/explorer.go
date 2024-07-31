@@ -58,7 +58,6 @@ func (expl *BlockExplorerServer) getFS() *fs.FS {
 	return &fs
 }
 
-
 func timeAgo(ts uint64) string {
 	t := time.UnixMilli(int64(ts))
 	duration := time.Since(t)
@@ -84,12 +83,11 @@ func formatTimestampDatetime(ts uint64) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-
 func (expl *BlockExplorerServer) getTemplates(patterns ...string) *template.Template {
 	fs := *expl.getFS()
 	funcMap := template.FuncMap{
-		"timeAgo": timeAgo,
-		"formatTimestamp": formatTimestamp,
+		"timeAgo":                 timeAgo,
+		"formatTimestamp":         formatTimestamp,
 		"formatTimestampDatetime": formatTimestampDatetime,
 	}
 	return template.Must(template.New("").Funcs(funcMap).ParseFS(fs, patterns...))

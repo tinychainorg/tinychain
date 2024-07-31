@@ -14,7 +14,7 @@ func dbGetVersion(db *sql.DB) (int, error) {
 	if err := row.Err(); err != nil {
 		return -1, fmt.Errorf("error checking database version: %s", err)
 	}
-	
+
 	databaseVersion := -1
 	row.Scan(&databaseVersion)
 
@@ -30,9 +30,9 @@ func dbMigrate(db *sql.DB, migrationIndex int, migrateFn func(tx *sql.Tx) error)
 	}
 
 	// Skip migration if the database is already at the target version.
-	if migrationIndex <= version { 
+	if migrationIndex <= version {
 		logger.Printf("Skipping migration: %d\n", migrationIndex)
-		return nil 
+		return nil
 	}
 
 	// Perform the migration.
@@ -226,7 +226,7 @@ func LoadDataStore[T DataStore](db *sql.DB, key string) (*T, error) {
 	}
 
 	logger.Printf("store name=%s loaded\n", color.HiYellowString(key))
-	
+
 	return &store, nil
 }
 
@@ -239,7 +239,7 @@ func SaveDataStore[T DataStore](db *sql.DB, key string, value T) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Encode the store into a byte slice.
 	buf, err := json.Marshal(value)
 	if err != nil {

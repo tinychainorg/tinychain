@@ -216,7 +216,6 @@ func (n *Node) setup() {
 		// TODO.
 	}
 
-
 	// Load peers from cache.
 	networkStore, err := LoadDataStore[NetworkStore](n.Dag.db, "network")
 	if err != nil {

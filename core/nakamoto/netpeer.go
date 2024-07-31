@@ -33,7 +33,7 @@ var WIRE_PROTOCOL_VERSION = uint(1)
 // It handles bootstrapping, peer discovery, gossip routines for transactions and blocks.
 // It implements the wire protocol for the network, providing API's to send messages to other peers, and callbacks to handle messages sent to us.
 type PeerCore struct {
-	peersMutex  sync.Mutex
+	peersMutex   sync.Mutex
 	peers        []Peer
 	server       *PeerServer
 	config       PeerConfig
@@ -55,7 +55,7 @@ type PeerCore struct {
 }
 
 type Peer struct {
-	Addr string `json:"addr"`
+	Addr          string `json:"addr"`
 	LastSeen      uint64 `json:"lastSeen"`
 	ClientVersion string `json:"clientVersion"`
 }
@@ -71,7 +71,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 	}
 
 	p := &PeerCore{
-		peersMutex: 			   sync.Mutex{},
+		peersMutex:                 sync.Mutex{},
 		peers:                      []Peer{},
 		server:                     nil,
 		config:                     config,
@@ -485,7 +485,7 @@ func (p *PeerCore) AddPeer(peerAddress string) {
 	}
 
 	peer := Peer{
-		Addr: peerAddress,
+		Addr:          peerAddress,
 		LastSeen:      uint64(time.Now().UnixMilli()),
 		ClientVersion: "",
 	}

@@ -560,7 +560,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 			Difficulty:     newDifficulty,
 		}
 		diffBytes := BigIntToBytes32(newDifficulty)
-		
+
 		_, err := dag.db.Exec(
 			"insert into epochs (id, start_block_hash, start_time, start_height, difficulty) values (?, ?, ?, ?, ?)",
 			epoch.GetId(),

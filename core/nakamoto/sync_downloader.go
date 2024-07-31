@@ -110,7 +110,7 @@ func (e *DownloadEngine) Start(workItems []DownloadWorkItem, initialWorkers []Do
 		workerLogs[peer] = &logs
 
 		go func() {
-			defer func() { onlineWorkersDoneChan <- -1; }() // will get called even if peer.DoWork panics
+			defer func() { onlineWorkersDoneChan <- -1 }() // will get called even if peer.DoWork panics
 			for {
 				// Select work item.
 				workItemInfo, more := <-workItemsChan

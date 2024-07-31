@@ -25,9 +25,9 @@ func main() {
 						Value: "8080",
 					},
 					&cli.StringFlag{
-						Name:  "db",
-						Usage: "The path to the tinychain database",
-						Value: "tinychain.db",
+						Name:     "db",
+						Usage:    "The path to the tinychain database",
+						Value:    "tinychain.db",
 						Required: true,
 					},
 					&cli.StringFlag{
@@ -63,8 +63,8 @@ func main() {
 						Value: "9000",
 					},
 					&cli.StringFlag{
-						Name:  "db",
-						Usage: "The path to the tinychain database",
+						Name:     "db",
+						Usage:    "The path to the tinychain database",
 						Required: true,
 					},
 				},

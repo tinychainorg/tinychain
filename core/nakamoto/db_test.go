@@ -54,7 +54,7 @@ func TestLoadSaveConfigStore(t *testing.T) {
 		return
 	}
 	wallets.Wallets = append(wallets.Wallets, UserWallet{
-		Label: "testwallet",
+		Label:            "testwallet",
 		PrivateKeyString: wallet.PrvkeyStr(),
 	})
 

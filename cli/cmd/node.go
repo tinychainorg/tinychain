@@ -26,7 +26,6 @@ func (m *MockStateMachine) VerifyTx(tx nakamoto.RawTransaction) error {
 	return nil
 }
 
-
 func getNetworks() map[string]nakamoto.ConsensusConfig {
 	genesis_difficulty := new(big.Int)
 	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
@@ -41,7 +40,6 @@ func getNetworks() map[string]nakamoto.ConsensusConfig {
 	genesisBlockHash := [32]byte{}
 	copy(genesisBlockHash[:], genesisBlockHash_)
 
-
 	network_testnet1 := nakamoto.ConsensusConfig{
 		EpochLengthBlocks:       10,
 		TargetEpochLengthMillis: 1000 * 60, // 1min, 1 block every 10s
@@ -51,10 +49,10 @@ func getNetworks() map[string]nakamoto.ConsensusConfig {
 	}
 
 	networks := map[string]nakamoto.ConsensusConfig{
-		"testnet1": network_testnet1,
+		"testnet1":   network_testnet1,
 		"terrydavis": network_testnet1,
 	}
-	
+
 	return networks
 }
 
