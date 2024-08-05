@@ -372,7 +372,6 @@ func TestSyncScheduleDownloadWork1(t *testing.T) {
 
 func TestSyncSyncDownloadDataHeaders(t *testing.T) {
 	// After getting the tips, then we need to divide them into work units.
-
 	assert := assert.New(t)
 	peers := setupTestNetwork(t)
 
@@ -703,4 +702,111 @@ func TestGetPeerCommonAncestor(t *testing.T) {
 	assert := assert.New(t)
 	assert.Equal(local_chainhashes[89], ancestor)
 	assertIntEqual(t, int(expectedIterations), n_iterations)
+}
+
+
+
+// Sync scenarios:
+// 
+// SCENARIO 1
+// =========== 
+// DESCRIPTION: local tip is behind remote tip, same branch. remote tip is heavier.
+// NETWORK STATE:
+// node1: a -> b -> c -> d -> e            (work=100)
+// node2: a -> b -> c -> d -> e -> f -> g  (work=150)
+// 
+// SCENARIO 2
+// =========== 
+// DESCRIPTION: local tip is behind remote tip, fork branch. remote branch is heavier.
+// NETWORK STATE:
+// node1: a -> b -> ca -> da -> ea         (work=100)
+// node2: a -> b -> cb -> db -> eb         (work=105)
+// 
+// SCENARIO 3
+// =========== 
+// DESCRIPTION: local tip is behind remote tip, fork branch. local branch is heavier.
+// NETWORK STATE:
+// node1: a -> b -> ca -> da -> ea         (work=105)
+// node2: a -> b -> cb -> db -> eb         (work=100)
+// 
+
+
+func printBlockchainView(t *testing.T, label string, dag *BlockDAG) {
+	// Print the entire hash chain according to node1.
+	hashlist, err := dag.GetLongestChainHashList(dag.FullTip.Hash, dag.FullTip.Height+10)
+	if err != nil {
+		t.Fatalf("Error getting longest chain: %s", err)
+	}
+	t.Logf("")
+	t.Logf("Longest chain (%s):", label)
+	for i, hash := range hashlist {
+		t.Logf("Block #%d: %x", i, hash)
+	}
+	t.Logf("")
+}
+
+func TestSyncRemoteForkBranchRemoteHeavier(t *testing.T) {
+	assert := assert.New(t)
+	peers := setupTestNetwork(t)
+
+	node1 := peers[0]
+	node2 := peers[1]
+
+	// Then we check the tips.
+	tip1 := node1.Dag.FullTip
+	tip2 := node2.Dag.FullTip
+
+	// Print the height of the tip.
+	t.Logf("Tip 1 height: %d", tip1.Height)
+	t.Logf("Tip 2 height: %d", tip2.Height)
+
+	// Check that the tips are the same.
+	assert.Equal(tip1.HashStr(), tip2.HashStr())
+
+	// Node 1 mines 15 blocks, gossips with node 2
+	node1.Miner.Start(15)
+
+	// Wait for nodes [1,2] to sync.
+	err := waitForNodesToSyncSameTip([]*Node{node1, node2})
+	assert.Nil(err)
+
+	// Disable nodes syncing.
+	node1.Peer.OnNewBlock = nil
+	node2.Peer.OnNewBlock = nil
+	
+	// Node 1 mines 5 blocks on alternative chain.
+	// Node 2 mines 7 blocks on alternative chain.
+	node1.Miner.Start(1)
+	node2.Miner.Start(5)
+
+	// Assert state.
+	tip1 = node1.Dag.FullTip
+	tip2 = node2.Dag.FullTip
+	assertIntEqual(t, 16, tip1.Height)
+	assertIntEqual(t, 20, tip2.Height)
+	assert.NotEqual(tip1.HashStr(), tip2.HashStr())
+
+	// Now print both hash chains.
+	printBlockchainView(t, "Node 1", node1.Dag)
+	printBlockchainView(t, "Node 2", node2.Dag)
+
+	// Now sync node 2 to node 1.
+	// Get the heavier tip.
+	// nodes := []*Node{node1, node2}
+	tips := []Block{tip1, tip2}
+	var heavierTipIndex int = -1
+	if tips[0].AccumulatedWork.Cmp(&tips[1].AccumulatedWork) == -1 {
+		heavierTipIndex = 1
+	} else if tips[1].AccumulatedWork.Cmp(&tips[0].AccumulatedWork) == -1 {
+		heavierTipIndex = 0
+	} else if tips[0].AccumulatedWork.Cmp(&tips[1].AccumulatedWork) == 0 {
+		t.Errorf("Tips have the same work. Re-run test.")
+	}
+	t.Logf("Heavier tip index: %d", heavierTipIndex)
+	assertIntEqual(t, 1, heavierTipIndex)
+
+	// The common ancestor should be 
+
+
+
 }
