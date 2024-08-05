@@ -396,7 +396,7 @@ func (n *Node) sync_getBestTipFromPeers() [32]byte {
 
 // Computes the common ancestor of our local canonical chain and a remote peer's canonical chain through an interactive binary search.
 // O(log N * query_size).
-func (n *Node) sync_computeCommonAncestorWithPeer(peer Peer, local_chainhashes *[][32]byte) [32]byte {
+func GetPeerCommonAncestor(localPeer *PeerCore, remotePeer Peer, local_chainhashes *[][32]byte) (ancestor [32]byte, nIterations int, err error) {
 	syncLog := NewLogger("node", "sync")
 
 	// 6a. Compute the common ancestor (interactive binary search).
@@ -416,10 +416,10 @@ func (n *Node) sync_computeCommonAncestorWithPeer(peer Peer, local_chainhashes *
 		// Peer responds with "SEEN" or "NOT SEEN"
 		// If "SEEN", we move to the right half.
 		// If "NOT SEEN", we move to the left half.
-		has, err := n.Peer.HasBlock(peer, guess_value)
+		has, err := localPeer.HasBlock(remotePeer, guess_value)
 		if err != nil {
 			syncLog.Printf("Failed to get block from peer: %s\n", err)
-			continue
+			return [32]byte{}, 0, err
 		}
 		if has {
 			// Move to the right half.
@@ -430,8 +430,8 @@ func (n *Node) sync_computeCommonAncestorWithPeer(peer Peer, local_chainhashes *
 		}
 	}
 
-	ancestor := (*local_chainhashes)[floor]
+	ancestor = (*local_chainhashes)[floor]
 	syncLog.Printf("Common ancestor: %x", ancestor)
 	syncLog.Printf("Found in %d iterations.", n_iterations)
-	return ancestor
+	return ancestor, n_iterations, nil
 }
