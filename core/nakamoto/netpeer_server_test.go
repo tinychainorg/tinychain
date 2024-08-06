@@ -12,8 +12,8 @@ func TestPeerServerStartFailsForPortInUse(t *testing.T) {
 
 	// Start a server on a random port.
 	port := getRandomPort()
-	peer1 := NewPeerServer(PeerConfig{address: "127.0.0.1", port: port})
-	peer2 := NewPeerServer(PeerConfig{address: "127.0.0.1", port: port})
+	peer1 := NewPeerServer(PeerConfig{ipAddress: "127.0.0.1", port: port})
+	peer2 := NewPeerServer(PeerConfig{ipAddress: "127.0.0.1", port: port})
 
 	errChan := make(chan error)
 

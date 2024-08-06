@@ -166,6 +166,10 @@ func (c *StateMachine) GetStateSnapshot() []StateLeaf {
 	return nil
 }
 
+func (c *StateMachine) GetState() map[[65]byte]uint64 {
+	return c.state
+}
+
 // Given a block DAG and a list of block hashes, extracts the transaction sequence, applies each transaction in order, and returns the final state.
 func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList [][32]byte) (*StateMachine, error) {
 	for _, blockHash := range longestChainHashList {

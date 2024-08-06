@@ -16,12 +16,19 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20.0'
+        go-version: '1.22.5'
 
     - name: Check Go code format
       run: |
         if [ -n "$(gofmt -l .)" ]; then
           echo "Go code is not formatted. Run 'go fmt' to format your code."
+          exit 1
+        fi
+
+    - name: Check go.mod format
+      run: |
+        if [ -n "$(go mod tidy)" ]; then
+          echo "Go module is not tidied. Run 'go mod tiny' to clean up old deps."
           exit 1
         fi
 
@@ -33,7 +40,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20.0'
+        go-version: '1.22.5'
 
     - name: Vet Go code
       run: go vet ./...
@@ -46,7 +53,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20.0'
+        go-version: '1.22.5'
 
     - name: Build
       run: go build -v ./...
@@ -60,7 +67,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20.0'
+        go-version: '1.22.5'
 
     - name: Test
       run: go test ./...

@@ -25,9 +25,10 @@ func main() {
 						Value: "8080",
 					},
 					&cli.StringFlag{
-						Name:  "db",
-						Usage: "The path to the tinychain database",
-						Value: "tinychain.db",
+						Name:     "db",
+						Usage:    "The path to the tinychain database",
+						Value:    "tinychain.db",
+						Required: true,
 					},
 					&cli.StringFlag{
 						Name:  "peers",
@@ -38,6 +39,38 @@ func main() {
 						Name:  "miner",
 						Usage: "Run the miner",
 						Value: false,
+					},
+					&cli.StringFlag{
+						Name:  "miner-tag",
+						Usage: "Sets the graffiti tag you put into blocks you've mined",
+						Value: "",
+					},
+					&cli.BoolFlag{
+						Name:  "explorer",
+						Usage: "Run the block explorer on port 9000",
+						Value: false,
+					},
+					&cli.StringFlag{
+						Name:  "network",
+						Usage: "The network to run on",
+						Value: "testnet1",
+					},
+				},
+			},
+			{
+				Name:   "explorer",
+				Usage:  "runs the tinychain blockchain explorer web app",
+				Action: cmd.RunExplorer,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "port",
+						Usage: "The port to run the node on",
+						Value: "9000",
+					},
+					&cli.StringFlag{
+						Name:     "db",
+						Usage:    "The path to the tinychain database",
+						Required: true,
 					},
 				},
 			},

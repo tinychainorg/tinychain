@@ -88,7 +88,8 @@ func (e *DownloadEngine) Start(workItems []DownloadWorkItem, initialWorkers []Do
 
 	var resultsMutex sync.Mutex
 	var pendingWork sync.WaitGroup
-	var onlineWorkers sync.WaitGroup
+	// var onlineWorkers sync.WaitGroup
+	onlineWorkersDoneChan := make(chan int)
 
 	e.dlog.Printf("starting download with %d peers", len(workers))
 	e.dlog.Printf("downloading %d items", len(workItems))
@@ -103,13 +104,13 @@ func (e *DownloadEngine) Start(workItems []DownloadWorkItem, initialWorkers []Do
 	// Setup worker threads.
 	// Start peer worker threads, which take work from the workItems channel.
 	workerThread := func(peer DownloadPeer) {
-		onlineWorkers.Add(1)
+		onlineWorkersDoneChan <- 1
 
 		logs := []workItemLog{}
 		workerLogs[peer] = &logs
 
 		go func() {
-			defer onlineWorkers.Done() // will get called even if peer.DoWork panics
+			defer func() { onlineWorkersDoneChan <- -1 }() // will get called even if peer.DoWork panics
 			for {
 				// Select work item.
 				workItemInfo, more := <-workItemsChan
@@ -158,11 +159,6 @@ func (e *DownloadEngine) Start(workItems []DownloadWorkItem, initialWorkers []Do
 		}()
 	}
 
-	for _, peer := range initialWorkers {
-		workers = append(workers, peer)
-		workerThread(peer)
-	}
-
 	newWorkerDoneChan := make(chan bool)
 	go func() {
 		for {
@@ -187,9 +183,23 @@ func (e *DownloadEngine) Start(workItems []DownloadWorkItem, initialWorkers []Do
 
 	// Close workersDone channel when all workers are exited (success or failure).
 	go func() {
-		onlineWorkers.Wait()
-		close(workersDone)
+		online := 0
+		for {
+			v := <-onlineWorkersDoneChan
+			online += v
+			e.dlog.Printf("online workers=%d", online)
+			if online == -1 {
+				close(workersDone)
+				break // TODO NO IDEA HOW THIS IS BEING REACHED
+			}
+		}
 	}()
+
+	for _, peer := range initialWorkers {
+		workers = append(workers, peer)
+		workerThread(peer)
+	}
+	onlineWorkersDoneChan <- -1 // sentry value
 
 	// Wait for all work to be done or an error to occur
 	var err error

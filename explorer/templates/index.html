@@ -1,0 +1,17 @@
+{{define "pageBody"}}
+    <p>Welcome to our block explorer. Use the navigation menu to explore blocks, accounts, and transactions.</p>
+
+    <p>Latest block:
+        <a href='/blocks/{{.fullTip.Hash | printf "%x" }}'>
+            {{.fullTip.Hash | printf "%x" }}
+        </a>
+    </p>
+
+    <p>Genesis block:
+        <a href='/blocks/0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7'>
+            0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7
+        </a>
+    </p>
+{{end}}
+
+{{template "_base_layout.html" .}}

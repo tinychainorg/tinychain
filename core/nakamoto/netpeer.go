@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/liamzebedee/tinychain-go/core"
@@ -32,6 +33,7 @@ var WIRE_PROTOCOL_VERSION = uint(1)
 // It handles bootstrapping, peer discovery, gossip routines for transactions and blocks.
 // It implements the wire protocol for the network, providing API's to send messages to other peers, and callbacks to handle messages sent to us.
 type PeerCore struct {
+	peersMutex   sync.Mutex
 	peers        []Peer
 	server       *PeerServer
 	config       PeerConfig
@@ -53,15 +55,13 @@ type PeerCore struct {
 }
 
 type Peer struct {
-	url           string
-	addr          string
-	port          string
-	lastSeen      uint64
-	clientVersion string
+	Addr          string `json:"addr"`
+	LastSeen      uint64 `json:"lastSeen"`
+	ClientVersion string `json:"clientVersion"`
 }
 
 func (peer *Peer) String() string {
-	return peer.url // TODO url not always available.
+	return peer.Addr // TODO url not always available.
 }
 
 func NewPeerCore(config PeerConfig) *PeerCore {
@@ -71,6 +71,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 	}
 
 	p := &PeerCore{
+		peersMutex:                 sync.Mutex{},
 		peers:                      []Peer{},
 		server:                     nil,
 		config:                     config,
@@ -221,7 +222,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		// Ingest new peers.
 		havePeers := make(map[string]bool)
 		for _, peer := range p.peers {
-			havePeers[peer.url] = true
+			havePeers[peer.Addr] = true
 		}
 		for _, peerUrl := range msg.Peers {
 			if _, ok := havePeers[peerUrl]; !ok {
@@ -232,7 +233,7 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		// Reply with our peers.
 		peers := []string{}
 		for _, peer := range p.peers {
-			peers = append(peers, peer.url)
+			peers = append(peers, peer.Addr)
 		}
 
 		return GossipPeersMessage{
@@ -273,7 +274,7 @@ func (p *PeerCore) statusLoggerRoutine() {
 
 func (p *PeerCore) GetLocalAddr() string {
 	// TODO for now.
-	return fmt.Sprintf("http://%s:%s", p.config.address, p.config.port)
+	return fmt.Sprintf("http://%s:%s", p.config.ipAddress, p.config.port)
 }
 
 func (p *PeerCore) GetExternalAddr() string {
@@ -295,7 +296,7 @@ func (p *PeerCore) GossipBlock(block RawBlock) {
 	for _, peer := range p.peers {
 		// TODO gossip the block header but not the full block.
 		// Let the peer decide on whether they need to download block.
-		_, err := SendMessageToPeer(peer.url, newBlockMsg, &p.peerLogger)
+		_, err := SendMessageToPeer(peer.Addr, newBlockMsg, &p.peerLogger)
 		if err != nil {
 			p.peerLogger.Printf("Failed to send block to peer: %v", err)
 			continue
@@ -309,7 +310,7 @@ func (p *PeerCore) GossipPeers() {
 	// Send list to all peers.
 	peers := []string{}
 	for _, peer := range p.peers {
-		peers = append(peers, peer.url)
+		peers = append(peers, peer.Addr)
 	}
 	gossipPeersMsg := GossipPeersMessage{
 		Type:  "gossip_peers",
@@ -317,7 +318,7 @@ func (p *PeerCore) GossipPeers() {
 	}
 
 	for _, peer := range p.peers {
-		reply, err := SendMessageToPeer(peer.url, gossipPeersMsg, &p.peerLogger)
+		reply, err := SendMessageToPeer(peer.Addr, gossipPeersMsg, &p.peerLogger)
 		if err != nil {
 			p.peerLogger.Printf("Failed to send block to peer: %v", err)
 		}
@@ -332,7 +333,7 @@ func (p *PeerCore) GossipPeers() {
 		// Ingest new peers.
 		havePeers := make(map[string]bool)
 		for _, peer := range p.peers {
-			havePeers[peer.url] = true
+			havePeers[peer.Addr] = true
 		}
 		for _, peerUrl := range msg.Peers {
 			if _, ok := havePeers[peerUrl]; !ok {
@@ -347,7 +348,7 @@ func (p *PeerCore) GetTip(peer Peer) (BlockHeader, error) {
 		Type: "get_tip",
 		Tip:  BlockHeader{},
 	}
-	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	res, err := SendMessageToPeer(peer.Addr, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send block to peer: %v", err)
 		return BlockHeader{}, err
@@ -369,7 +370,7 @@ func (p *PeerCore) SyncGetTipAtDepth(peer Peer, fromBlock [32]byte, depth uint64
 		Depth:     depth,
 		Direction: dir,
 	}
-	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	res, err := SendMessageToPeer(peer.Addr, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
 		return [32]byte{}, err
@@ -392,7 +393,7 @@ func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.
 		Headers:   inclHeaders,
 		Bodies:    inclBodies,
 	}
-	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	res, err := SendMessageToPeer(peer.Addr, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send message to peer: %v", err)
 		return SyncGetBlockDataReply{}, err
@@ -412,7 +413,7 @@ func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (bool, error) {
 		Type:      "has_block",
 		BlockHash: fmt.Sprintf("%x", blockhash),
 	}
-	res, err := SendMessageToPeer(peer.url, msg, &p.peerLogger)
+	res, err := SendMessageToPeer(peer.Addr, msg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send block to peer: %v", err)
 		return false, err
@@ -466,32 +467,39 @@ func (p *PeerCore) makeHeartbeat() HeartbeatMesage {
 	return heartbeatMsg
 }
 
-func (p *PeerCore) AddPeer(peerInfo string) {
+func (p *PeerCore) HasPeer(peerAddress string) bool {
+	for _, peer := range p.peers {
+		if peer.Addr == peerAddress {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *PeerCore) AddPeer(peerAddress string) {
 	// Check URL valid.
-	_, err := url.Parse(peerInfo)
+	_, err := url.Parse(peerAddress)
 	if err != nil {
 		p.peerLogger.Println("Failed to parse peer address: ", err)
 		return
 	}
 
 	peer := Peer{
-		url: peerInfo,
-		// addr: url.Hostname(),
-		// port: url.Port(),
-		lastSeen:      0,
-		clientVersion: "",
+		Addr:          peerAddress,
+		LastSeen:      uint64(time.Now().UnixMilli()),
+		ClientVersion: "",
 	}
 
 	heartbeatMsg := p.makeHeartbeat()
 
-	if peer.url == p.GetExternalAddr() || peer.url == p.GetLocalAddr() {
+	if peer.Addr == p.GetExternalAddr() || peer.Addr == p.GetLocalAddr() {
 		// Skip self.
 		p.peerLogger.Printf("AddPeer found peerInfo corresponding to our peer. Skipping.\n")
 		return
 	}
 
 	// Send heartbeat message to peer.
-	res, err := SendMessageToPeer(peer.url, heartbeatMsg, &p.peerLogger)
+	res, err := SendMessageToPeer(peer.Addr, heartbeatMsg, &p.peerLogger)
 	if err != nil {
 		p.peerLogger.Printf("Failed to send heartbeat to peer: %v", err)
 		return
@@ -505,6 +513,7 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 	}
 
 	p.peerLogger.Println("Peer is alive")
+	peer.LastSeen = uint64(time.Now().UnixMilli())
 
 	// Now we check if this is our peer.
 	if heartbeatReply.PeerId == p.peerId {
@@ -513,8 +522,12 @@ func (p *PeerCore) AddPeer(peerInfo string) {
 	}
 
 	// Add peer to list.
-	p.peers = append(p.peers, peer)
+	p.peersMutex.Lock()
+	if !p.HasPeer(peer.Addr) {
+		p.peers = append(p.peers, peer)
+	}
+	defer p.peersMutex.Unlock()
 
 	// Print.
-	p.peerLogger.Printf("Added peer url=%s\n", peer.url)
+	p.peerLogger.Printf("Added peer.Addr=%s\n", peer.Addr)
 }

@@ -1,0 +1,20 @@
+{{define "pageBody"}}
+
+<h2>Accounts ledger</h2>
+<p>Accounts length: {{ len .Accounts | printf "%d" }} entries</p>
+<table border="1">
+    <tr>
+        <th>Account</th>
+        <th>Balance</th>
+    </tr>
+    {{range .Accounts}}
+    <tr>
+        <td><a href='/accounts/{{ .Pubkey | printf "%x" }}'>{{ .Pubkey | printf "%x" }}</a></td>
+        <td>{{ .Balance | printf "%d" }} TNY</td>
+    </tr>
+    {{end}}
+</table>
+
+{{end}}
+
+{{template "_base_layout.html" .}}

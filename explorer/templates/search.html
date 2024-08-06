@@ -1,0 +1,26 @@
+{{define "pageBody"}}
+
+<h2>Search</h2>
+<p>No results found for "<strong>{{.Query}}</strong>"</p>
+<p>You can search for the following:</p>
+<table border="1">
+    <tr>
+        <td>Blocks</td>
+        <td>Search for a block by its hash.</td>
+        <td>e.g. 0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7</td>
+    </tr>
+    <tr>
+        <td>Transactions</td>
+        <td>Search for a transaction by its hash.</td>
+        <td>e.g. 0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7</td>
+    </tr>
+    <tr>
+        <td>Accounts</td>
+        <td>Search for an account by its public key.</td>
+        <td>e.g. 04ab95051135931ccbafed12ec83bd438659a0e475306e763cbe29dff98dbed72a806bd07875e432d362aa2e0083f8d3cb68904e966d736f5955e06f6cf1402bc7</td>
+    </tr>
+</table>
+
+{{end}}
+
+{{template "_base_layout.html" .}}

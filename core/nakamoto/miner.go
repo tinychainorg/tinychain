@@ -17,6 +17,7 @@ type Miner struct {
 	dag            BlockDAG
 	CoinbaseWallet *core.Wallet
 	IsRunning      bool
+	GraffitiTag    [32]byte
 
 	// Mutex.
 	mutex sync.Mutex
@@ -177,6 +178,7 @@ func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 		TransactionsMerkleRoot: [32]byte{},
 		Nonce:                  [32]byte{},
 		Transactions:           blockBody,
+		Graffiti:               miner.GraffitiTag,
 	}
 	raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 

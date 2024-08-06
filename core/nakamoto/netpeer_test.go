@@ -77,7 +77,7 @@ func waitForPeersOnline(peers []*PeerCore) {
 
 func TestStartPeer(t *testing.T) {
 	ch := make(chan bool)
-	peer1 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort()})
+	peer1 := NewPeerCore(PeerConfig{ipAddress: "127.0.0.1", port: getRandomPort()})
 	go peer1.Start()
 
 	// Setup timeout.
@@ -92,8 +92,8 @@ func TestStartPeer(t *testing.T) {
 func TestStartPeerHeartbeat(t *testing.T) {
 	assert := assert.New(t)
 
-	peer1 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort()})
-	peer2 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort()})
+	peer1 := NewPeerCore(PeerConfig{ipAddress: "127.0.0.1", port: getRandomPort()})
+	peer2 := NewPeerCore(PeerConfig{ipAddress: "127.0.0.1", port: getRandomPort()})
 
 	// Override message handler.
 	heartbeatChan := make(chan HeartbeatMesage, 1)
@@ -145,10 +145,10 @@ func TestStartPeerHeartbeat(t *testing.T) {
 
 func TestPeerGossip(t *testing.T) {
 	// assert := assert.New(t)
-	peer1 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort()})
+	peer1 := NewPeerCore(PeerConfig{ipAddress: "127.0.0.1", port: getRandomPort()})
 	go peer1.Start()
 
-	peer2 := NewPeerCore(PeerConfig{address: "127.0.0.1", port: getRandomPort()})
+	peer2 := NewPeerCore(PeerConfig{ipAddress: "127.0.0.1", port: getRandomPort()})
 	go peer2.Start()
 
 	// Gossip a block from peer 1 to peer 2.

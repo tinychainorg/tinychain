@@ -1,0 +1,40 @@
+{{define "pageBody"}}
+    <h2>Account: {{.AccountPubkey}}</h2>
+    <table border="1">
+        <tr>
+            <td>Public key</td>
+            <td>{{.AccountPubkey}}</td>
+        </tr>
+        <tr>
+            <td>Balance</td>
+            <td>{{.AccountBalance | printf "%d"}} TNY</td>
+        </tr>
+    </table>
+
+
+    <!-- Transactions table. -->
+    <h3>Transactions</h3>
+    <table border="1">
+        <tr>
+            <th>Index</th>
+            <th>ID</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Amount</th>
+            <th>Fee</th>
+        </tr>
+        {{range .Transactions}}
+        <tr>
+            <td>{{.TxIndex}}</td>
+            <td><a href='/transactions/{{.Hash | printf "%x"}}'>{{.Hash | printf "%x" | printf "%0.20s"}}</a></td>
+            <td><a href='/accounts/{{.FromPubkey | printf "%x" }}'>{{.FromPubkey | printf "%x" | printf "%.20s" }}</a></td>
+            <td><a href='/accounts/{{.ToPubkey | printf "%x" }}'>{{.ToPubkey | printf "%x" | printf "%.20s" }}</a></td>
+            <td>{{.Amount}} TNY</td>
+            <td>{{.Fee}} TNY</td>
+        </tr>
+        {{end}}
+    </table>
+
+{{end}}
+
+{{template "_base_layout.html" .}}

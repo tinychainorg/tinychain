@@ -182,14 +182,6 @@ func saveDbForInspection(db *sql.DB) error {
 	return nil
 }
 
-func TestOpenDB(t *testing.T) {
-	// test not null
-	_, err := OpenDB(":memory:")
-	if err != nil {
-		t.Log(err)
-	}
-}
-
 func TestDagLatestTipIsSet(t *testing.T) {
 	assert := assert.New(t)
 	dag, _, _, genesisBlock := newBlockdag()

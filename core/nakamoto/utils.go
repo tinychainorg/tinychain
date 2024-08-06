@@ -46,6 +46,12 @@ func HexStringToBytes32(s string) [32]byte {
 	return fbuf
 }
 
+func StringToBytes32(s string) [32]byte {
+	var b [32]byte
+	copy(b[:], s)
+	return b
+}
+
 func PadBytes(src []byte, length int) []byte {
 	if len(src) >= length {
 		return src

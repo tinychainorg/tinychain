@@ -1,0 +1,59 @@
+{{define "pageBody"}}
+    <h2>Transaction</h2>
+    <table border="1">
+        <tr>
+            <td>Hash</td>
+            <td>{{.Transaction.Hash | printf "%x"}}</td>
+        </tr>
+        <!-- From to amount fee -->
+        <tr>
+            <td>From</td>
+            <td><a href='/accounts/{{.Transaction.FromPubkey | printf "%x" }}'>{{.Transaction.FromPubkey | printf "%x" | printf "%.20s" }}</a></td>
+        </tr>
+        <tr>
+            <td>To</td>
+            <td><a href='/accounts/{{.Transaction.ToPubkey | printf "%x" }}'>{{.Transaction.ToPubkey | printf "%x" | printf "%.20s" }}</a></td>
+        </tr>
+        <tr>
+            <td>Amount</td>
+            <td>{{.Transaction.Amount}} TNY</td>
+        </tr>
+        <tr>
+            <td>Fee</td>
+            <td>{{.Transaction.Fee}} TNY</td>
+        </tr>
+        <tr>
+            <td>Signature</td>
+            <td>{{.Transaction.Sig | printf "%x" }}</td>
+        </tr>
+
+        <tr>
+            <td>Status</td>
+            <td>
+                {{.TxStatus.Status}}
+                {{if eq .TxStatus.Status "Confirmed"}}
+                    ✅ (block <a href='/blocks/{{.TxStatus.Block.Hash | printf "%x"}}'>{{.TxStatus.Block.Height | printf "%d"}}</a>)
+                {{else}}
+                    ❌
+                {{end}}
+            </td>
+        </tr>
+    </table>
+
+
+    <!-- Transactions table. -->
+    <h3>Included in blocks</h3>
+    <table border="1">
+        <tr>
+            <th>Block</th>
+        </tr>
+        {{range .Blocks}}
+        <tr>
+            <td><a href='/blocks/{{. | printf "%x" }}'>{{. | printf "%x"}}</a></td>
+        </tr>
+        {{end}}
+    </table>
+
+{{end}}
+
+{{template "_base_layout.html" .}}
