@@ -25,6 +25,13 @@ jobs:
           exit 1
         fi
 
+    - name: Check go.mod format
+      run: |
+        if [ -n "$(go mod tidy)" ]; then
+          echo "Go module is not tidied. Run 'go mod tiny' to clean up old deps."
+          exit 1
+        fi
+
   vet:
     runs-on: ubuntu-latest
     steps:
