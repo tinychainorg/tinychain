@@ -1,4 +1,4 @@
-![logo](./docs/assets/logo.png)
+ ![logo](./docs/assets/logo.png)
 
 [![CI](https://github.com/tinychainorg/tinychain/actions/workflows/go.yml/badge.svg)](https://github.com/tinychainorg/tinychain/actions/workflows/go.yml)
 
