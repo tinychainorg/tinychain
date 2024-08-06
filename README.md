@@ -63,3 +63,14 @@ make && cd build/ && ./tinychain node --port 8000 --db testnet.db -mine
 ./e2e/node2.sh
 ```
 
+## Running a block explorer.
+
+tinychain comes with a built-in block explorer (like Etherscan or Blockchain.info), which you can use to view blocks, transactions, and accounts. It displays all internal information of blocks (including difficulty epoch, transactions merkle root, accumulated work, etc.) that you can use to debug and introspect your blockchain network.
+
+```sh
+cd cli/
+tinychain explorer --db ./node1.db
+# open localhost:9000
+```
+
+![sample page in block explorer](docs/block-explorer/353631856-57d80f67-5752-40a1-be0e-12dcac5c8a10.png)
