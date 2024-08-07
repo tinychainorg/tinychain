@@ -2,7 +2,7 @@ package nakamoto
 
 import (
 	"fmt"
-	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/liamzebedee/tinychain-go/core"
@@ -212,82 +212,6 @@ func (n *Node) Sync() int {
 	// The sync algorithm is a greedy iterative search.
 	// We continue downloading block headers from a peer until we reach their tip.
 
-	// TODO handle peers joining.
-	WINDOW_SIZE := 2048
-
-	// Greedily searches the block DAG from a tip hash, downloading headers in parallel from peers from all subbranches up to a depth.
-	// The depth is referred to as the "window size", and is a constant value of 2048 blocks.
-	search := func(currentTipHash [32]byte) int {
-		// 1. Get the tips from all our peers and bucket them.
-		peersTips, err := n.getPeerTips(currentTipHash, uint64(WINDOW_SIZE), 1)
-		if err != nil {
-			n.syncLog.Printf("Failed to get peer tips: %s\n", err)
-			return 0
-		}
-
-		// 2. For each tip, download a window of headers and ingest them.
-		downloaded := 0
-		for _, peers := range peersTips {
-			// 2a. Identify heights.
-			heights := core.NewBitset(WINDOW_SIZE)
-			for i := 0; i < WINDOW_SIZE; i++ {
-				heights.Insert(i)
-			}
-
-			// 2b. Download headers.
-			headers, _, err := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
-			if err != nil {
-				n.syncLog.Printf("Failed to download headers: %s\n", err)
-				continue
-			}
-
-			// 2c. Validate headers.
-			// Sanity-check: verify we have all the headers for the heights in order. TODO.
-			headers2 := orderValidateHeaders(currentTipHash, headers)
-
-			// 2d. Ingest headers.
-			for _, header := range headers2 {
-				err := n.Dag.IngestHeader(header)
-				if err != nil {
-					// Skip. We will not be able to download the bodies.
-					continue
-				}
-
-				downloaded += 1
-			}
-
-			n.syncLog.Printf("Downloaded %d headers\n", downloaded)
-
-			// Now get the bodies.
-			// Filter through missing bodies for headers.
-			heights2 := core.NewBitset(WINDOW_SIZE)
-			for i, _ := range headers2 {
-				heights2.Insert(i)
-			}
-			_, bodies, err := n.SyncDownloadData(currentTipHash, *heights2, peers, false, true)
-			if err != nil {
-				n.syncLog.Printf("Failed to download bodies: %s\n", err)
-				continue
-			}
-
-			// Print the bdoeis and exit.
-			n.syncLog.Printf("Downloaded bodies n=%d\n", len(bodies))
-
-			// 2d. Ingest bodies.
-			for i, body := range bodies {
-				err := n.Dag.IngestBlockBody(body)
-				if err != nil {
-					// Skip. We will not be able to download the bodies.
-					n.syncLog.Printf("Failed to ingest body %d: %s\n", i, err)
-					continue
-				}
-			}
-		}
-
-		// 3. Return the number of headers downloaded.
-		return downloaded
-	}
-
 	currentTip, err := n.Dag.GetLatestHeadersTip()
 	if err != nil {
 		n.syncLog.Printf("Failed to get latest tip: %s\n", err)
@@ -298,7 +222,7 @@ func (n *Node) Sync() int {
 
 	for {
 		// Search for headers from current tip.
-		downloaded := search(currentTip.Hash)
+		downloaded := n.sync_search(currentTip.Hash)
 		totalSynced += downloaded
 
 		// Exit when there are no more headers to download.
@@ -313,21 +237,93 @@ func (n *Node) Sync() int {
 	return totalSynced
 }
 
+func (n *Node) sync_search(baseBlock [32]byte) int {
+	// The size of the window we are searching.
+	WINDOW_SIZE := 2048
+
+	// Greedily searches the block DAG from a tip hash, downloading headers in parallel from peers from all subbranches up to a depth.
+	// The depth is referred to as the "window size", and is a constant value of 2048 blocks.
+	// 1. Get the tips from all our peers and bucket them.
+	peersTips, err := n.getPeerTips(baseBlock, uint64(WINDOW_SIZE), 1)
+	if err != nil {
+		n.syncLog.Printf("Failed to get peer tips: %s\n", err)
+		return 0
+	}
+
+	// 2. For each tip, download a window of headers and ingest them.
+	downloaded := 0
+	for _, peers := range peersTips {
+		// 2a. Identify heights.
+		heights := core.NewBitset(WINDOW_SIZE)
+		for i := 0; i < WINDOW_SIZE; i++ {
+			heights.Insert(i)
+		}
+
+		// 2b. Download headers.
+		headers, _, err := n.SyncDownloadData(baseBlock, *heights, peers, true, false)
+		if err != nil {
+			n.syncLog.Printf("Failed to download headers: %s\n", err)
+			continue
+		}
+
+		// 2c. Validate headers.
+		// Sanity-check: verify we have all the headers for the heights in order. TODO.
+		headers2 := orderValidateHeaders(baseBlock, headers)
+
+		// 2d. Ingest headers.
+		for _, header := range headers2 {
+			err := n.Dag.IngestHeader(header)
+			if err != nil {
+				// Skip. We will not be able to download the bodies.
+				continue
+			}
+
+			downloaded += 1
+		}
+
+		n.syncLog.Printf("Downloaded %d headers\n", downloaded)
+
+		// Now get the bodies.
+		// Filter through missing bodies for headers.
+		heights2 := core.NewBitset(WINDOW_SIZE)
+		for i, _ := range headers2 {
+			heights2.Insert(i)
+		}
+		_, bodies, err := n.SyncDownloadData(baseBlock, *heights2, peers, false, true)
+		if err != nil {
+			n.syncLog.Printf("Failed to download bodies: %s\n", err)
+			continue
+		}
+
+		// Print the bdoeis and exit.
+		n.syncLog.Printf("Downloaded bodies n=%d\n", len(bodies))
+
+		// 2d. Ingest bodies.
+		for i, body := range bodies {
+			err := n.Dag.IngestBlockBody(body)
+			if err != nil {
+				// Skip. We will not be able to download the bodies.
+				n.syncLog.Printf("Failed to ingest body %d: %s\n", i, err)
+				continue
+			}
+		}
+	}
+
+	// 3. Return the number of headers downloaded.
+	return downloaded
+}
+
 // Contacts all our peers in parallel, gets the block header of their tip, and returns the best tip based on total work.
-func (n *Node) sync_getBestTipFromPeers() [32]byte {
+func (n *Node) sync_getBestTipFromPeers(peers []Peer) (BlockHeader, error) {
 	syncLog := NewLogger("node", "sync")
-
-	// 1. Contact all our peers.
-	// 2. Get their current tips in parallel.
+	
+	// 1. Contact all our peers and get their current tips in parallel.
 	syncLog.Printf("Getting tips from %d peers...\n", len(n.Peer.peers))
-
 	var wg sync.WaitGroup
-
-	tips := make([]BlockHeader, 0)
 	tipsChan := make(chan BlockHeader, len(n.Peer.peers))
-	// timeout := time.After(5 * time.Second)
+	tips := make([]BlockHeader, 0)
 
-	for _, peer := range n.Peer.peers {
+	for _, peer := range peers {
 		wg.Add(1)
 		go func(peer Peer) {
 			defer wg.Done()
@@ -341,57 +337,29 @@ func (n *Node) sync_getBestTipFromPeers() [32]byte {
 		}(peer)
 	}
 
-	go func() {
-		wg.Wait()
-		close(tipsChan)
-	}()
-
-	// TODO WIP
-	// for {
-	// 	select {
-	// 	case tip, ok := <-tipsChan:
-	// 		if !ok {
-	// 			break
-	// 		}
-	// 		tips = append(tips, tip)
-	// 	case <-timeout:
-	// 		syncLog.Printf("Timed out getting tips from peers\n")
-	// 	}
-	// }
+	wg.Wait()
+	close(tipsChan)
+	for tip := range tipsChan {
+		tips = append(tips, tip)
+	}
 
 	syncLog.Printf("Received %d tips\n", len(tips))
 	if len(tips) == 0 {
 		syncLog.Printf("No tips received. Exiting sync.\n")
-		return [32]byte{} // TODO, should return error
+		return BlockHeader{}, fmt.Errorf("No tips received")
 	}
 
-	// 3. Sort the tips by max(work).
-	// 4. Reduce the tips to (tip, work, num_peers).
-	// 5. Choose the tip with the highest work and the most peers mining on it.
-	numPeersOnTip := make(map[[32]byte]int)
-	tipWork := make(map[[32]byte]*big.Int)
+	// 2. Sort the tips by max(work).
+	slices.SortFunc(tips, func(bh1, bh2 BlockHeader) int {
+		w1 := CalculateWork(Bytes32ToBigInt(bh1.BlockHash()))
+		w2 := CalculateWork(Bytes32ToBigInt(bh2.BlockHash()))
+		return w1.Cmp(w2)
+	})
 
-	highestWork := big.NewInt(0)
-	bestTipHash := [32]byte{}
-
-	for _, tip := range tips {
-		hash := tip.BlockHash()
-		// TODO embed difficulty into block header so we can verify POW.
-		work := CalculateWork(Bytes32ToBigInt(hash))
-
-		// -1 if x < y
-		// highestWork < work
-		if highestWork.Cmp(work) == -1 {
-			highestWork = work
-			bestTipHash = hash
-		}
-
-		numPeersOnTip[hash] += 1
-		tipWork[hash] = work
-	}
-
-	syncLog.Printf("Best tip: %s\n", bestTipHash)
-	return bestTipHash
+	// 3. Return the best tip.
+	bestTip := tips[len(tips)-1]
+	syncLog.Printf("Best tip: %x\n", bestTip.BlockHash())
+	return bestTip, nil
 }
 
 // Computes the common ancestor of our local canonical chain and a remote peer's canonical chain through an interactive binary search.
