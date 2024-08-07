@@ -806,7 +806,48 @@ func TestSyncRemoteForkBranchRemoteHeavier(t *testing.T) {
 	assertIntEqual(t, 1, heavierTipIndex)
 
 	// The common ancestor should be 
-
-
-
 }
+
+
+func TestSyncGetBestTipFromPeers(t *testing.T) {
+	assert := assert.New(t)
+	peers := setupTestNetwork(t)
+
+	node1 := peers[0]
+	node2 := peers[1]
+	node3 := peers[2]
+
+	// Base case: all tips are the same.
+	bestTip, err := node1.sync_getBestTipFromPeers(node1.Peer.peers)
+	assert.Nil(err)
+	assert.Equal(node1.Dag.FullTip.HashStr(), bestTip.BlockHashStr())
+	assert.Equal(node2.Dag.FullTip.HashStr(), bestTip.BlockHashStr())
+	assert.Equal(node3.Dag.FullTip.HashStr(), bestTip.BlockHashStr())
+
+	// Now we test the case where one peer has a different tip.
+	// Node 1 mines 15 blocks, gossips with node 2
+	node1.Miner.Start(5)
+	node2.Miner.Start(10)
+
+	// node2 should have best tip.
+	bestTip, err = node1.sync_getBestTipFromPeers(node1.Peer.peers)
+	assert.Nil(err)
+	assert.Equal(node2.Dag.FullTip.HashStr(), bestTip.BlockHashStr())
+}
+
+// Sync process:
+// 1. Ask all peers for tips
+// 2. Choose the tip with highest amount of work
+// 3. Find the common ancestor 
+// 4. Sync from this base block
+
+
+// Sync needs to distinguish between two scenarios:
+// 1) live sync: the node is syncing in real-time with the network.
+// 2) cold sync: the node is syncing from a cold start, and needs to download all blocks from the network.
+// what changes in each scenario?
+// - live sync:
+// -- we validate timestamps
+// -- we download just one branch
+// - cold sync
+// -- we download all branches
