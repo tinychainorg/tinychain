@@ -50,6 +50,7 @@ type PeerCore struct {
 	OnGetTip            func(msg GetTipMessage) (BlockHeader, error)
 	OnSyncGetTipAtDepth func(msg SyncGetTipAtDepthMessage) (SyncGetTipAtDepthReply, error)
 	OnSyncGetData       func(msg SyncGetBlockDataMessage) (SyncGetBlockDataReply, error)
+	OnHasBlock          func(msg HasBlockMessage) (bool, error)
 
 	peerLogger log.Logger
 }
@@ -211,6 +212,27 @@ func NewPeerCore(config PeerConfig) *PeerCore {
 		}
 
 		return reply, nil
+	})
+
+	p.server.RegisterMesageHandler("has_block", func(message []byte) (interface{}, error) {
+		var msg HasBlockMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			return nil, err
+		}
+
+		if p.OnHasBlock == nil {
+			return nil, fmt.Errorf("HasBlock callback not set")
+		}
+
+		has, err := p.OnHasBlock(msg)
+		if err != nil {
+			return nil, err
+		}
+
+		return HasBlockReply{
+			Type: "has_block",
+			Has: has,
+		}, nil
 	})
 
 	p.server.RegisterMesageHandler("gossip_peers", func(message []byte) (interface{}, error) {
@@ -411,7 +433,7 @@ func (p *PeerCore) SyncGetBlockData(peer Peer, fromBlock [32]byte, heights core.
 func (p *PeerCore) HasBlock(peer Peer, blockhash [32]byte) (bool, error) {
 	msg := HasBlockMessage{
 		Type:      "has_block",
-		BlockHash: fmt.Sprintf("%x", blockhash),
+		BlockHash: blockhash,
 	}
 	res, err := SendMessageToPeer(peer.Addr, msg, &p.peerLogger)
 	if err != nil {
