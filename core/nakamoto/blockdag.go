@@ -211,6 +211,22 @@ func (dag *BlockDAG) UpdateTip() error {
 	return nil
 }
 
+// Validation rules for blocks:
+// 1. Verify parent is known.
+// 2. Verify timestamp is within bounds.
+// TODO: subjectivity.
+// 3. Verify num transactions is the same as the length of the transactions list.
+// 4a. Verify coinbase transcation is present.
+// 4b. Verify transactions are valid.
+// 5. Verify transaction merkle root is valid.
+// 6. Verify POW solution is valid.
+// 6a. Compute the current difficulty epoch.
+// 6b. Verify POW solution.
+// 6c. Verify parent total work is correct.
+// 7. Verify block size is within bounds.
+// 8. Ingest block into database store.
+func (dag *BlockDAG) __doc() {}
+
 // Ingests a block header, and recomputes the headers tip. Used by light clients / SPV sync.
 func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
 	// 1. Verify parent is known.

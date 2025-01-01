@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/liamzebedee/tinychain-go/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,4 +39,41 @@ func TestGetRawGenesisBlockFromConfig(t *testing.T) {
 	assert.Equal(uint64(0), genesisBlock.NumTransactions)
 	assert.Equal([32]byte{}, genesisBlock.TransactionsMerkleRoot)
 	assert.Equal(big.NewInt(21).String(), genesisNonce.String())
+}
+
+func formatByteArrayDynamic(b []byte) string {
+	out := fmt.Sprintf("[%d]byte{", len(b))
+	for i, v := range b {
+		if i > 0 {
+			out += ", "
+		}
+		out += fmt.Sprintf("0x%02x", v)
+	}
+	out += "}"
+	return out
+}
+
+func TestWalletCreateSignTransferTx(t *testing.T) {
+	wallet, err := core.CreateRandomWallet()
+	if err != nil {
+		panic(err)
+	}
+	tx := MakeCoinbaseTx(wallet, uint64(GetBlockReward(0)))
+
+	// JSON dump.
+	// str, err := json.Marshal(tx)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// Print as a Go-formatted RawTransaction{} for usage in genesis.go.
+	fmt.Printf("Coinbase tx:\n")
+	fmt.Printf("RawTransaction {\n")
+	fmt.Printf("From: %v,\n", formatByteArrayDynamic(tx.FromPubkey[:]))
+	fmt.Printf("To: %v,\n", formatByteArrayDynamic(tx.ToPubkey[:]))
+	fmt.Printf("Sig: %v,\n", formatByteArrayDynamic(tx.Sig[:]))
+	fmt.Printf("Amount: %d,\n", tx.Amount)
+	fmt.Printf("Fee: %d,\n", tx.Fee)
+	fmt.Printf("Nonce: %d,\n", tx.Nonce)
+	fmt.Printf("}\n")
 }

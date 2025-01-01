@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/tinychainorg/tinychain/actions/workflows/go.yml/badge.svg)](https://github.com/tinychainorg/tinychain/actions/workflows/go.yml)
 
+![](./explorer/assets/logo.png)
+
 [Website](https://www.tinycha.in) | [API documentation](https://pkg.go.dev/github.com/tinychainorg/tinychain) | [Concepts](./docs/concepts.md)
 
 **tinychain is the tiniest blockchain implementation in the world.**
