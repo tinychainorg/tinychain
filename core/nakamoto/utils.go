@@ -1,6 +1,8 @@
 package nakamoto
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -129,4 +131,13 @@ func NewLogger(prefix string, prefix2 string) *log.Logger {
 		prefixFull += color.HiYellowString(fmt.Sprintf("(%s) ", prefix2))
 	}
 	return log.New(os.Stdout, prefixFull, log.Ldate|log.Ltime|log.Lmsgprefix)
+}
+
+func randomNonce() uint64 {
+	var nonce uint64
+	err := binary.Read(rand.Reader, binary.BigEndian, &nonce)
+	if err != nil {
+		panic(err)
+	}
+	return nonce
 }
