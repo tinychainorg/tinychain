@@ -10,6 +10,7 @@ Differences:
 
  * Transactions do not have a VM environment.
  * The state model is not based on UXTO's or accounts. Tinychain computes state like an account-based chain, in that it stores an `account -> balance` mapping. But internally, it stores its state as state leafs - which are more similar to unique UXTO's than in Ethereum's model of accounts.
+ * Bitcoin features protection against quantum computing attacks, since coins are locked to a preimage of a public key (RIPEMD(SHA256(pubkey))) using P2PKH rather than locked to a public key itself. 
 
 Missing efficiencies:
 
