@@ -45,14 +45,14 @@ func NewMiner(dag BlockDAG, coinbaseWallet *core.Wallet) *Miner {
 	}
 }
 
-func MakeCoinbaseTx(wallet *core.Wallet) RawTransaction {
+func MakeCoinbaseTx(wallet *core.Wallet, amount uint64) RawTransaction {
 	// Construct coinbase tx.
 	tx := RawTransaction{
 		Version:    1,
 		Sig:        [64]byte{},
 		FromPubkey: wallet.PubkeyBytes(),
 		ToPubkey:   wallet.PubkeyBytes(),
-		Amount:     50,
+		Amount:     amount,
 		Fee:        0,
 		Nonce:      0,
 	}
@@ -148,9 +148,6 @@ func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel
 
 // Creates a new block template for mining.
 func (miner *Miner) MakeNewPuzzle() POWPuzzle {
-	// Construct coinbase tx.
-	coinbaseTx := MakeCoinbaseTx(miner.CoinbaseWallet)
-
 	// Get the current tip.
 	current_tip, err := miner.dag.GetLatestFullTip()
 	if err != nil {
@@ -160,6 +157,10 @@ func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 	if miner.GetTipForMining != nil {
 		current_tip = miner.GetTipForMining()
 	}
+
+	// Construct coinbase tx.
+	blockReward := uint64(GetBlockReward(int(current_tip.Height)))
+	coinbaseTx := MakeCoinbaseTx(miner.CoinbaseWallet, blockReward)
 
 	// Get the block body.
 	blockBody := []RawTransaction{}
