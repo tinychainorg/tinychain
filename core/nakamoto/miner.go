@@ -159,7 +159,7 @@ func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 	}
 
 	// Construct coinbase tx.
-	blockReward := uint64(GetBlockReward(int(current_tip.Height)))
+	blockReward := GetBlockReward(int(current_tip.Height))
 	coinbaseTx := MakeCoinbaseTx(miner.CoinbaseWallet, blockReward)
 
 	// Get the block body.

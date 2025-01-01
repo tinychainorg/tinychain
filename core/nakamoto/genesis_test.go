@@ -58,7 +58,7 @@ func TestWalletCreateSignTransferTx(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	tx := MakeCoinbaseTx(wallet, uint64(GetBlockReward(0)))
+	tx := MakeCoinbaseTx(wallet, GetBlockReward(0))
 
 	// JSON dump.
 	// str, err := json.Marshal(tx)

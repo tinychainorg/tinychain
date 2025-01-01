@@ -193,7 +193,7 @@ func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList
 		var stateMachineInput StateMachineInput
 		var minerPubkey [65]byte
 		isCoinbase := false
-		blockReward := uint64(GetBlockReward(blockHeight) * ONE_COIN)
+		blockReward := GetBlockReward(blockHeight)
 
 		for i, tx := range *txs {
 			// Special case: coinbase tx is always the first tx in the block.
