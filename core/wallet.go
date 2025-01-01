@@ -98,23 +98,13 @@ func (w *Wallet) Sign(msg []byte) ([]byte, error) {
 }
 
 // Verifies an ECDSA signature for a message using the public key.
-func VerifySignature(pubkeyStr string, sig, msg []byte) bool {
+func VerifySignature(pubkeyBytes [65]byte, sig, msg []byte) bool {
 	if len(sig) != 64 {
 		fmt.Printf("Invalid signature length: %d\n", len(sig)) // TODO
 		return false
 	}
-	if len(pubkeyStr) != 130 {
-		panic("Invalid public key") // TODO
-		// return false
-	}
 
-	pubkeyBytes, err := hex.DecodeString(pubkeyStr)
-	if err != nil {
-		panic(err)
-		// return false
-	}
-
-	x, y := elliptic.Unmarshal(elliptic.P256(), pubkeyBytes)
+	x, y := elliptic.Unmarshal(elliptic.P256(), pubkeyBytes[:])
 	if x == nil {
 		panic("Invalid public key") // TODO
 		// return false

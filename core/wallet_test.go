@@ -67,7 +67,11 @@ func TestVerifyWithRealSig(t *testing.T) {
 		t.Fatalf("Failed to decode signature: %s", err)
 	}
 
-	ok := VerifySignature(pubkeyStr, sig, msg)
+	var pubkeyBytes [65]byte
+	pubkeyBytes1, _ := hex.DecodeString(pubkeyStr)
+	copy(pubkeyBytes[:], pubkeyBytes1)
+
+	ok := VerifySignature(pubkeyBytes, sig, msg)
 	assert.True(ok)
 }
 
@@ -92,8 +96,7 @@ func TestVerify(t *testing.T) {
 	t.Logf("Signature: %s", hex.EncodeToString(sig))
 
 	// Verify the signature.
-	pubkeyStr := wallet.PubkeyStr()
-	ok := VerifySignature(pubkeyStr, sig, msg)
+	ok := VerifySignature(wallet.PubkeyBytes(), sig, msg)
 
 	assert.True(ok)
 }

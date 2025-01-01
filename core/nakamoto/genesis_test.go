@@ -69,9 +69,10 @@ func TestWalletCreateSignTransferTx(t *testing.T) {
 	// Print as a Go-formatted RawTransaction{} for usage in genesis.go.
 	fmt.Printf("Coinbase tx:\n")
 	fmt.Printf("RawTransaction {\n")
-	fmt.Printf("From: %v,\n", formatByteArrayDynamic(tx.FromPubkey[:]))
-	fmt.Printf("To: %v,\n", formatByteArrayDynamic(tx.ToPubkey[:]))
-	fmt.Printf("Sig: %v,\n", formatByteArrayDynamic(tx.Sig[:]))
+	fmt.Printf("Version: %d,\n", tx.Version)
+	fmt.Printf("Sig: %s,\n", formatByteArrayDynamic(tx.Sig[:]))
+	fmt.Printf("FromPubkey: %s,\n", formatByteArrayDynamic(tx.FromPubkey[:]))
+	fmt.Printf("ToPubkey: %s,\n", formatByteArrayDynamic(tx.ToPubkey[:]))
 	fmt.Printf("Amount: %d,\n", tx.Amount)
 	fmt.Printf("Fee: %d,\n", tx.Fee)
 	fmt.Printf("Nonce: %d,\n", tx.Nonce)

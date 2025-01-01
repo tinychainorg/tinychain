@@ -150,6 +150,12 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 
 	dag.log.Printf("Inserted genesis block hash=%s work=%s\n", hex.EncodeToString(genesisBlockHash[:]), work.String())
 
+	// Insert the genesis block transactions.
+	err = dag.IngestBlockBody(genesisBlock.Transactions)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -411,7 +417,7 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	for i, block_tx := range raw.Transactions {
 		dag.log.Printf("Verifying transaction %d\n", i)
 		isValid := core.VerifySignature(
-			hex.EncodeToString(block_tx.FromPubkey[:]),
+			block_tx.FromPubkey,
 			block_tx.Sig[:],
 			block_tx.Envelope(),
 		)
@@ -537,7 +543,7 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	for i, block_tx := range raw.Transactions {
 		dag.log.Printf("Verifying transaction %d\n", i)
 		isValid := core.VerifySignature(
-			hex.EncodeToString(block_tx.FromPubkey[:]),
+			block_tx.FromPubkey,
 			block_tx.Sig[:],
 			block_tx.Envelope(),
 		)
