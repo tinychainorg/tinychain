@@ -346,7 +346,7 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	}
 	rows.Close()
 
-	// Verify we have not already ingested the txs.
+	// Verify we have not already ingested the txs for this block.
 	rows, err = dag.db.Query(`select count(*) from transactions_blocks where block_hash = ?`, blockhashBuf)
 	if err != nil {
 		return err
@@ -385,6 +385,11 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	}
 
 	// 4. Verify transactions are valid.
+	// 4a. Verify coinbase tx is present.
+	if len(raw.Transactions) < 1 {
+		return fmt.Errorf("Missing coinbase tx.")
+	}
+	// 4b. Verify transactions.
 	// TODO: We can parallelise this.
 	// This is one of the most expensive operations of the blockchain node.
 	for i, block_tx := range raw.Transactions {
@@ -506,6 +511,11 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 4. Verify transactions are valid.
+	// 4a. Verify coinbase tx is present.
+	if len(raw.Transactions) < 1 {
+		return fmt.Errorf("Missing coinbase tx.")
+	}
+	// 4b. Verify transactions.
 	// TODO: We can parallelise this.
 	// This is one of the most expensive operations of the blockchain node.
 	for i, block_tx := range raw.Transactions {

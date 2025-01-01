@@ -17,3 +17,8 @@ func GetBlockReward(blockHeight int) float64 {
 	reward := initialReward / math.Pow(2, float64(numHalvings))
 	return reward
 }
+
+// 1 BTC = 1 * 10^8
+// BTC amounts are fixed-precision - they have 8 decimal places.
+// ie. 1 BTC = 100 000 000 sats
+const ONE_COIN = 100_000_000

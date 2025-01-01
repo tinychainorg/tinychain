@@ -30,6 +30,9 @@ type StateMachineInput struct {
 
 	// Miner address for fees.
 	MinerPubkey [65]byte
+
+	// Block reward.
+	BlockReward uint64
 }
 
 // The state machine is the core of the business logic for the Nakamoto blockchain.
@@ -136,15 +139,15 @@ func (c *StateMachine) transitionTransfer(input StateMachineInput) ([]*StateLeaf
 
 func (c *StateMachine) transitionCoinbase(input StateMachineInput) ([]*StateLeaf, error) {
 	toBalance := c.GetBalance(input.RawTransaction.ToPubkey)
-	amount := input.RawTransaction.Amount
+	blockReward := input.BlockReward
 
 	// Check if the `to` balance will overflow.
-	if _, carry := bits.Add64(toBalance, amount, 0); carry != 0 {
+	if _, carry := bits.Add64(toBalance, blockReward, 0); carry != 0 {
 		return nil, ErrToBalanceOverflow
 	}
 
 	// Add the coins to the `to` account balance.
-	toBalance += amount
+	toBalance += blockReward
 
 	// Create the new state leaves.
 	toLeaf := &StateLeaf{
@@ -172,12 +175,16 @@ func (c *StateMachine) GetState() map[[65]byte]uint64 {
 
 // Given a block DAG and a list of block hashes, extracts the transaction sequence, applies each transaction in order, and returns the final state.
 func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList [][32]byte) (*StateMachine, error) {
-	for _, blockHash := range longestChainHashList {
+	for blockHeight, blockHash := range longestChainHashList {
 		// 1. Get all transactions for block.
 		// TODO ignore: nonce, sig
 		txs, err := dag.GetBlockTransactions(blockHash)
 		if err != nil {
 			return nil, err
+		}
+
+		if len(*txs) == 0 {
+			return nil, fmt.Errorf("Block %x has no transactions", blockHash)
 		}
 
 		// stateMachineLogger.Printf("Processing block %x with %d transactions", blockHash, len(*txs))
@@ -186,6 +193,7 @@ func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList
 		var stateMachineInput StateMachineInput
 		var minerPubkey [65]byte
 		isCoinbase := false
+		blockReward := uint64(GetBlockReward(blockHeight) * ONE_COIN)
 
 		for i, tx := range *txs {
 			// Special case: coinbase tx is always the first tx in the block.
@@ -199,6 +207,7 @@ func RebuildState(dag *BlockDAG, stateMachine StateMachine, longestChainHashList
 				RawTransaction: tx.ToRawTransaction(),
 				IsCoinbase:     isCoinbase,
 				MinerPubkey:    minerPubkey,
+				BlockReward:    blockReward,
 			}
 
 			// Transition the state machine.
