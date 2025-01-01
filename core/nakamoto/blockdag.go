@@ -150,6 +150,12 @@ func (dag *BlockDAG) initialiseBlockDAG() error {
 
 	dag.log.Printf("Inserted genesis block hash=%s work=%s\n", hex.EncodeToString(genesisBlockHash[:]), work.String())
 
+	// Insert the genesis block transactions.
+	err = dag.IngestBlockBody(genesisBlock.Transactions)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -210,6 +216,22 @@ func (dag *BlockDAG) UpdateTip() error {
 
 	return nil
 }
+
+// Validation rules for blocks:
+// 1. Verify parent is known.
+// 2. Verify timestamp is within bounds.
+// TODO: subjectivity.
+// 3. Verify num transactions is the same as the length of the transactions list.
+// 4a. Verify coinbase transcation is present.
+// 4b. Verify transactions are valid.
+// 5. Verify transaction merkle root is valid.
+// 6. Verify POW solution is valid.
+// 6a. Compute the current difficulty epoch.
+// 6b. Verify POW solution.
+// 6c. Verify parent total work is correct.
+// 7. Verify block size is within bounds.
+// 8. Ingest block into database store.
+func (dag *BlockDAG) __doc() {}
 
 // Ingests a block header, and recomputes the headers tip. Used by light clients / SPV sync.
 func (dag *BlockDAG) IngestHeader(raw BlockHeader) error {
@@ -346,7 +368,7 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	}
 	rows.Close()
 
-	// Verify we have not already ingested the txs.
+	// Verify we have not already ingested the txs for this block.
 	rows, err = dag.db.Query(`select count(*) from transactions_blocks where block_hash = ?`, blockhashBuf)
 	if err != nil {
 		return err
@@ -385,12 +407,17 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	}
 
 	// 4. Verify transactions are valid.
+	// 4a. Verify coinbase tx is present.
+	if len(raw.Transactions) < 1 {
+		return fmt.Errorf("Missing coinbase tx.")
+	}
+	// 4b. Verify transactions.
 	// TODO: We can parallelise this.
 	// This is one of the most expensive operations of the blockchain node.
 	for i, block_tx := range raw.Transactions {
 		dag.log.Printf("Verifying transaction %d\n", i)
 		isValid := core.VerifySignature(
-			hex.EncodeToString(block_tx.FromPubkey[:]),
+			block_tx.FromPubkey,
 			block_tx.Sig[:],
 			block_tx.Envelope(),
 		)
@@ -506,12 +533,17 @@ func (dag *BlockDAG) IngestBlock(raw RawBlock) error {
 	}
 
 	// 4. Verify transactions are valid.
+	// 4a. Verify coinbase tx is present.
+	if len(raw.Transactions) < 1 {
+		return fmt.Errorf("Missing coinbase tx.")
+	}
+	// 4b. Verify transactions.
 	// TODO: We can parallelise this.
 	// This is one of the most expensive operations of the blockchain node.
 	for i, block_tx := range raw.Transactions {
 		dag.log.Printf("Verifying transaction %d\n", i)
 		isValid := core.VerifySignature(
-			hex.EncodeToString(block_tx.FromPubkey[:]),
+			block_tx.FromPubkey,
 			block_tx.Sig[:],
 			block_tx.Envelope(),
 		)

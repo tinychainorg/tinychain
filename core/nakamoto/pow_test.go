@@ -265,7 +265,7 @@ func TestECDSASignatureVerifyTiming(t *testing.T) {
 		t.Fatalf("Failed to sign message: %s", err)
 	}
 
-	pubkey := wallet.PubkeyStr()
+	pubkey := wallet.PubkeyBytes()
 
 	// Measure start time.
 	start := time.Now()

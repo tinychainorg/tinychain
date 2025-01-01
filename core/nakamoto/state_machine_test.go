@@ -67,6 +67,7 @@ func TestStateMachineIdea(t *testing.T) {
 		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 		IsCoinbase:     true,
 		MinerPubkey:    [65]byte{},
+		BlockReward:    0,
 	}
 	effects, err := stateMachine.Transition(tx0)
 	if err != nil {
@@ -83,6 +84,7 @@ func TestStateMachineIdea(t *testing.T) {
 		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0], 0),
 		IsCoinbase:     false,
 		MinerPubkey:    [65]byte{},
+		BlockReward:    0,
 	}
 	effects, err = stateMachine.Transition(tx1)
 	if err != nil {
@@ -309,6 +311,7 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 			RawTransaction: newUnsignedTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 			IsCoinbase:     true,
 			MinerPubkey:    [65]byte{},
+			BlockReward:    0,
 		}
 		effects, err := stateMachine.Transition(coinbaseTx)
 		if err != nil {
@@ -322,6 +325,7 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 			RawTransaction: newUnsignedTransferTx(wallets[0].PubkeyBytes(), wallets[1].PubkeyBytes(), 50, &wallets[0], 0),
 			IsCoinbase:     false,
 			MinerPubkey:    [65]byte{},
+			BlockReward:    0,
 		}
 		effects, err = stateMachine.Transition(tx1)
 		if err != nil {
@@ -452,6 +456,7 @@ func TestStateMachineReconstructState(t *testing.T) {
 				RawTransaction: tx.ToRawTransaction(),
 				IsCoinbase:     isCoinbase,
 				MinerPubkey:    minerPubkey,
+				BlockReward:    0,
 			}
 
 			// Transition the state machine.
@@ -550,6 +555,7 @@ func TestStateMachineTxAlreadySequenced(t *testing.T) {
 		RawTransaction: rawTx,
 		IsCoinbase:     false,
 		MinerPubkey:    miner.CoinbaseWallet.PubkeyBytes(),
+		BlockReward:    0,
 	}
 
 	t.Skip()

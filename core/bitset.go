@@ -6,11 +6,11 @@ import (
 
 // A bit string is a fixed-length string of bits (0s and 1s) used to compactly represent a set of integers. Each bit at index `i` represents the membership of integer `i` in the set.
 //
-// For example, the bitstring 1010 represents the set {1, 3}.
+// For example, the bitstring 0101 represents the set {1, 3}.
 // The size of the string is 4 bits, and can represent a set of 4 integers.
-// Bit strings become efficient to use when the number of integers is large.
+// Bit sets become efficient to use when the count of integers is large.
 // ie. when we have a set of 1000 integers, we can represent it with:
-//   - naively: 1000 * uint32 = 4000 bytes
+//   - naively as:  1000 * uint32 = 4000 bytes
 //   - with a bitstring: 1000 bits = 125 bytes
 type Bitset []byte
 
@@ -23,7 +23,7 @@ func NewBitsetFromBuffer(buf []byte) *Bitset {
 	return (*Bitset)(&buf)
 }
 
-// Size returns the number of bits in the bitstring.
+// Size returns the number of integers countable in the bit set.
 func (b *Bitset) Size() int {
 	return len(*b) * 8
 }

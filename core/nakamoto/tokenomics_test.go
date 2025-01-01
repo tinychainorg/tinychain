@@ -13,7 +13,7 @@ func TestGetBlockReward(t *testing.T) {
 	blocksIn8Years := 1 * 6 * 24 * 365 * 120
 	xy := make([][2]float64, blocksIn8Years)
 	for i := 0; i < blocksIn8Years; i++ {
-		xy[i] = [2]float64{float64(i), GetBlockReward(i)}
+		xy[i] = [2]float64{float64(i), float64(GetBlockReward(i))}
 	}
 
 	// Dump this to a csv for visualisation in the IPython notebook.
