@@ -169,10 +169,9 @@ func (dag *BlockDAG) updateHeadersTip() error {
 	if prev_tip.Hash != curr_tip.Hash {
 		dag.log.Printf("New headers tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
 		dag.HeadersTip = curr_tip
-		if dag.OnNewHeadersTip == nil {
-			return nil
+		if dag.OnNewHeadersTip != nil {
+			dag.OnNewHeadersTip(curr_tip, prev_tip)
 		}
-		dag.OnNewHeadersTip(curr_tip, prev_tip)
 	}
 
 	return nil
@@ -188,10 +187,6 @@ func (dag *BlockDAG) updateFullTip() error {
 	if prev_tip.Hash != curr_tip.Hash {
 		dag.log.Printf("New full tip: height=%d hash=%s\n", curr_tip.Height, curr_tip.HashStr())
 		dag.FullTip = curr_tip
-		if dag.OnNewFullTip == nil {
-			return nil
-		}
-		dag.OnNewFullTip(curr_tip, prev_tip)
 		if dag.OnNewFullTip != nil {
 			dag.OnNewFullTip(curr_tip, prev_tip)
 		}
