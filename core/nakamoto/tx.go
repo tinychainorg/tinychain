@@ -98,7 +98,7 @@ func (tx *RawTransaction) Hash() [32]byte {
 	return sha256.Sum256(h.Sum(nil))
 }
 
-func MakeTransferTx(from [65]byte, to [65]byte, amount uint64, wallet *core.Wallet, fee uint64) RawTransaction {
+func MakeTransferTx(from [65]byte, to [65]byte, amount uint64, fee uint64, wallet *core.Wallet) RawTransaction {
 	tx := RawTransaction{
 		Version:    1,
 		Sig:        [64]byte{},
