@@ -404,6 +404,7 @@ func TestDagGetBlockByHashGenesis(t *testing.T) {
 	t.Logf("Genesis block size: %d\n", block.SizeBytes)
 
 	// RawBlock.
+	// find:GENESIS-BLOCK-ASSERTS
 	genesisNonce := Bytes32ToBigInt(genesisBlock.Nonce)
 	assert.Equal(conf.GenesisParentBlockHash, block.ParentHash)
 	assert.Equal(uint64(0), block.Timestamp)
@@ -489,6 +490,7 @@ func TestDagBlockDAGInitialised(t *testing.T) {
 	t.Logf("Block: %v\n", block.Hash)
 
 	// Check the genesis block.
+	// find:GENESIS-BLOCK-ASSERTS
 	genesisNonce := Bytes32ToBigInt(genesisBlock.Nonce)
 	assert.Equal(genesisBlock.Hash(), block.Hash)
 	assert.Equal(conf.GenesisParentBlockHash, block.ParentHash)
