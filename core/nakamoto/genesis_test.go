@@ -9,6 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestDumpGenesisBlock(t *testing.T) {
+	// Dump genesis block to JSON.
+
+}
+
 func TestGetRawGenesisBlockFromConfig(t *testing.T) {
 	assert := assert.New(t)
 
@@ -54,7 +59,7 @@ func formatByteArrayDynamic(b []byte) string {
 	return out
 }
 
-func TestWalletCreateSignTransferTx(t *testing.T) {
+func TestCreateGenesisCoinbaseTx(t *testing.T) {
 	wallet, err := core.CreateRandomWallet()
 	if err != nil {
 		panic(err)
