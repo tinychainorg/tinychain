@@ -67,6 +67,12 @@ func (c *StateMachine) Transition(input StateMachineInput) ([]*StateLeaf, error)
 		return nil, errors.New("unsupported transaction version")
 	}
 
+	// Check coinbase constraints.
+	if input.IsCoinbase && input.RawTransaction.Amount != input.BlockReward {
+		// TODO: this is a sanity check.
+		return nil, errors.New("invalid coinbase tx, amount must equal block reward")
+	}
+
 	if input.IsCoinbase {
 		return c.transitionCoinbase(input)
 	} else {
@@ -140,6 +146,9 @@ func (c *StateMachine) transitionTransfer(input StateMachineInput) ([]*StateLeaf
 func (c *StateMachine) transitionCoinbase(input StateMachineInput) ([]*StateLeaf, error) {
 	toBalance := c.GetBalance(input.RawTransaction.ToPubkey)
 	blockReward := input.BlockReward
+
+	// TODO: what happens when blockreward != input.tx.amount??
+	// TODO: what happens when blockreward == 0?
 
 	// Check if the `to` balance will overflow.
 	if _, carry := bits.Add64(toBalance, blockReward, 0); carry != 0 {
