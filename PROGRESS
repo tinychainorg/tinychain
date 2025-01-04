@@ -1,0 +1,82 @@
+
+COMPONENTS
+==========
+
+block
+db
+netpeer_server
+netpeer
+pow
+tokenomics
+tx
+wallet
+merkle-tree
+    100%
+
+genesis
+    90%
+
+    need genesis block serialised as json
+    need multiple genesis blocks / network configs potentially
+
+blockdag
+    80%
+    
+    needs refactoring some methods
+    needs timestamp calculation (subjective) in there
+    needs parallel sig verification
+    needs(?) to verify tx validity
+
+state-machine
+    50%
+
+    needs either UXTO model or account nonces to prevent duplicate txs
+    needs proper testing
+
+node
+    50%
+
+    needs to sync properly on divergent branches
+    needs to restart miner on new full tip
+    needs to revalidate mempool on new full tip
+    need to manage miner so it doesnt run in headers mode?
+    needs to discover other nodes via dns seed or something
+
+cli
+    10%
+
+    needs light mode to just follow chain
+    needs wallet to send/receive txs
+
+sync
+    50%
+
+    needs simplification pass
+    needs proper testing
+
+sync-downloader
+    50%
+
+    needs fixing since it fails weirdly?
+
+explorer
+    90%
+
+    entire state recomputed after each block. inefficient
+    coins showed in full integer, no decimalisation yet
+
+
+PROJECT
+=======
+
+testnet 1
+    100%
+
+    done
+
+post-testnet 1 pass
+    50%
+
+    need to clean up comments and docs
+    need to clean up repo - delete old files
+

@@ -46,7 +46,7 @@ Taking inspiration from projects like SQLite, TempleOS, Cosmos/Tendermint, Linux
 
 tinychain is in-development. Currently we can run a node, mine blocks, ingest them into a DAG, create and sign transactions, run a state machine, build the UXTO set from processing transactions, connect to peers and gossip.
 
-In progress: state synchronisation, user wallet API's.
+We ran our first testnet back in Aug 2024 in sprint 1. Now we are refining in preparation for testnet 2. See [PROGRESS](./PROGRESS) for the open state of different subcomponents.
 
 ## Install.
 
