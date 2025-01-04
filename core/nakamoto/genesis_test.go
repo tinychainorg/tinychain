@@ -25,20 +25,21 @@ func TestGetRawGenesisBlockFromConfig(t *testing.T) {
 	}
 
 	// Get the genesis block.
-	genesisBlock := GetRawGenesisBlockFromConfig(conf)
-	genesisNonce := Bytes32ToBigInt(genesisBlock.Nonce)
+	block := GetRawGenesisBlockFromConfig(conf)
+	genesisNonce := Bytes32ToBigInt(block.Nonce)
 
 	// Print the hash.
-	fmt.Printf("Genesis block hash: %x\n", genesisBlock.Hash())
+	fmt.Printf("Genesis block hash: %x\n", block.Hash())
 
 	// Check the genesis block.
-	assert.Equal(HexStringToBytes32("0877dbb50dc6df9056f4caf55f698d5451a38015f8e536e9c82ca3f5265c38c7"), genesisBlock.Hash())
-	assert.Equal(conf.GenesisParentBlockHash, genesisBlock.ParentHash)
-	assert.Equal(BigIntToBytes32(*big.NewInt(0)), genesisBlock.ParentTotalWork)
-	assert.Equal(uint64(0), genesisBlock.Timestamp)
-	assert.Equal(uint64(0), genesisBlock.NumTransactions)
-	assert.Equal([32]byte{}, genesisBlock.TransactionsMerkleRoot)
-	assert.Equal(big.NewInt(21).String(), genesisNonce.String())
+	// find:GENESIS-BLOCK-ASSERTS
+	assert.Equal(HexStringToBytes32("04ce8ce628e56bab073ff2298f1f9d0e96d31fb7a81f388d8fe6e4aa4dc1aaa8"), block.Hash())
+	assert.Equal(conf.GenesisParentBlockHash, block.ParentHash)
+	assert.Equal(BigIntToBytes32(*big.NewInt(0)), block.ParentTotalWork)
+	assert.Equal(uint64(0), block.Timestamp)
+	assert.Equal(uint64(1), block.NumTransactions)
+	assert.Equal([32]uint8{0x59, 0xe0, 0xaa, 0xf, 0x1f, 0xe6, 0x6f, 0x3b, 0xe, 0xb0, 0xc, 0xa3, 0x31, 0x33, 0x1a, 0x69, 0x1, 0xc4, 0xc4, 0xa1, 0x21, 0x99, 0xba, 0xa0, 0x16, 0x77, 0xfd, 0xe2, 0xd4, 0xb7, 0xc6, 0x88}, block.TransactionsMerkleRoot)
+	assert.Equal(big.NewInt(19).String(), genesisNonce.String())
 }
 
 func formatByteArrayDynamic(b []byte) string {

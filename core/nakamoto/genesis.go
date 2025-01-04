@@ -24,6 +24,10 @@ type ConsensusConfig struct {
 }
 
 // Builds the raw genesis block from the consensus configuration.
+//
+// NOTE: This function essentially creates the genesis block from a short configuration.
+// If the values are changed, the genesis hash will change, and a bunch of tests will fail / need to be updated with the new hash.
+// These tests have been marked with the comment string find:GENESIS-BLOCK-ASSERTS so you can find them easily.
 func GetRawGenesisBlockFromConfig(consensus ConsensusConfig) RawBlock {
 	txs := []RawTransaction{
 		RawTransaction{

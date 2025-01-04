@@ -67,7 +67,7 @@ func TestStateMachineIdea(t *testing.T) {
 		RawTransaction: MakeTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 		IsCoinbase:     true,
 		MinerPubkey:    [65]byte{},
-		BlockReward:    0,
+		BlockReward:    100,
 	}
 	effects, err := stateMachine.Transition(tx0)
 	if err != nil {
@@ -311,7 +311,7 @@ func TestBenchmarkTxOpsPerDay(t *testing.T) {
 			RawTransaction: newUnsignedTransferTx(wallets[0].PubkeyBytes(), wallets[0].PubkeyBytes(), 100, &wallets[0], 0),
 			IsCoinbase:     true,
 			MinerPubkey:    [65]byte{},
-			BlockReward:    0,
+			BlockReward:    100,
 		}
 		effects, err := stateMachine.Transition(coinbaseTx)
 		if err != nil {
@@ -484,7 +484,8 @@ func TestStateMachineReconstructState(t *testing.T) {
 
 func assertIntEqual[num int | uint | int8 | uint8 | int16 | uint16 | int32 | uint32 | int64 | uint64](t *testing.T, a num, b num) {
 	if a != b {
-		t.Fatalf("Expected %d to equal %d", a, b)
+		t.Logf("Expected %d to equal %d", a, b)
+		t.FailNow()
 	}
 }
 
@@ -518,7 +519,7 @@ func TestStateMachineTxAlreadySequenced(t *testing.T) {
 	}
 
 	wallet0_balance := state.GetBalance(wallets[0].PubkeyBytes())
-	assertIntEqual(t, uint64(50*10), wallet0_balance) // coinbase rewards.
+	assertIntEqual(t, uint64(50*10)*ONE_COIN, wallet0_balance) // coinbase rewards.
 
 	// Now we send a transfer tx.
 	// First create the tx, then mine a block with it.
