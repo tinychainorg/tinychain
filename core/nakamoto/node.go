@@ -11,6 +11,7 @@ type Node struct {
 	Miner         *Miner
 	Peer          *PeerCore
 	StateMachine1 *StateMachine
+	Mempool       *Mempool
 	log           *log.Logger
 	syncLog       *log.Logger
 	stateLog      *log.Logger
@@ -22,11 +23,14 @@ func NewNode(dag *BlockDAG, miner *Miner, peer *PeerCore) *Node {
 		panic(err)
 	}
 
+	mempool := NewMempool()
+
 	n := &Node{
 		Dag:           dag,
 		Miner:         miner,
 		Peer:          peer,
 		StateMachine1: stateMachine,
+		Mempool:       mempool,
 		log:           NewLogger("node", ""),
 		syncLog:       NewLogger("node", "sync"),
 		stateLog:      NewLogger("node", "state"),
@@ -181,8 +185,6 @@ func (n *Node) setup() {
 	// Recompute the state after a new tip.
 	n.Dag.OnNewFullTip = func(new_tip Block, prev_tip Block) {
 		// 1. Rebuild state.
-		// 2. Regenerate current mempool.
-
 		n.stateLog.Printf("rebuild-state\n")
 		start := time.Now()
 
@@ -194,6 +196,33 @@ func (n *Node) setup() {
 
 		duration := time.Since(start)
 		n.stateLog.Printf("rebuild-state completed duration=%s n_blocks=%d\n", duration.String(), n.Dag.FullTip.Height)
+
+		// 2. Regenerate current mempool. Tx set should not include any txs that are in the chain.
+		// 3. Restart miner.
+		// TODO.
+	}
+
+	// Listen for new transactions and add them to the mempool.
+	n.Peer.OnNewTransaction = func(tx RawTransaction) error {
+		n.log.Printf("New transaction gossip from peer: tx=%x\n", tx.Hash())
+
+		// Submit transaction to mempool.
+		err := n.Mempool.SubmitTx(tx)
+		if err != nil {
+			n.log.Printf("Failed to add transaction to mempool: %s\n", err)
+			// If the tx was rejected (e.g. fee too low), return the error.
+			return err
+		}
+
+		return nil
+	}
+
+	// Connect the miner to the mempool.
+	n.Miner.GetBlockBody = func() []RawTransaction {
+		// Get the mempool transactions.
+		var MAX_BUNDLE_SIZE uint = 8192 - 1 // minus the miner's coinbase tx
+		bundle := n.Mempool.GetBundle(MAX_BUNDLE_SIZE)
+		return bundle
 	}
 
 	// When we get a tx, add it to the mempool.
@@ -209,14 +238,8 @@ func (n *Node) setup() {
 	//      - Reinsert any transcations that were included in blocks that were orphaned, to a maximum depth of 1 day of blocks (144 blocks). O(144)
 	//      - Revalidate the tx set. O(K).
 	//   c. Begin mining on the new tip.
-
-	// When we get new transaction, add it to mempool.
-	n.Peer.OnNewTransaction = func(tx RawTransaction) {
-		// Add transaction to mempool.
-		// TODO.
-	}
-
 	// Load peers from cache.
+
 	networkStore, err := LoadDataStore[NetworkStore](n.Dag.db, "network")
 	if err != nil {
 		n.log.Printf("Failed to load network store: %s\n", err)
