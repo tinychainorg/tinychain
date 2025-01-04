@@ -7,16 +7,16 @@ import (
 
 // The Nakamoto consensus configuration, pertaining to difficulty readjustment, genesis block, and block size.
 type ConsensusConfig struct {
-	// The length of an epoch.
+	// The length of a difficulty epoch in blocks.
 	EpochLengthBlocks uint64 `json:"epoch_length_blocks"`
 
-	// The target block production rate in terms of 1 epoch.
+	// The target length of one epoch in milliseconds.
 	TargetEpochLengthMillis uint64 `json:"target_epoch_length_millis"`
 
-	// Genesis difficulty target.
+	// The difficulty of the genesis block.
 	GenesisDifficulty big.Int `json:"genesis_difficulty"`
 
-	// The genesis parent block hash.
+	// The parent block hash for the genesis block. This is a special case, as the genesis block has a parent we don't know the preimage for.
 	GenesisParentBlockHash [32]byte `json:"genesis_block_hash"`
 
 	// Maximum block size.

@@ -13,6 +13,33 @@ import (
 )
 
 // The Miner is responsible for solving the Hashcash proof-of-work puzzle.
+//
+// The operation of the miner is as follows:
+// 1. Begin the miner thread.
+// 2. Generate a new POW puzzle:
+//   a. Create the block template.
+//      i. Get the current tip and set block.parent_hash to the tip's hash.
+//      ii. Construct the coinbase transaction with our miner wallet.
+//      iii. Get the block's body (transactions) using `Miner.GetBlockBody`. This is used to connect the mempool.
+//      iv. Compute the transaction merkle root.
+//   b. Compute the difficulty target for mining.
+// 3. Begin mining the puzzle:
+//   a. Send the puzzle to the miner thread.
+//   b. The miner thread will mine the puzzle until a solution is found.
+//     i. Increment the nonce.
+//     ii. Hash the block.
+//     iii. Check if the guess (hash) is less than the target.
+//     iv. If the guess is less than the target, the puzzle is solved. Send the solution back to the main thread.
+//     v. If a new puzzle is received, stop mining the current puzzle and start mining the new puzzle.
+// 4. When a solution to the puzzle is found, the miner thread will send the solution back to the main thread.
+// 5. The main thread will:
+//   a. Set the nonce in the block to the solution.
+//   b. Call `Miner.OnBlockSolution` with the block.
+//   c. Increment the number of blocks mined.
+//   d. If the maximum number of blocks to mine has been reached, stop the miner.
+//   e. Otherwise, generate a new puzzle and send it to the miner thread.
+//
+
 type Miner struct {
 	dag            BlockDAG
 	CoinbaseWallet *core.Wallet
@@ -54,7 +81,7 @@ func MakeCoinbaseTx(wallet *core.Wallet, amount uint64) RawTransaction {
 		ToPubkey:   wallet.PubkeyBytes(),
 		Amount:     amount,
 		Fee:        0,
-		Nonce:      0,
+		Nonce:      randomNonce(),
 	}
 	envelope := tx.Envelope()
 	sig, err := wallet.Sign(envelope)
@@ -181,12 +208,12 @@ func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 		Transactions:           blockBody,
 		Graffiti:               miner.GraffitiTag,
 	}
+
+	// Compute the transaction merkle root.
 	raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 
-	// Mine the POW solution.
+	// Compute the difficulty target for mining, which may involve recomputing the difficulty (epoch change).
 	curr_height := current_tip.Height + 1
-
-	// First get the right epoch.
 	var difficulty big.Int
 	epoch, err := miner.dag.GetEpochForBlockHash(current_tip.Hash)
 	if err != nil {
