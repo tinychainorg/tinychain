@@ -46,6 +46,10 @@ type Miner struct {
 	IsRunning      bool
 	GraffitiTag    [32]byte
 
+	// Miner state.
+	stopCh  chan bool
+	puzzles chan POWPuzzle
+
 	// Mutex.
 	mutex sync.Mutex
 
@@ -99,7 +103,13 @@ type POWPuzzle struct {
 	solution   big.Int
 }
 
-func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle, puzzleChannel chan POWPuzzle) (big.Int, error) {
+// Miner thread:
+// States:
+// - waiting for puzzle
+// - mining puzzle
+// - puzzle solved
+// - restart on new puzzle
+func mineWithStatus(log *log.Logger, hashrates chan float64, solutions chan POWPuzzle, puzzles chan POWPuzzle, stopCh chan bool) (big.Int, error) {
 	// Execute in 3s increments.
 	lastHashrateMeasurement := Timestamp()
 	numHashes := 0
@@ -118,7 +128,7 @@ func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel
 			now := Timestamp()
 			duration := now - lastHashrateMeasurement
 			hashrate := float64(numHashes) / float64(duration/1000)
-			hashrateChannel <- hashrate
+			hashrates <- hashrate
 			numHashes = 0
 			lastHashrateMeasurement = now
 		}
@@ -127,12 +137,12 @@ func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel
 	// Routine: Mine.
 	for {
 		var i uint64 = 0
-		miner.log.Println("Waiting for new puzzle")
-		puzzle := <-puzzleChannel
+		log.Println("Waiting for new puzzle")
+		puzzle := <-puzzles
 		block := puzzle.block
 		nonce := puzzle.startNonce
 		target := puzzle.target
-		miner.log.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+		log.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
 
 		// Loop: mine 1 hash.
 		for {
@@ -151,21 +161,24 @@ func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel
 
 			// Check solution: hash < target.
 			if guess.Cmp(&target) == -1 {
-				miner.log.Printf("Puzzle solved: iterations=%d\n", i)
+				log.Printf("Puzzle solved: iterations=%d\n", i)
 
 				puzzle.solution = nonce
-				solutionChannel <- puzzle
+				solutions <- puzzle
 				break
 			}
 
 			// Check if new puzzle has been received.
 			select {
-			case newPuzzle := <-puzzleChannel:
+			case newPuzzle := <-puzzles:
 				puzzle = newPuzzle
 				block = puzzle.block
 				nonce = puzzle.startNonce
 				target = puzzle.target
-				miner.log.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+				log.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+			case <-stopCh:
+				log.Println("Stopping miner")
+				return nonce, nil
 			default:
 				// Do nothing.
 			}
@@ -234,6 +247,25 @@ func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 	return puzzle
 }
 
+func (miner *Miner) Stop() {
+	miner.mutex.Lock()
+	if !miner.IsRunning {
+		miner.log.Printf("Miner not running")
+		miner.mutex.Unlock()
+		return
+	}
+	miner.IsRunning = false
+	miner.mutex.Unlock()
+
+	miner.log.Println("Sent stop signal to miner")
+	miner.stopCh <- true
+}
+
+// Send new puzzle to miner thread, based off the latest full tip.
+func (miner *Miner) RestartWithNewPuzzle() {
+	miner.puzzles <- miner.MakeNewPuzzle()
+}
+
 func (miner *Miner) Start(mineMaxBlocks int64) []RawBlock {
 	miner.mutex.Lock()
 	if miner.IsRunning {
@@ -243,26 +275,29 @@ func (miner *Miner) Start(mineMaxBlocks int64) []RawBlock {
 	miner.IsRunning = true
 	miner.mutex.Unlock()
 
-	// The next tip channel.
-	// next_tip := make(chan Block)
-	// block_solutions := make(chan Block)
-	hashrateChannel := make(chan float64, 1)
-	puzzleChannel := make(chan POWPuzzle, 1)
-	solutionChannel := make(chan POWPuzzle, 1)
+	// Set miner thread state.
+	hashrates := make(chan float64, 1)
+	puzzles := make(chan POWPuzzle, 1)
+	solutions := make(chan POWPuzzle, 1)
+	stopCh := make(chan bool, 1)
 
-	go miner.MineWithStatus(hashrateChannel, solutionChannel, puzzleChannel)
+	// Set miner state.
+	miner.stopCh = stopCh
+	miner.puzzles = puzzles
+
+	go mineWithStatus(miner.log, hashrates, solutions, puzzles, stopCh)
 
 	var blocksMined int64 = 0
 	mined := []RawBlock{}
 
-	puzzleChannel <- miner.MakeNewPuzzle()
+	puzzles <- miner.MakeNewPuzzle()
 	for {
 		select {
-		case hashrate := <-hashrateChannel:
+		case hashrate := <-hashrates:
 			// Print iterations using commas.
 			p := message.NewPrinter(language.English)
 			miner.log.Printf(p.Sprintf("Hashrate: %.2f H/s\n", hashrate))
-		case puzzle := <-solutionChannel:
+		case puzzle := <-solutions:
 			miner.log.Println("Received solution")
 
 			raw := puzzle.block
@@ -288,7 +323,7 @@ func (miner *Miner) Start(mineMaxBlocks int64) []RawBlock {
 
 			miner.log.Println("Making new puzzle")
 			miner.log.Println("New puzzle ready")
-			puzzleChannel <- miner.MakeNewPuzzle()
+			puzzles <- miner.MakeNewPuzzle()
 		}
 	}
 }

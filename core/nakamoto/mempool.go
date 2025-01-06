@@ -130,3 +130,8 @@ func (m *Mempool) GetBundle(max uint) []RawTransaction {
 
 	return bundle
 }
+
+// Regenerates the mempool from the current state of the chain, removing transactions that are already in the chain.
+func (m *Mempool) Regenerate() {
+	// TODO.
+}

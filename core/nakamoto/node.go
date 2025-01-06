@@ -198,8 +198,10 @@ func (n *Node) setup() {
 		n.stateLog.Printf("rebuild-state completed duration=%s n_blocks=%d\n", duration.String(), n.Dag.FullTip.Height)
 
 		// 2. Regenerate current mempool. Tx set should not include any txs that are in the chain.
+		n.Mempool.Regenerate()
+
 		// 3. Restart miner.
-		// TODO.
+		n.Miner.RestartWithNewPuzzle()
 	}
 
 	// Listen for new transactions and add them to the mempool.
