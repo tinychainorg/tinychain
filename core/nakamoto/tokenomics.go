@@ -9,7 +9,7 @@ import (
 // TODO URGENT: implement this in integer arithmetic to avoid precision differences causing consensus faults.
 func GetBlockReward(blockHeight int) uint64 {
 	initialReward := 50.0
-	halvingInterval := 210000
+	halvingInterval := 210_000
 
 	// Calculate the number of halvings
 	numHalvings := blockHeight / halvingInterval

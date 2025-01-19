@@ -235,7 +235,7 @@ func (n *Node) Sync() int {
 			}
 
 			// 2b. Download headers.
-			headers, _, err := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
+			headersUnsafe, _, err := n.SyncDownloadData(currentTipHash, *heights, peers, true, false)
 			if err != nil {
 				n.syncLog.Printf("Failed to download headers: %s\n", err)
 				continue
@@ -243,10 +243,10 @@ func (n *Node) Sync() int {
 
 			// 2c. Validate headers.
 			// Sanity-check: verify we have all the headers for the heights in order. TODO.
-			headers2 := orderValidateHeaders(currentTipHash, headers)
+			headers := orderValidateHeaders(currentTipHash, headersUnsafe)
 
 			// 2d. Ingest headers.
-			for _, header := range headers2 {
+			for _, header := range headers {
 				err := n.Dag.IngestHeader(header)
 				if err != nil {
 					// Skip. We will not be able to download the bodies.
@@ -258,10 +258,9 @@ func (n *Node) Sync() int {
 
 			n.syncLog.Printf("Downloaded %d headers\n", downloaded)
 
-			// Now get the bodies.
-			// Filter through missing bodies for headers.
+			// 2e. Download bodies.
 			heights2 := core.NewBitset(WINDOW_SIZE)
-			for i, _ := range headers2 {
+			for i, _ := range headers {
 				heights2.Insert(i)
 			}
 			_, bodies, err := n.SyncDownloadData(currentTipHash, *heights2, peers, false, true)
@@ -270,10 +269,9 @@ func (n *Node) Sync() int {
 				continue
 			}
 
-			// Print the bdoeis and exit.
 			n.syncLog.Printf("Downloaded bodies n=%d\n", len(bodies))
 
-			// 2d. Ingest bodies.
+			// 2f. Ingest bodies.
 			for i, body := range bodies {
 				err := n.Dag.IngestBlockBody(body)
 				if err != nil {
