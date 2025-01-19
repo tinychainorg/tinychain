@@ -3,7 +3,6 @@ package nakamoto
 import (
 	"encoding/binary"
 	"encoding/json"
-	"math"
 	"testing"
 	"time"
 
@@ -218,108 +217,6 @@ func TestNodeSyncMissingBlocks(t *testing.T) {
 
 	// Check that the tips are the same.
 	assert.Equal(tip1, tip2)
-}
-
-// One part of the block sync algorithm is determining the common ancestor of two chains:
-//
-//	Chain 1: the chain we have on our local node.
-//	Chain 2: the chain of a remote peer who has a more recent tip.
-//
-// We determine the common ancestor in order to download the most minimal set of block headers required to sync to the latest tip.
-// There are a few approaches to this:
-// - naive approach: download all headers from the tip to the remote peer's genesis block, and then compare the headers to find the common ancestor. This is O(N) where N is the length of the longest chain.
-// - naive approach 2: send the peer the block we have at (height - 6), which is according to Nakamoto's calculations, "probabilistically final" and unlikely to be reorg-ed. Ask them if they have this block, and if so, sync the remaining 6 blocks. This fails when there is ongoing volatile reorgs, as well as doesn't work for a full sync.
-// - slightly less naive approach: send the peer "checkpoints" at a regular interval. So for the full list of block hashes, we send H/I where I is the interval size, and use this to sync. This is O(H/I).
-// - slightly slightly less naive approach: send the peer a list of "checkpoints" at exponentially decreasing intervals. This is smart since the finality of a block increases exponentially with the number of confirmations. This is O(H/log(H)).
-// - the most efficient approach. Interactively binary search with the node. At each step of the binary search, we split their view of the chain hash list in half, and ask them if they have the block at the midpoint.
-//
-// Let me explain the binary search.
-// <------------------------>   our view
-// <------------------------> their view
-// n=1
-// <------------|-----------> their view
-// <------------------|-----> their view
-// <---------------|--------> their view
-// At each iteration we ask: do you have a block at height/2 with this hash?
-// - if the answer is yes, we move to the right half.
-// - if the answer is no, we move to the left half.
-// We continue until the length of our search space = 1.
-//
-// Now for some modelling.
-// Finding the common ancestor is O(log N). Each message is (blockhash [32]byte, height uint64). Message size is 40 bytes.
-// Total networking cost is O(40 * log N), bitcoin's chain height is 850585, O(40 * log 850585) = O(40 * 20) = O(800) bytes.
-// Less than 1KB of data to find common ancestor.
-func TestInteractiveBinarySearchFindCommonAncestor(t *testing.T) {
-	local_chainhashes := [][32]byte{}
-	remote_chainhashes := [][32]byte{}
-
-	// Populate blockhashes for test.
-	for i := 0; i < 100; i++ {
-		local_chainhashes = append(local_chainhashes, uint64To32ByteArray(uint64(i)))
-		remote_chainhashes = append(remote_chainhashes, uint64To32ByteArray(uint64(i)))
-	}
-	// Set remote to branch at block height 90.
-	for i := 90; i < 100; i++ {
-		remote_chainhashes[i] = uint64To32ByteArray(uint64(i + 1000))
-	}
-
-	// Print both for debugging.
-	t.Logf("Local chainhashes:\n")
-	for _, x := range local_chainhashes {
-		t.Logf("%x", x)
-	}
-	t.Logf("\n")
-	t.Logf("Remote chainhashes:\n")
-	for _, x := range remote_chainhashes {
-		t.Logf("%x", x)
-	}
-	t.Logf("\n")
-
-	// Peer method.
-	hasBlockhash := func(blockhash [32]byte) bool {
-		for _, x := range remote_chainhashes {
-			if x == blockhash {
-				return true
-			}
-		}
-		return false
-	}
-
-	//
-	// Find the common ancestor.
-	//
-
-	// This is a classical binary search algorithm.
-	floor := 0
-	ceil := len(local_chainhashes)
-	n_iterations := 0
-
-	for (floor + 1) < ceil {
-		guess_idx := (floor + ceil) / 2
-		guess_value := local_chainhashes[guess_idx]
-
-		t.Logf("Iteration %d: floor=%d, ceil=%d, guess_idx=%d, guess_value=%x", n_iterations, floor, ceil, guess_idx, guess_value)
-		n_iterations += 1
-
-		// Send our tip's blockhash
-		// Peer responds with "SEEN" or "NOT SEEN"
-		// If "SEEN", we move to the right half.
-		// If "NOT SEEN", we move to the left half.
-		if hasBlockhash(guess_value) {
-			// Move to the right half.
-			floor = guess_idx
-		} else {
-			// Move to the left half.
-			ceil = guess_idx
-		}
-	}
-
-	ancestor := local_chainhashes[floor]
-	t.Logf("Common ancestor: %x", ancestor)
-	t.Logf("Found in %d iterations.", n_iterations)
-
-	expectedIterations := math.Ceil(math.Log2(float64(len(local_chainhashes))))
-	t.Logf("Expected iterations: %f", expectedIterations)
 }
 
 func uint64To32ByteArray(num uint64) [32]byte {

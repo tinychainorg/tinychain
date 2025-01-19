@@ -96,8 +96,8 @@ type GetBlocksReply struct {
 
 // has_block
 type HasBlockMessage struct {
-	Type      string `json:"type"` // "have_block"
-	BlockHash string `json:"blockHash"`
+	Type      string   `json:"type"` // "have_block"
+	BlockHash [32]byte `json:"blockHash"`
 }
 
 type HasBlockReply struct {
