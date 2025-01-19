@@ -48,6 +48,10 @@ func HexStringToBytes32(s string) [32]byte {
 	return fbuf
 }
 
+func HexStringToBigInt(s string) big.Int {
+	return Bytes32ToBigInt(HexStringToBytes32(s))
+}
+
 func StringToBytes32(s string) [32]byte {
 	var b [32]byte
 	copy(b[:], s)
