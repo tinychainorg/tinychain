@@ -3,6 +3,7 @@ package nakamoto
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -371,7 +372,6 @@ func TestSyncScheduleDownloadWork1(t *testing.T) {
 
 func TestSyncSyncDownloadDataHeaders(t *testing.T) {
 	// After getting the tips, then we need to divide them into work units.
-
 	assert := assert.New(t)
 	peers := setupTestNetwork(t)
 
@@ -470,7 +470,6 @@ func TestSyncSyncDownloadDataHeaders(t *testing.T) {
 
 func TestSyncSync(t *testing.T) {
 	// After getting the tips, then we need to divide them into work units.
-
 	assert := assert.New(t)
 	peers := setupTestNetwork(t)
 
@@ -530,5 +529,325 @@ func TestSyncSync(t *testing.T) {
 	assertIntEqual(t, 0, downloaded2)
 	downloaded3 := node3.Sync()
 	assertIntEqual(t, 0, downloaded3)
-
 }
+
+
+// One part of the block sync algorithm is determining the common ancestor of two chains:
+//
+//	Chain 1: the chain we have on our local node.
+//	Chain 2: the chain of a remote peer who has a more recent tip.
+//
+// We determine the common ancestor in order to download the most minimal set of block headers required to sync to the latest tip.
+// There are a few approaches to this:
+// - naive approach: download all headers from the tip to the remote peer's genesis block, and then compare the headers to find the common ancestor. This is O(N) where N is the length of the longest chain.
+// - naive approach 2: send the peer the block we have at (height - 6), which is according to Nakamoto's calculations, "probabilistically final" and unlikely to be reorg-ed. Ask them if they have this block, and if so, sync the remaining 6 blocks. This fails when there is ongoing volatile reorgs, as well as doesn't work for a full sync.
+// - slightly less naive approach: send the peer "checkpoints" at a regular interval. So for the full list of block hashes, we send H/I where I is the interval size, and use this to sync. This is O(H/I).
+// - slightly slightly less naive approach: send the peer a list of "checkpoints" at exponentially decreasing intervals. This is smart since the finality of a block increases exponentially with the number of confirmations. This is O(H/log(H)).
+// - the most efficient approach. Interactively binary search with the node. At each step of the binary search, we split their view of the chain hash list in half, and ask them if they have the block at the midpoint.
+//
+// Let me explain the binary search.
+// <------------------------>   our view
+// <------------------------> their view
+// n=1
+// <------------|-----------> their view
+// <------------------|-----> their view
+// <---------------|--------> their view
+// At each iteration we ask: do you have a block at height/2 with this hash?
+// - if the answer is yes, we move to the right half.
+// - if the answer is no, we move to the left half.
+// We continue until the length of our search space = 1.
+//
+// Now for some modelling.
+// Finding the common ancestor is O(log N). Each message is (blockhash [32]byte, height uint64). Message size is 40 bytes.
+// Total networking cost is O(40 * log N), bitcoin's chain height is 850585, O(40 * log 850585) = O(40 * 20) = O(800) bytes.
+// Less than 1KB of data to find common ancestor.
+func TestInteractiveBinarySearchFindCommonAncestor(t *testing.T) {
+	local_chainhashes := [][32]byte{}
+	remote_chainhashes := [][32]byte{}
+
+	// Populate blockhashes for test.
+	for i := 0; i < 100; i++ {
+		local_chainhashes = append(local_chainhashes, uint64To32ByteArray(uint64(i)))
+		remote_chainhashes = append(remote_chainhashes, uint64To32ByteArray(uint64(i)))
+	}
+	// Set remote to branch at block height 90.
+	for i := 90; i < 100; i++ {
+		remote_chainhashes[i] = uint64To32ByteArray(uint64(i + 1000))
+	}
+
+	// Print both for debugging.
+	t.Logf("Local chainhashes:\n")
+	for _, x := range local_chainhashes {
+		t.Logf("%x", x)
+	}
+	t.Logf("\n")
+	t.Logf("Remote chainhashes:\n")
+	for _, x := range remote_chainhashes {
+		t.Logf("%x", x)
+	}
+	t.Logf("\n")
+
+	// Peer method.
+	hasBlockhash := func(blockhash [32]byte) bool {
+		for _, x := range remote_chainhashes {
+			if x == blockhash {
+				return true
+			}
+		}
+		return false
+	}
+
+	//
+	// Find the common ancestor.
+	//
+
+	// This is a classical binary search algorithm.
+	floor := 0
+	ceil := len(local_chainhashes)
+	n_iterations := 0
+
+	for (floor + 1) < ceil {
+		guess_idx := (floor + ceil) / 2
+		guess_value := local_chainhashes[guess_idx]
+
+		t.Logf("Iteration %d: floor=%d, ceil=%d, guess_idx=%d, guess_value=%x", n_iterations, floor, ceil, guess_idx, guess_value)
+		n_iterations += 1
+
+		// Send our tip's blockhash
+		// Peer responds with "SEEN" or "NOT SEEN"
+		// If "SEEN", we move to the right half.
+		// If "NOT SEEN", we move to the left half.
+		if hasBlockhash(guess_value) {
+			// Move to the right half.
+			floor = guess_idx
+		} else {
+			// Move to the left half.
+			ceil = guess_idx
+		}
+	}
+
+	ancestor := local_chainhashes[floor]
+	t.Logf("Common ancestor: %x", ancestor)
+	t.Logf("Found in %d iterations.", n_iterations)
+
+	expectedIterations := math.Ceil(math.Log2(float64(len(local_chainhashes))))
+	t.Logf("Expected iterations: %f", expectedIterations)
+}
+
+func TestGetPeerCommonAncestor(t *testing.T) {
+	local_chainhashes := [][32]byte{}
+	remote_chainhashes := [][32]byte{}
+
+	// Populate blockhashes for test.
+	for i := 0; i < 100; i++ {
+		local_chainhashes = append(local_chainhashes, uint64To32ByteArray(uint64(i)))
+		remote_chainhashes = append(remote_chainhashes, uint64To32ByteArray(uint64(i)))
+	}
+	// Set remote to branch at block height 90.
+	for i := 90; i < 100; i++ {
+		remote_chainhashes[i] = uint64To32ByteArray(uint64(i + 1000))
+	}
+
+	// Print both for debugging.
+	t.Logf("Local chainhashes:\n")
+	for _, x := range local_chainhashes {
+		t.Logf("%x", x)
+	}
+	t.Logf("\n")
+	t.Logf("Remote chainhashes:\n")
+	for _, x := range remote_chainhashes {
+		t.Logf("%x", x)
+	}
+	t.Logf("\n")
+
+	// Peer mock.
+	peer1 := NewPeerCore(PeerConfig{ipAddress: "127.0.0.1", port: getRandomPort()})
+	peer2 := NewPeerCore(PeerConfig{ipAddress: "127.0.0.1", port: getRandomPort()})
+
+	go peer1.Start()
+	go peer2.Start()
+
+	// Wait for peers online.
+	waitForPeersOnline([]*PeerCore{peer1, peer2})
+
+	// Bootstrap.
+	peer1.Bootstrap([]string{peer2.GetLocalAddr()})
+
+	peer2.OnHasBlock = func(msg HasBlockMessage) (bool, error) {
+		blockhash := msg.BlockHash
+		for _, x := range remote_chainhashes {
+			if x == blockhash {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	//
+	// Find the common ancestor.
+	//
+
+	remotePeer := peer1.GetPeers()[0]
+	ancestor, n_iterations, err := GetPeerCommonAncestor(peer1, remotePeer, &local_chainhashes)
+	if err != nil {
+		t.Fatalf("Error finding common ancestor: %s", err)
+	}
+	t.Logf("Common ancestor: %x", ancestor)
+	t.Logf("Found in %d iterations.", n_iterations)
+
+	expectedIterations := math.Ceil(math.Log2(float64(len(local_chainhashes))))
+	t.Logf("Expected iterations: %f", expectedIterations)
+
+	// Now we assert the common ancestor.
+	assert := assert.New(t)
+	assert.Equal(local_chainhashes[89], ancestor)
+	assertIntEqual(t, int(expectedIterations), n_iterations)
+}
+
+
+
+// Sync scenarios:
+// 
+// SCENARIO 1
+// =========== 
+// DESCRIPTION: local tip is behind remote tip, same branch. remote tip is heavier.
+// NETWORK STATE:
+// node1: a -> b -> c -> d -> e            (work=100)
+// node2: a -> b -> c -> d -> e -> f -> g  (work=150)
+// 
+// SCENARIO 2
+// =========== 
+// DESCRIPTION: local tip is behind remote tip, fork branch. remote branch is heavier.
+// NETWORK STATE:
+// node1: a -> b -> ca -> da -> ea         (work=100)
+// node2: a -> b -> cb -> db -> eb         (work=105)
+// 
+// SCENARIO 3
+// =========== 
+// DESCRIPTION: local tip is behind remote tip, fork branch. local branch is heavier.
+// NETWORK STATE:
+// node1: a -> b -> ca -> da -> ea         (work=105)
+// node2: a -> b -> cb -> db -> eb         (work=100)
+// 
+
+
+func printBlockchainView(t *testing.T, label string, dag *BlockDAG) {
+	// Print the entire hash chain according to node1.
+	hashlist, err := dag.GetLongestChainHashList(dag.FullTip.Hash, dag.FullTip.Height+10)
+	if err != nil {
+		t.Fatalf("Error getting longest chain: %s", err)
+	}
+	t.Logf("")
+	t.Logf("Longest chain (%s):", label)
+	for i, hash := range hashlist {
+		t.Logf("Block #%d: %x", i, hash)
+	}
+	t.Logf("")
+}
+
+func TestSyncRemoteForkBranchRemoteHeavier(t *testing.T) {
+	assert := assert.New(t)
+	peers := setupTestNetwork(t)
+
+	node1 := peers[0]
+	node2 := peers[1]
+
+	// Then we check the tips.
+	tip1 := node1.Dag.FullTip
+	tip2 := node2.Dag.FullTip
+
+	// Print the height of the tip.
+	t.Logf("Tip 1 height: %d", tip1.Height)
+	t.Logf("Tip 2 height: %d", tip2.Height)
+
+	// Check that the tips are the same.
+	assert.Equal(tip1.HashStr(), tip2.HashStr())
+
+	// Node 1 mines 15 blocks, gossips with node 2
+	node1.Miner.Start(15)
+
+	// Wait for nodes [1,2] to sync.
+	err := waitForNodesToSyncSameTip([]*Node{node1, node2})
+	assert.Nil(err)
+
+	// Disable nodes syncing.
+	node1.Peer.OnNewBlock = nil
+	node2.Peer.OnNewBlock = nil
+	
+	// Node 1 mines 5 blocks on alternative chain.
+	// Node 2 mines 7 blocks on alternative chain.
+	node1.Miner.Start(1)
+	node2.Miner.Start(5)
+
+	// Assert state.
+	tip1 = node1.Dag.FullTip
+	tip2 = node2.Dag.FullTip
+	assertIntEqual(t, 16, tip1.Height)
+	assertIntEqual(t, 20, tip2.Height)
+	assert.NotEqual(tip1.HashStr(), tip2.HashStr())
+
+	// Now print both hash chains.
+	printBlockchainView(t, "Node 1", node1.Dag)
+	printBlockchainView(t, "Node 2", node2.Dag)
+
+	// Now sync node 2 to node 1.
+	// Get the heavier tip.
+	// nodes := []*Node{node1, node2}
+	tips := []Block{tip1, tip2}
+	var heavierTipIndex int = -1
+	if tips[0].AccumulatedWork.Cmp(&tips[1].AccumulatedWork) == -1 {
+		heavierTipIndex = 1
+	} else if tips[1].AccumulatedWork.Cmp(&tips[0].AccumulatedWork) == -1 {
+		heavierTipIndex = 0
+	} else if tips[0].AccumulatedWork.Cmp(&tips[1].AccumulatedWork) == 0 {
+		t.Errorf("Tips have the same work. Re-run test.")
+	}
+	t.Logf("Heavier tip index: %d", heavierTipIndex)
+	assertIntEqual(t, 1, heavierTipIndex)
+
+	// The common ancestor should be 
+}
+
+
+func TestSyncGetBestTipFromPeers(t *testing.T) {
+	assert := assert.New(t)
+	peers := setupTestNetwork(t)
+
+	node1 := peers[0]
+	node2 := peers[1]
+	node3 := peers[2]
+
+	// Base case: all tips are the same.
+	bestTip, err := node1.sync_getBestTipFromPeers(node1.Peer.peers)
+	assert.Nil(err)
+	assert.Equal(node1.Dag.FullTip.HashStr(), bestTip.BlockHashStr())
+	assert.Equal(node2.Dag.FullTip.HashStr(), bestTip.BlockHashStr())
+	assert.Equal(node3.Dag.FullTip.HashStr(), bestTip.BlockHashStr())
+
+	// Now we test the case where one peer has a different tip.
+	// Node 1 mines 15 blocks, gossips with node 2
+	node1.Miner.Start(5)
+	node2.Miner.Start(10)
+
+	// node2 should have best tip.
+	bestTip, err = node1.sync_getBestTipFromPeers(node1.Peer.peers)
+	assert.Nil(err)
+	assert.Equal(node2.Dag.FullTip.HashStr(), bestTip.BlockHashStr())
+}
+
+// Sync process:
+// 1. Ask all peers for tips
+// 2. Choose the tip with highest amount of work
+// 3. Find the common ancestor 
+// 4. Sync from this base block
+
+
+// Sync needs to distinguish between two scenarios:
+// 1) live sync: the node is syncing in real-time with the network.
+// 2) cold sync: the node is syncing from a cold start, and needs to download all blocks from the network.
+// what changes in each scenario?
+// - live sync:
+// -- we validate timestamps
+// -- we download just one branch
+// - cold sync
+// -- we download all branches
