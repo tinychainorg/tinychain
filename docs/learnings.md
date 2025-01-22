@@ -9,4 +9,6 @@
  * there are lots of things I didn't anticipate:
    * signature caching
    * `blocks_transactions` table. Originally thought transactions.block was a one-to-one. Derp, it's many-to-many.
- * to check if a block is fully synced, we need to 
+ * It was at this point I learnt, there is no way to implement forwards iteration for the GetPath function. 
+ 
+   Why? Because you cannot know in the middle of a chain whether you are on the heaviest chain. Because the accumulated work may be low for the (n+1)th block, but then peak in the (n+2)th block.

@@ -9,16 +9,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestDumpGenesisBlock(t *testing.T) {
+	// Dump genesis block to JSON.
+
+}
+
 func TestGetRawGenesisBlockFromConfig(t *testing.T) {
 	assert := assert.New(t)
-
-	genesis_difficulty := new(big.Int)
-	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
 
 	conf := ConsensusConfig{
 		EpochLengthBlocks:       5,
 		TargetEpochLengthMillis: 2000,
-		GenesisDifficulty:       *genesis_difficulty,
+		GenesisDifficulty:       HexStringToBigInt("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
 		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
 		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
@@ -54,7 +56,7 @@ func formatByteArrayDynamic(b []byte) string {
 	return out
 }
 
-func TestWalletCreateSignTransferTx(t *testing.T) {
+func TestCreateGenesisCoinbaseTx(t *testing.T) {
 	wallet, err := core.CreateRandomWallet()
 	if err != nil {
 		panic(err)

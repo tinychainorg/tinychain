@@ -113,3 +113,25 @@ func (m *Mempool) GetFeeStatistics() FeeStatistics {
 
 	return stats
 }
+
+// Creates a bundle from the mempool.
+func (m *Mempool) GetBundle(max uint) []RawTransaction {
+	if max == 0 {
+		return []RawTransaction{}
+	}
+
+	bundle := []RawTransaction{}
+	for _, tx := range m.txs {
+		bundle = append(bundle, *tx)
+		if uint(len(bundle)) == max {
+			break
+		}
+	}
+
+	return bundle
+}
+
+// Regenerates the mempool from the current state of the chain, removing transactions that are already in the chain.
+func (m *Mempool) Regenerate() {
+	// TODO.
+}

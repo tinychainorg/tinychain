@@ -85,8 +85,7 @@ There are a couple things to keep in mind while testing:
 
    Tinychain is implemented in Go, which means we use goroutines for parallelism/concurrency. We have to manually implement checks to wait for nodes to resolve to the state we are testing for; since `n(goroutines) > n(cpu's)`, we never have "true parallelism" as there are always multiple goroutines on a single CPU. However, for testing purposes, we can achieve something approximately similar to the theoretical desired design. 
 
- - **Bind to localhost**. When we create a test network, we create a set of nodes which each listen on a random open system port. It's important that the node listens on the `localhost` or `127.0.0.1` hostname - this is the lowest permission host. If we listen on `0.0.0.0` on macOS, then it can trigger permissions popups (for fuck's sake, I wish Steve was still here).
-
+ - **Bind to localhost**. When we create a test network, we create a set of nodes which each listen on a random open system port. It's important that the node listens on the `localhost` or `127.0.0.1` hostname - this is the lowest permission host. If we listen on `0.0.0.0` on macOS, then it can trigger permissions popups (I wish Steve was still here).
 
 There are multiple helpers designed to construct test networks:
 

@@ -1,17 +1,4 @@
 
-DAG
-
-    [x] test IngestHeader
-    [x] test IngestBody
-    test updates full tip / headers tip
-
-Parallel download
-
-    [x] implement a really basic version which downloads in parallel. basically a dumb bittorrent
-    [x] make sure it can work with peers joining/leaving
-    [x] probably try to do it without channels just to start with (simpler mental model)
-
-
 Currently:
 - rename Sign(msg) to accept a sighash, and then add a sighash method to tx.go
 - why is block body not being matched with block header?
@@ -19,6 +6,25 @@ Currently:
     sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
     sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
     sync_test.go:361: Error ingesting body: Block header not found for txs merkle root.
+
+
+mempool
+    listen for new txs
+    put them in mempool
+    inside node/miner?
+        get a bundle from mempool
+        mine on it
+
+adjust miner
+    restart mechanism to mine on new tip
+    how does it do it now? 
+    documentation on the functionality
+
+
+state machine
+    remove sanity check for blockreward/iscoinbase
+    add proper tests
+
 
 
 

@@ -185,6 +185,7 @@ func (b *RawBlock) Envelope() []byte {
 	if err != nil {
 		panic(err)
 	}
+	// TODO: sanity check NumTransactions/TransactionsMerkleRoot matches against what's in Transactions.
 	err = binary.Write(buf, binary.BigEndian, b.Nonce)
 	if err != nil {
 		panic(err)

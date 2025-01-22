@@ -23,6 +23,7 @@ This is an index of the concepts you will encounter throughout a Nakamoto blockc
    - Height / Depth.
    - Heaviest chain / accumulated work.
  - Sync. 
+   - History vs. state sync.
    - Greedy search. Window sizing.
    - Bit sets.
    - Parallel downloads / chunking.
@@ -41,6 +42,8 @@ This is an index of the concepts you will encounter throughout a Nakamoto blockc
  - Mining.
    - Block template - header and bundle.
    - Nonce.
+   - Puzzles. Guess. Solution.
+   - Hashrate.
  - Peers and networking.
    - Messages.
    - RPC.

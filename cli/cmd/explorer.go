@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/liamzebedee/tinychain-go/core/nakamoto"
 	"github.com/liamzebedee/tinychain-go/explorer"
 	"github.com/urfave/cli/v2"
 
@@ -15,8 +16,8 @@ func RunExplorer(cmdCtx *cli.Context) error {
 	dbPath := cmdCtx.String("db")
 
 	// DAG.
-	networks := getNetworks()
-	dag, _, _ := newBlockdag(dbPath, networks["testnet1"])
+	networks := nakamoto.GetNetworks()
+	dag, _, _ := newBlockdag(dbPath, networks["testnet1"].ConsensusConfig)
 
 	// Handle process signals.
 	c := make(chan os.Signal, 1)

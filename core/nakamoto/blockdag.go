@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/liamzebedee/tinychain-go/core"
 	_ "github.com/mattn/go-sqlite3"
@@ -43,9 +44,14 @@ type BlockDAG struct {
 	// The "full node" tip. This is the tip of the heaviest chain of full blocks.
 	FullTip Block
 
-	// OnNewTip handler.
+	// Triggered on a new headers tip (light sync).
 	OnNewHeadersTip func(tip Block, prevTip Block)
-	OnNewFullTip    func(tip Block, prevTip Block)
+
+	// Triggered on a new full tip (fully-synced).
+	OnNewFullTip func(tip Block, prevTip Block)
+
+	// Get the current time according to the system clock.
+	ClockTime func() uint64
 
 	log *log.Logger
 }
@@ -70,6 +76,29 @@ func NewBlockDAGFromDB(db *sql.DB, stateMachine StateMachineInterface, consensus
 	}
 
 	return dag, nil
+}
+
+func (dag *BlockDAG) getClockTime() uint64 {
+	if dag.ClockTime != nil {
+		return dag.ClockTime()
+	}
+
+	now := time.Now()
+	milliseconds := now.UnixMilli()
+	return uint64(milliseconds)
+}
+
+func (dag *BlockDAG) IsTipFresh(tip Block) bool {
+	age := dag.getClockTime() - tip.Timestamp
+
+	// sanity-check.
+	if age < 0 {
+		panic("tip.Timestamp is from future")
+	}
+
+	isFresh := age < 6
+	// TODO
+	return isFresh
 }
 
 // Initalises the block DAG with the genesis block.
@@ -215,7 +244,6 @@ func (dag *BlockDAG) UpdateTip() error {
 // Validation rules for blocks:
 // 1. Verify parent is known.
 // 2. Verify timestamp is within bounds.
-// TODO: subjectivity.
 // 3. Verify num transactions is the same as the length of the transactions list.
 // 4a. Verify coinbase transcation is present.
 // 4b. Verify transactions are valid.
@@ -394,6 +422,14 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	raw.Transactions = body
 
 	// 2. Verify timestamp is within bounds.
+	// 2a. Verify monotonic - parent.timestamp < block.timestamp.
+	// 2b. Verify not in future - block.timestamp < (now + now*1.05)
+	// 2c. Verify not in past (if we are in live mode) -
+	// - if tip is fresh, that is, the tip's age is within statistical bounds for expecting a new block from the network
+	// - ie. 0 < tip.age < avg_block_time(6 blocks)
+	// - we can expect a new block soon, then we verify the tip is within the real clock time
+	// - if we are uncertain when we will be reconnected to the network, due to a split, then we must disable the safety check.
+	//
 	// TODO: subjectivity.
 
 	// 3. Verify num transactions is the same as the length of the transactions list.
@@ -406,6 +442,7 @@ func (dag *BlockDAG) IngestBlockBody(body []RawTransaction) error {
 	if len(raw.Transactions) < 1 {
 		return fmt.Errorf("Missing coinbase tx.")
 	}
+
 	// 4b. Verify transactions.
 	// TODO: We can parallelise this.
 	// This is one of the most expensive operations of the blockchain node.

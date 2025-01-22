@@ -57,13 +57,10 @@ func newBlockdag() (BlockDAG, ConsensusConfig, *sql.DB, RawBlock) {
 
 	stateMachine := newMockStateMachine()
 
-	genesis_difficulty := new(big.Int)
-	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-
 	conf := ConsensusConfig{
 		EpochLengthBlocks:       5,
 		TargetEpochLengthMillis: 2000,
-		GenesisDifficulty:       *genesis_difficulty,
+		GenesisDifficulty:       HexStringToBigInt("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
 		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
 		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
@@ -745,23 +742,13 @@ func newBlockdagLongEpoch() (BlockDAG, ConsensusConfig, *sql.DB) {
 
 	stateMachine := newMockStateMachine()
 
-	genesis_difficulty := new(big.Int)
-	genesis_difficulty.SetString("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)
-
-	// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
-	genesisBlockHash_, err := hex.DecodeString("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646")
-	if err != nil {
-		panic(err)
-	}
-	genesisBlockHash := [32]byte{}
-	copy(genesisBlockHash[:], genesisBlockHash_)
-
 	conf := ConsensusConfig{
 		EpochLengthBlocks:       20000,
 		TargetEpochLengthMillis: 1000,
-		GenesisDifficulty:       *genesis_difficulty,
-		GenesisParentBlockHash:  genesisBlockHash,
-		MaxBlockSizeBytes:       2 * 1024 * 1024, // 2MB
+		GenesisDifficulty:       HexStringToBigInt("0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+		// https://serhack.me/articles/story-behind-alternative-genesis-block-bitcoin/ ;)
+		GenesisParentBlockHash: HexStringToBytes32("000006b15d1327d67e971d1de9116bd60a3a01556c91b6ebaa416ebc0cfaa646"),
+		MaxBlockSizeBytes:      2 * 1024 * 1024, // 2MB
 	}
 
 	blockdag, err := NewBlockDAGFromDB(db, stateMachine, conf)
@@ -1197,4 +1184,73 @@ func TestDagIngestBodyMissingHeader(t *testing.T) {}
 func TestDagIngestBody(t *testing.T) {
 	// Ingest body.
 	// Updates both full and header tip.
+}
+
+func TestDagBlockTimestampRules(t *testing.T) {
+	assert := assert.New(t)
+	blockdag, _, _, genesisBlock := newBlockdag()
+
+	assert.True(true)
+	assert.NotNil(blockdag)
+	assert.NotNil(genesisBlock)
+
+	// 2. Verify timestamp is within bounds.
+	// 2a. Verify monotonic - parent.timestamp < block.timestamp.
+	// 2b. Verify not in future - block.timestamp < (now + now*1.05)
+	// 2c. Verify not in past (if we are in live mode) -
+	// - if tip is fresh, that is, the tip's age is within statistical bounds for expecting a new block from the network
+	// - ie. 0 < tip.age < avg_block_time(6 blocks)
+	// - we can expect a new block soon, then we verify the tip is within the real clock time
+	// - if we are uncertain when we will be reconnected to the network, due to a split, then we must disable the safety check.
+	//
+
+	// The block timestamp follows the following validation constraints:
+	// - monotonic: parentblock.timestamp < block.timestamp
+	//
+	// Sync mode:
+	// - just believe every block received. ensure monotonicity. ensure the increase is bound by 2 weeks at max.
+	// but what if there is war? who cares. just put it in for now.
+	//
+	// Live mode?
+	// - if the parent block timestamp is within 1d of the current system clock
+	// - if the current block timestamp is within 1d of
+
+	// Attacks:
+	//
+	// 1. Make the timestamp super far in the future. Manipulate the difficulty epoch so the length/span is only
+	// one block long.
+	// CAVEAT: this doesn't matter. Accumulated work determines heaviest chain. Just choose heavier chain. Cannot outpace the majority.
+	//
+	// 2. Reuse the same block?
+	// Impossible. Hash challenges changes each block.
+	//
+	// 3. Submit a block solution but adjust the timestamp to be before previous block.
+	// MITIGATED.
+	//
+	// 4. Submit a block solution but adjust the timestamp to be on the next difficulty boundary. Continually trigger new difficulty epochs?
+	// This doesn't work since the epoch is computed based on a span of blocks / height.
+	//
+	// 5. Manipulate the timestamp as to increase the block production rate for the next epoch, so we get more rewards.
+	// Other nodes would have to collude to do this.
+	// What's the effective solution here?
+	//
+	// How do we know when we are in live mode?
+	// 1. receive a block
+	// 2. if it's on our branch, check our tip
+	// 3. if the tip is "fresh" (ie. )
+	// tip.age = now() - tip.timestamp
+	// if tip.age < 6 blocks: fresh = true else false
+	// what is the statistic for liveness of the network?
+	// block production rate for the past 120 blocks
+	//
+	// the timestamp cannot be more than 15mins in future
+	//
+	// if the tip is fresh we are still in live mode.
+	// else we revert to sync mode.
+	// in live mode we verify that the timestamp on blocks is recent.
+	// otherwise we just have to trust that we are receiving the longest chain and we are expecting more blocks.
+	//
+	// we may have undergone a network split.
+	//
+
 }

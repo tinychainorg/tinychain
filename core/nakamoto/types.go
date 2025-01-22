@@ -34,6 +34,7 @@ func GetIdForEpoch(startBlockHash [32]byte, startHeight uint64) string {
 }
 
 // The epoch unique ID is the height ++ startblockhash.
+// e.g. 1000_0ab1c2d3... is the epoch starting at height 1000 with start block hash 0ab1c2d3...
 func (e *Epoch) GetId() string {
 	return GetIdForEpoch(e.StartBlockHash, e.StartHeight)
 }
@@ -95,8 +96,8 @@ type GetBlocksReply struct {
 
 // has_block
 type HasBlockMessage struct {
-	Type      string `json:"type"` // "have_block"
-	BlockHash string `json:"blockHash"`
+	Type      string   `json:"type"` // "have_block"
+	BlockHash [32]byte `json:"blockHash"`
 }
 
 type HasBlockReply struct {

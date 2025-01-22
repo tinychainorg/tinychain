@@ -295,6 +295,7 @@ func (dag *BlockDAG) GetLatestFullTip() (Block, error) {
 
 			-- Case 2: Blocks without transactions.
 			-- If a block has no transactions, then it is fully downloaded and is considered for the "full tip".
+			-- TODO: A block NEVER has 0 transactions! There is always the coinbase.
 			SELECT b.hash, b.acc_work
 			FROM blocks b
 			WHERE b.num_transactions = 0

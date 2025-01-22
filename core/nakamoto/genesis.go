@@ -7,16 +7,16 @@ import (
 
 // The Nakamoto consensus configuration, pertaining to difficulty readjustment, genesis block, and block size.
 type ConsensusConfig struct {
-	// The length of an epoch.
+	// The length of a difficulty epoch in blocks.
 	EpochLengthBlocks uint64 `json:"epoch_length_blocks"`
 
-	// The target block production rate in terms of 1 epoch.
+	// The target length of one epoch in milliseconds.
 	TargetEpochLengthMillis uint64 `json:"target_epoch_length_millis"`
 
-	// Genesis difficulty target.
+	// The difficulty of the genesis block.
 	GenesisDifficulty big.Int `json:"genesis_difficulty"`
 
-	// The genesis parent block hash.
+	// The parent block hash for the genesis block. This is a special case, as the genesis block has a parent we don't know the preimage for.
 	GenesisParentBlockHash [32]byte `json:"genesis_block_hash"`
 
 	// Maximum block size.
@@ -30,6 +30,9 @@ type ConsensusConfig struct {
 // These tests have been marked with the comment string find:GENESIS-BLOCK-ASSERTS so you can find them easily.
 func GetRawGenesisBlockFromConfig(consensus ConsensusConfig) RawBlock {
 	txs := []RawTransaction{
+		// Genesis coinbase transaction.
+		// Run `go test ./... -count=1 -v -run TestCreateGenesisCoinbaseTx` to generate a genesis coinbase tx.
+		// This will output a coinbase transaction with a valid signature.
 		RawTransaction{
 			Version:    1,
 			Sig:        [64]byte{0x86, 0xaf, 0x5f, 0x4b, 0x76, 0xea, 0x1c, 0xd2, 0xfb, 0xd4, 0x0f, 0xec, 0x93, 0x90, 0x70, 0x58, 0x47, 0xa1, 0x36, 0xb2, 0xc7, 0x0d, 0x10, 0x7b, 0xdd, 0x3e, 0x92, 0x27, 0xfd, 0xcb, 0x5e, 0xbb, 0x1c, 0x50, 0x0e, 0xfa, 0x02, 0x6a, 0x30, 0x44, 0x71, 0x15, 0xcc, 0x97, 0xf4, 0x15, 0x7f, 0x56, 0xd3, 0x3d, 0xb3, 0x30, 0xd6, 0x66, 0x06, 0xbb, 0xc1, 0x02, 0xae, 0x41, 0x39, 0xdb, 0x67, 0x93},

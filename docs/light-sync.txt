@@ -1,0 +1,29 @@
+The sync algorithm is so simple.
+
+For each peer:
+1. Trade tips.
+2. Determine highest common ancestor.
+3. Sync headers from there.
+
+
+light-sync(other):
+    var myself, other : Peer
+
+    # test-case: test if we are synced.
+    # O(1)
+    tip = other.get_tip
+    if dag.has(tip):
+        return;
+    
+    # fast-case: test if we are within 12 blocks.
+    tips = other.get_tips(-6)
+    local_chain = get_path(tip, -6)
+    if intersects(tips, local_chain):
+        download the last 6 headers and then we're synced
+        return;
+    
+    # base-case: interactive bissect highest common ancestor (binary search).
+    base_block = find_highest_common_ancestor(other, tip)
+    download_headers_from(base_block)
+
+

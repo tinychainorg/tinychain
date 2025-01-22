@@ -13,11 +13,42 @@ import (
 )
 
 // The Miner is responsible for solving the Hashcash proof-of-work puzzle.
+//
+// The operation of the miner is as follows:
+// 1. Begin the miner thread.
+// 2. Generate a new POW puzzle:
+//   a. Create the block template.
+//      i. Get the current tip and set block.parent_hash to the tip's hash.
+//      ii. Construct the coinbase transaction with our miner wallet.
+//      iii. Get the block's body (transactions) using `Miner.GetBlockBody`. This is used to connect the mempool.
+//      iv. Compute the transaction merkle root.
+//   b. Compute the difficulty target for mining.
+// 3. Begin mining the puzzle:
+//   a. Send the puzzle to the miner thread.
+//   b. The miner thread will mine the puzzle until a solution is found.
+//     i. Increment the nonce.
+//     ii. Hash the block.
+//     iii. Check if the guess (hash) is less than the target.
+//     iv. If the guess is less than the target, the puzzle is solved. Send the solution back to the main thread.
+//     v. If a new puzzle is received, stop mining the current puzzle and start mining the new puzzle.
+// 4. When a solution to the puzzle is found, the miner thread will send the solution back to the main thread.
+// 5. The main thread will:
+//   a. Set the nonce in the block to the solution.
+//   b. Call `Miner.OnBlockSolution` with the block.
+//   c. Increment the number of blocks mined.
+//   d. If the maximum number of blocks to mine has been reached, stop the miner.
+//   e. Otherwise, generate a new puzzle and send it to the miner thread.
+//
+
 type Miner struct {
 	dag            BlockDAG
 	CoinbaseWallet *core.Wallet
 	IsRunning      bool
 	GraffitiTag    [32]byte
+
+	// Miner state.
+	stopCh  chan bool
+	puzzles chan POWPuzzle
 
 	// Mutex.
 	mutex sync.Mutex
@@ -54,7 +85,7 @@ func MakeCoinbaseTx(wallet *core.Wallet, amount uint64) RawTransaction {
 		ToPubkey:   wallet.PubkeyBytes(),
 		Amount:     amount,
 		Fee:        0,
-		Nonce:      0,
+		Nonce:      randomNonce(),
 	}
 	envelope := tx.Envelope()
 	sig, err := wallet.Sign(envelope)
@@ -72,7 +103,13 @@ type POWPuzzle struct {
 	solution   big.Int
 }
 
-func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel chan POWPuzzle, puzzleChannel chan POWPuzzle) (big.Int, error) {
+// Miner thread:
+// States:
+// - waiting for puzzle
+// - mining puzzle
+// - puzzle solved
+// - restart on new puzzle
+func mineWithStatus(log *log.Logger, hashrates chan float64, solutions chan POWPuzzle, puzzles chan POWPuzzle, stopCh chan bool) (big.Int, error) {
 	// Execute in 3s increments.
 	lastHashrateMeasurement := Timestamp()
 	numHashes := 0
@@ -91,7 +128,7 @@ func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel
 			now := Timestamp()
 			duration := now - lastHashrateMeasurement
 			hashrate := float64(numHashes) / float64(duration/1000)
-			hashrateChannel <- hashrate
+			hashrates <- hashrate
 			numHashes = 0
 			lastHashrateMeasurement = now
 		}
@@ -100,12 +137,12 @@ func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel
 	// Routine: Mine.
 	for {
 		var i uint64 = 0
-		miner.log.Println("Waiting for new puzzle")
-		puzzle := <-puzzleChannel
+		log.Println("Waiting for new puzzle")
+		puzzle := <-puzzles
 		block := puzzle.block
 		nonce := puzzle.startNonce
 		target := puzzle.target
-		miner.log.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+		log.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
 
 		// Loop: mine 1 hash.
 		for {
@@ -124,21 +161,24 @@ func (miner *Miner) MineWithStatus(hashrateChannel chan float64, solutionChannel
 
 			// Check solution: hash < target.
 			if guess.Cmp(&target) == -1 {
-				miner.log.Printf("Puzzle solved: iterations=%d\n", i)
+				log.Printf("Puzzle solved: iterations=%d\n", i)
 
 				puzzle.solution = nonce
-				solutionChannel <- puzzle
+				solutions <- puzzle
 				break
 			}
 
 			// Check if new puzzle has been received.
 			select {
-			case newPuzzle := <-puzzleChannel:
+			case newPuzzle := <-puzzles:
 				puzzle = newPuzzle
 				block = puzzle.block
 				nonce = puzzle.startNonce
 				target = puzzle.target
-				miner.log.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+				log.Printf("New puzzle block=%s target=%s\n", block.HashStr(), target.String())
+			case <-stopCh:
+				log.Println("Stopping miner")
+				return nonce, nil
 			default:
 				// Do nothing.
 			}
@@ -181,12 +221,12 @@ func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 		Transactions:           blockBody,
 		Graffiti:               miner.GraffitiTag,
 	}
+
+	// Compute the transaction merkle root.
 	raw.TransactionsMerkleRoot = GetMerkleRootForTxs(raw.Transactions)
 
-	// Mine the POW solution.
+	// Compute the difficulty target for mining, which may involve recomputing the difficulty (epoch change).
 	curr_height := current_tip.Height + 1
-
-	// First get the right epoch.
 	var difficulty big.Int
 	epoch, err := miner.dag.GetEpochForBlockHash(current_tip.Hash)
 	if err != nil {
@@ -207,6 +247,25 @@ func (miner *Miner) MakeNewPuzzle() POWPuzzle {
 	return puzzle
 }
 
+func (miner *Miner) Stop() {
+	miner.mutex.Lock()
+	if !miner.IsRunning {
+		miner.log.Printf("Miner not running")
+		miner.mutex.Unlock()
+		return
+	}
+	miner.IsRunning = false
+	miner.mutex.Unlock()
+
+	miner.log.Println("Sent stop signal to miner")
+	miner.stopCh <- true
+}
+
+// Send new puzzle to miner thread, based off the latest full tip.
+func (miner *Miner) RestartWithNewPuzzle() {
+	miner.puzzles <- miner.MakeNewPuzzle()
+}
+
 func (miner *Miner) Start(mineMaxBlocks int64) []RawBlock {
 	miner.mutex.Lock()
 	if miner.IsRunning {
@@ -216,26 +275,29 @@ func (miner *Miner) Start(mineMaxBlocks int64) []RawBlock {
 	miner.IsRunning = true
 	miner.mutex.Unlock()
 
-	// The next tip channel.
-	// next_tip := make(chan Block)
-	// block_solutions := make(chan Block)
-	hashrateChannel := make(chan float64, 1)
-	puzzleChannel := make(chan POWPuzzle, 1)
-	solutionChannel := make(chan POWPuzzle, 1)
+	// Set miner thread state.
+	hashrates := make(chan float64, 1)
+	puzzles := make(chan POWPuzzle, 1)
+	solutions := make(chan POWPuzzle, 1)
+	stopCh := make(chan bool, 1)
 
-	go miner.MineWithStatus(hashrateChannel, solutionChannel, puzzleChannel)
+	// Set miner state.
+	miner.stopCh = stopCh
+	miner.puzzles = puzzles
+
+	go mineWithStatus(miner.log, hashrates, solutions, puzzles, stopCh)
 
 	var blocksMined int64 = 0
 	mined := []RawBlock{}
 
-	puzzleChannel <- miner.MakeNewPuzzle()
+	puzzles <- miner.MakeNewPuzzle()
 	for {
 		select {
-		case hashrate := <-hashrateChannel:
+		case hashrate := <-hashrates:
 			// Print iterations using commas.
 			p := message.NewPrinter(language.English)
 			miner.log.Printf(p.Sprintf("Hashrate: %.2f H/s\n", hashrate))
-		case puzzle := <-solutionChannel:
+		case puzzle := <-solutions:
 			miner.log.Println("Received solution")
 
 			raw := puzzle.block
@@ -261,7 +323,7 @@ func (miner *Miner) Start(mineMaxBlocks int64) []RawBlock {
 
 			miner.log.Println("Making new puzzle")
 			miner.log.Println("New puzzle ready")
-			puzzleChannel <- miner.MakeNewPuzzle()
+			puzzles <- miner.MakeNewPuzzle()
 		}
 	}
 }
